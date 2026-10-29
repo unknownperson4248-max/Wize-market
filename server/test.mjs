@@ -45,3 +45,18 @@ console.log('PASS: Google signature/audience/expiry/nonce, session auth, CSRF, t
 
 const autoPost=await call('/api/posts','POST',{...post,price:6707,groupId:group},'buyer');assert.equal(autoPost.status,201);const rangeRow=sql.prepare('SELECT r.min_price,r.max_price FROM wm_posts p JOIN wm_group_ranges r ON r.id=p.range_id WHERE p.id=?').get(autoPost.data.id);assert.equal(rangeRow.min_price,5001);assert.equal(rangeRow.max_price,10000);console.log('PASS: 6707 automatically selects the 5001–10000 range.');
 assert.equal((await call('/api/groups/'+group+'/preferences','POST',{muted:true},'buyer')).status,200);assert.equal((await call('/api/groups/'+group+'/preferences','GET',undefined,'buyer')).data.muted,true);assert.equal((await call('/api/groups/'+group+'/preferences','GET',undefined,'admin')).data.muted,false);assert.equal((await call('/api/groups/'+group+'/preferences','GET',undefined,'outsider')).status,403);console.log('PASS: group mute preferences persist per member and reject outsiders.');
+// A member can read a shared group photo; unrelated users cannot. R2 may set range on a full response.
+await call('/api/groups/'+group+'/join','POST',{},'seller');
+await call('/api/groups/'+group+'/messages','POST',{text:'media:image/png:/media/'+mediaId},'seller');
+const mediaRequest=id=>new Request('https://test.local/media/'+mediaId,{headers:{cookie:'wm_session='+tokens[id]}});
+rr=await worker.fetch(mediaRequest('buyer'),env);assert.equal(rr.status,200);assert.equal(rr.headers.get('content-type'),'image/png');assert.equal((await rr.arrayBuffer()).byteLength,16);
+assert.equal((await worker.fetch(mediaRequest('outsider'),env)).status,404);
+const r2get=env.MEDIA.get;env.MEDIA.get=async k=>{const o=await r2get(k);return o?{...o,range:{offset:0,length:o.size}}:null};
+rr=await worker.fetch(mediaRequest('buyer'),env);assert.equal(rr.status,200);assert.equal(rr.headers.get('content-range'),null);env.MEDIA.get=r2get;
+// Even the website owner and other trusted admins cannot read somebody else's personal conversation.
+for(const id of ['owner','admin','outsider']){assert.equal((await call('/api/threads/'+thread+'/messages','GET',undefined,id)).status,404);assert.equal((await call('/api/threads','GET',undefined,id)).data.threads.length,0);}
+assert.equal((await call('/api/admin/overview')).status,401);assert.equal((await call('/api/admin/overview','GET',undefined,'buyer')).status,403);assert.equal((await call('/api/admin/overview','GET',undefined,'admin')).data.stats.Groups,1);
+assert.equal((await call('/api/admin/users','GET',undefined,'admin')).status,403);const adminPeople=await call('/api/admin/users?q=buyer','GET',undefined,'owner');assert.equal(adminPeople.data.users.length,1);assert.equal(adminPeople.data.users[0].email,undefined);
+assert.equal((await call('/api/admin/settings','POST',{name:'Test Market',welcome:'Welcome players'},'admin')).status,403);assert.equal((await call('/api/admin/settings','POST',{name:'Test Market',welcome:'Welcome players'},'owner')).status,200);assert.deepEqual((await call('/api/site')).data,{name:'Test Market',welcome:'Welcome players'});
+assert.equal((await call('/api/admin/role','POST',{userId:'owner',role:'trusted'},'admin')).status,403);assert.equal((await call('/api/admin/role','POST',{userId:'outsider',role:'trusted'},'owner')).status,200);assert.equal((await call('/api/admin/role','POST',{userId:'owner',role:'trusted'},'outsider')).status,403);
+console.log('PASS: authenticated R2 group images, full response status, private chats hidden from owner/admin/outsiders, admin role boundaries and persistent website settings.');
