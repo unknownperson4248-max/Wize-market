@@ -23,3 +23,5 @@ body.chat-open{overflow:hidden;height:100dvh}.chat-open>header,.chat-open .side,
 
 
 #groupInfoHero .avatar img{display:block;width:100%;height:100%;object-fit:cover;border-radius:50%;font-size:0}#groupInfoHero .avatar{overflow:hidden;line-height:1;font-size:27px}.info-shortcuts{gap:25px}.info-shortcut b{font-weight:400}.secondary-shortcuts{margin-top:-12px;opacity:.8}.secondary-shortcuts .info-shortcut>span{width:37px;height:37px;font-size:20px}#groupInfoSearch{max-width:600px;margin:auto;padding-top:22px}#groupSearchResults{margin-top:20px}#groupSearchResults .bubble{margin:12px 0}
+
+#groupPostComposer{position:fixed;inset:0;z-index:90;background:var(--bg);overflow:auto;padding:0 15px 35px;overscroll-behavior:contain}#groupPostComposer>.info-nav{position:sticky;top:0;background:var(--bg);padding:15px 0;max-width:650px;margin:auto}#groupPostFormSlot{max-width:650px;margin:15px auto}#groupPostComposer #postForm>h2,#groupPostComposer #postForm>p.small{display:none}#groupPostComposer .media-grid{grid-template-columns:repeat(3,minmax(0,1fr))}#groupInfoHero .avatar{background:#202939}#groupInfoHero .avatar img{object-fit:cover}
