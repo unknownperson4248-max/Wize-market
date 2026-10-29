@@ -34,3 +34,11 @@ Deals start from approved public listings and accepted seller chats. An independ
 ## Validation
 
 server/test.mjs uses isolated in-memory SQLite and generated RSA keys, never production accounts. It verifies signature/audience/nonce/expiry, CSRF, permission boundaries, group membership, post moderation, request consent, follow behavior, private rooms, optimistic versioning and dual-party completion totals. Google account selection must be completed by the owner in their own browser; no password or Google account was used in automated tests.
+
+## Group logos and post ranges
+
+Group creation now requires only the group name and an image logo. The creator must own the uploaded image and must be owner/trusted on the server. A logo becomes publicly visible when assigned to a group; unassigned uploads remain private. Existing groups without logos retain their names and memberships.
+
+Inside a group, Chat is independent of the post range selector. Members can view All posts, General posts or a selected price range without filtering chat messages. New groups start with BDT 0–5,000, 5,001–10,000 and 10,001+ post ranges. The group creator (while trusted) and the site owner can add or edit up to 20 ranges. Range edits that would move existing posts outside the new bounds are rejected. Game ID posts require a matching range; ordinary community posts can remain uncategorized. All group posts still require approval.
+
+Migration server/migrations/002_group_ranges.sql has been applied to the existing deployment. It adds columns without deleting data, preserves legacy group caps as an initial range, and categorizes existing Game ID group posts. Run this migration once only on old databases. Fresh databases use the updated server/schema.sql.
