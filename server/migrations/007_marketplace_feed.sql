@@ -1,0 +1,14 @@
+ALTER TABLE wm_posts ADD COLUMN game_category TEXT NOT NULL DEFAULT 'free-fire';
+ALTER TABLE wm_posts ADD COLUMN price_format TEXT NOT NULL DEFAULT 'full';
+UPDATE wm_posts SET game_category='community' WHERE kind!='Game ID';
+CREATE TABLE IF NOT EXISTS wm_seller_badges(user_id TEXT PRIMARY KEY REFERENCES users(id),granted_by TEXT NOT NULL REFERENCES users(id),created_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS wm_post_views(post_id TEXT NOT NULL REFERENCES wm_posts(id),user_id TEXT NOT NULL REFERENCES users(id),created_at INTEGER NOT NULL,PRIMARY KEY(post_id,user_id));
+CREATE TABLE IF NOT EXISTS wm_post_shares(id TEXT PRIMARY KEY,post_id TEXT NOT NULL REFERENCES wm_posts(id),user_id TEXT NOT NULL REFERENCES users(id),created_at INTEGER NOT NULL,UNIQUE(post_id,user_id));
+CREATE INDEX IF NOT EXISTS wm_shares_user ON wm_post_shares(user_id,created_at);
+CREATE INDEX IF NOT EXISTS wm_shares_post ON wm_post_shares(post_id);
+CREATE TABLE IF NOT EXISTS wm_reports(id TEXT PRIMARY KEY,post_id TEXT REFERENCES wm_posts(id),user_id TEXT NOT NULL REFERENCES users(id),reason TEXT NOT NULL,details TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','resolved','dismissed')),created_at INTEGER NOT NULL,resolved_by TEXT REFERENCES users(id),resolved_at INTEGER);
+CREATE INDEX IF NOT EXISTS wm_reports_status ON wm_reports(status,created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS wm_reports_one_open ON wm_reports(user_id,post_id) WHERE status='open' AND post_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS wm_posts_category_price ON wm_posts(game_category,status,price,created_at);
+DROP VIEW IF EXISTS wm_public_users;
+CREATE VIEW wm_public_users AS SELECT u.id,COALESCE(NULLIF(d.display_name,''),u.name) name,CASE WHEN d.picture_id IS NOT NULL THEN '/avatar/'||u.id||'?v='||d.updated_at ELSE u.picture END picture,CASE WHEN d.cover_id IS NOT NULL THEN '/cover/'||u.id||'?v='||d.updated_at ELSE '/assets/profile-cover.webp' END cover,COALESCE(d.bio,'') bio,(EXISTS(SELECT 1 FROM wm_roles vr WHERE vr.user_id=u.id AND vr.role='owner') OR EXISTS(SELECT 1 FROM wm_verifications v WHERE v.user_id=u.id)) verified,EXISTS(SELECT 1 FROM wm_seller_badges sb WHERE sb.user_id=u.id) trusted_seller,u.created_at,u.updated_at FROM users u LEFT JOIN wm_profile_details d ON d.user_id=u.id;
