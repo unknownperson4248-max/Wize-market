@@ -132,3 +132,30 @@ assert.equal((await call('/api/reviews','POST',{dealId:deal,rating:5,comment:'Sm
 // Shared post links enforce the same group visibility; group listings can start a private deal conversation.
 assert.equal((await call('/api/listing/'+album.data.id)).status,200);assert.equal((await call('/api/listing/'+groupPost)).status,401);assert.equal((await call('/api/listing/'+groupPost,'GET',undefined,'outsider')).status,403);assert.equal((await call('/api/listing/'+groupPost,'GET',undefined,'buyer')).status,200);assert.equal((await call('/api/threads','POST',{postId:groupPost},'seller')).status,201);
 console.log('PASS: private Saved ownership and group access, real idempotent likes/comments, verified completed-deal public reviews, and scoped shared listings/group deal contact.');
+// Blue verification is a distinct owner-managed permission, never inherited from admin access.
+sql.exec('DELETE FROM wm_limits');
+assert.equal((await call('/api/profile/owner')).data.profile.verified,1);
+assert.equal((await call('/api/profile/admin')).data.profile.verified,0);
+assert.equal((await call('/api/admin/verification','POST',{userId:'seller',verified:true})).status,401);
+for(const id of ['admin','buyer','seller'])assert.equal((await call('/api/admin/verification','POST',{userId:'seller',verified:true},id)).status,403);
+assert.equal((await call('/api/admin/verification','POST',{userId:'missing',verified:true},'owner')).status,404);
+assert.equal((await call('/api/admin/verification','POST',{userId:'seller',verified:'yes'},'owner')).status,400);
+assert.equal((await call('/api/admin/verification','POST',{userId:'owner',verified:false},'owner')).status,403);
+assert.equal((await call('/api/admin/verification','POST',{userId:'seller',verified:true},'owner')).status,200);
+assert.equal((await call('/api/profile/seller')).data.profile.verified,1);
+assert.equal((await call('/api/me','GET',undefined,'seller')).data.user.verified,1);
+assert.equal((await call('/api/me','GET',undefined,'seller')).data.user.role,'member');
+assert.equal((await call('/api/feed?q=Fifty%20image%20album')).data.posts[0].verified,1);
+assert.equal((await call('/api/admin/verification','POST',{userId:'buyer',verified:true},'seller')).status,403);
+assert.equal((await call('/api/admin/role','POST',{userId:'seller',role:'trusted'},'owner')).status,200);
+assert.equal((await call('/api/admin/role','POST',{userId:'seller',role:'member'},'owner')).status,200);
+assert.equal((await call('/api/profile/seller')).data.profile.verified,1);
+// The separate control-room session uses the same owner authorization; Google sessions alone cannot use it.
+assert.equal((await call('/api/control/verification','POST',{userId:'seller',verified:false},'owner')).status,401);
+const badgeEntry=await call('/api/control/owner-access','POST',{},'owner');assert.equal(badgeEntry.status,200);
+const badgeLogin=await worker.fetch(new Request('https://test.local/api/control/owner-access',{method:'POST',headers:{origin:'https://test.local',cookie:'wm_session='+tokens.owner},body:'{}'}),env);
+const badgeCookie=badgeLogin.headers.get('set-cookie').split(';')[0];
+const badgeRevoke=await worker.fetch(new Request('https://test.local/api/control/verification',{method:'POST',headers:{origin:'https://test.local',cookie:badgeCookie,'content-type':'application/json'},body:JSON.stringify({userId:'seller',verified:false})}),env);assert.equal(badgeRevoke.status,200);
+assert.equal((await call('/api/profile/seller')).data.profile.verified,0);assert.equal((await call('/api/feed?q=Fifty%20image%20album')).data.posts[0].verified,0);
+assert.equal(sql.prepare('SELECT count(*) n FROM wm_verifications').get().n,0);
+console.log('PASS: owner-only blue verification grant/revoke, separate control-room auth, no automatic trusted badge, no role escalation, protected owner badge, and live profile/feed badge state.');
