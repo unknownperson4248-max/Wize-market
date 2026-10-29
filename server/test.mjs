@@ -159,3 +159,26 @@ const badgeRevoke=await worker.fetch(new Request('https://test.local/api/control
 assert.equal((await call('/api/profile/seller')).data.profile.verified,0);assert.equal((await call('/api/feed?q=Fifty%20image%20album')).data.posts[0].verified,0);
 assert.equal(sql.prepare('SELECT count(*) n FROM wm_verifications').get().n,0);
 console.log('PASS: owner-only blue verification grant/revoke, separate control-room auth, no automatic trusted badge, no role escalation, protected owner badge, and live profile/feed badge state.');
+// Inbox requests are incoming only; peer cards expose public identity without leaking chats/emails.
+sql.exec('DELETE FROM wm_limits');
+const freshRequest=await call('/api/threads','POST',{userId:'buyer'},'outsider');assert.equal(freshRequest.status,201);const requestId=freshRequest.data.thread.id;
+assert.ok(!(await call('/api/threads?section=requests','GET',undefined,'buyer')).data.threads.some(t=>t.id===requestId));
+assert.equal((await call('/api/threads/'+requestId+'/messages','POST',{text:'Interested in your ID'},'outsider')).status,201);
+const requestInbox=(await call('/api/threads?section=requests','GET',undefined,'buyer')).data.threads;
+assert.ok(requestInbox.some(t=>t.id===requestId&&t.last_text==='Interested in your ID'));
+assert.ok(!(await call('/api/threads?section=requests','GET',undefined,'outsider')).data.threads.some(t=>t.id===requestId));
+assert.ok(!(await call('/api/threads?section=chats','GET',undefined,'buyer')).data.threads.some(t=>t.id===requestId));
+assert.ok((await call('/api/threads?section=chats','GET',undefined,'outsider')).data.threads.some(t=>t.id===requestId));
+const peerCard=(await call('/api/threads/'+requestId+'/messages','GET',undefined,'outsider')).data.peer;assert.equal(peerCard.id,'buyer');assert.equal(peerCard.email,undefined);assert.ok('picture' in peerCard);assert.ok('bio' in peerCard);
+assert.equal((await call('/api/threads/'+requestId+'/messages','GET',undefined,'owner')).status,404);
+assert.ok(!(await call('/api/threads?section=requests','GET',undefined,'seller')).data.threads.some(t=>t.id===requestId));
+assert.equal((await call('/api/threads/'+requestId+'/accept','POST',{},'buyer')).status,200);
+assert.ok(!(await call('/api/threads?section=requests','GET',undefined,'buyer')).data.threads.some(t=>t.id===requestId));
+assert.ok((await call('/api/threads?section=chats','GET',undefined,'buyer')).data.threads.some(t=>t.id===requestId));
+assert.equal((await call('/api/threads?section=invalid','GET',undefined,'buyer')).status,400);
+// Public group discovery reveals no message preview until membership is established.
+const ownerGroup=(await call('/api/groups','GET',undefined,'admin')).data.groups.find(g=>g.id===group);assert.ok(ownerGroup.last_text);
+const unjoinedGroup=(await call('/api/groups','GET',undefined,'seller')).data.groups.find(g=>g.id===group);sql.prepare('DELETE FROM wm_group_members WHERE group_id=? AND user_id=?').run(group,'seller');
+assert.equal((await call('/api/groups','GET',undefined,'seller')).data.groups.find(g=>g.id===group).last_text,null);
+assert.equal((await call('/api/groups')).data.groups.find(g=>g.id===group).last_text,null);
+console.log('PASS: incoming request filtering, accepted chats move to inbox, public peer identity/photo without email, private preview isolation, and group previews restricted to members.');
