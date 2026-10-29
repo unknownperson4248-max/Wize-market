@@ -96,3 +96,28 @@ assert.equal((await call('/api/control/session')).data.adminId,undefined);assert
 sql.prepare('UPDATE sessions SET created_at=? WHERE user_id=?').run(Date.now()-660000,'owner');const recovery={username:'recovered_owner',password:'Recovered!LongPassword97',recover:true};assert.equal((await call('/api/admin/setup','POST',recovery,'owner')).status,403);assert.equal((await call('/api/admin/setup','POST',recovery,'buyer')).status,403);
 sql.prepare('UPDATE sessions SET created_at=? WHERE user_id=?').run(Date.now(),'owner');assert.equal((await call('/api/admin/setup','POST',recovery,'owner')).status,200);assert.equal((await call('/api/control/login','POST',recovery)).status,200);
 console.log('PASS: owner-only Google admin entry, private admin ID visibility, fresh-login password recovery, and rejection of non-owner/stale-session resets.');
+// Home includes public posts and the viewer's joined-group posts, without leaking to outsiders.
+sql.exec('DELETE FROM wm_limits');env.AI=safeAI;
+let memberHome=(await call('/api/feed','GET',undefined,'buyer')).data.posts;assert.ok(memberHome.some(p=>p.id===groupPost));assert.ok(!(await call('/api/feed','GET',undefined,'outsider')).data.posts.some(p=>p.id===groupPost));
+// Edits are owner-only, versioned, safety-checked, and keep the group/range scope.
+let editing=(await call('/api/posts/'+directPost.data.id,'GET',undefined,'seller')).data.post;
+assert.equal((await call('/api/posts/'+editing.id,'GET',undefined,'buyer')).status,404);
+assert.equal((await call('/api/posts/'+editing.id+'/edit','POST',{...post,title:'Edited listing',version:editing.version},'buyer')).status,404);
+assert.equal((await call('/api/posts/'+editing.id+'/edit','POST',{...post,title:'Edited listing',version:editing.version},'seller')).status,200);
+assert.equal((await call('/api/posts/'+editing.id+'/edit','POST',{...post,title:'Stale edit',version:editing.version},'seller')).status,409);
+assert.equal((await call('/api/feed?q=Edited%20listing')).data.posts[0].title,'Edited listing');
+editing=(await call('/api/posts/'+editing.id,'GET',undefined,'seller')).data.post;
+assert.equal((await call('/api/posts/'+editing.id+'/delete','POST',{version:editing.version},'buyer')).status,404);
+assert.equal((await call('/api/posts/'+editing.id+'/delete','POST',{version:editing.version},'seller')).status,200);
+assert.ok(!(await call('/api/feed')).data.posts.some(p=>p.id===editing.id));assert.ok(!(await call('/api/my-posts','GET',undefined,'seller')).data.posts.some(p=>p.id===editing.id));assert.ok(sql.prepare('SELECT deleted_at FROM wm_posts WHERE id=?').get(editing.id).deleted_at);
+// Fifty owned, checked images are accepted in order; empty photo posts, 51 photos and foreign assets are rejected.
+const fifty=[];for(let i=0;i<51;i++){const id=crypto.randomUUID();objects.set(id,bytes);sql.prepare('INSERT INTO wm_uploads VALUES(?,?,?,?,?)').run(id,'seller','image/png',16,Date.now());sql.prepare('INSERT INTO wm_media_checks VALUES(?,?,?,?)').run(id,'safe','Test scanner passed',Date.now());fifty.push({id})}
+let album=await call('/api/posts','POST',{...post,title:'Fifty image album',media:fifty.slice(0,50),mediaMode:'photos'},'seller');assert.equal(album.status,201);assert.equal(album.data.status,'approved');const savedAlbum=(await call('/api/posts/'+album.data.id,'GET',undefined,'seller')).data.post;assert.equal(savedAlbum.media.length,50);assert.deepEqual(savedAlbum.media.map(a=>a.id),fifty.slice(0,50).map(a=>a.id));
+assert.equal((await call('/api/posts','POST',{...post,media:fifty,mediaMode:'photos'},'seller')).status,400);assert.equal((await call('/api/posts','POST',{...post,media:[],mediaMode:'photos'},'seller')).status,400);assert.equal((await call('/api/posts','POST',{...post,media:[fifty[0]],mediaMode:'photos'},'buyer')).status,400);
+// Custom profile data survives independently of Google's stored identity and appears on old posts too.
+assert.equal((await call('/api/profile/details','POST',{name:'Rahat Custom',bio:'Gaming, trading & community',pictureId:mediaId},'seller')).status,200);const ownProfile=(await call('/api/me','GET',undefined,'seller')).data.user;assert.equal(ownProfile.name,'Rahat Custom');assert.equal(ownProfile.bio,'Gaming, trading & community');assert.ok(ownProfile.picture.startsWith('/avatar/seller'));
+assert.equal((await call('/api/profile/seller')).data.profile.name,'Rahat Custom');assert.equal((await call('/api/feed?q=Fifty%20image%20album')).data.posts[0].name,'Rahat Custom');assert.equal((await worker.fetch(new Request('https://test.local/avatar/seller'),env)).status,200);
+assert.equal((await call('/api/profile/details','POST',{name:'bad',bio:'x',pictureId:mediaId},'buyer')).status,400);assert.equal((await call('/api/profile/details','POST',{name:'bad',bio:'x'.repeat(501)},'seller')).status,400);
+// Removing a listing preserves thread/deal history and denies new listing-based conversations.
+const listingVersion=sql.prepare('SELECT version FROM wm_posts WHERE id=?').get(postId).version;assert.equal((await call('/api/posts/'+postId+'/delete','POST',{version:listingVersion},'seller')).status,200);assert.equal((await call('/api/deals/'+deal,'GET',undefined,'buyer')).status,200);assert.equal((await call('/api/threads','POST',{postId},'outsider')).status,404);
+console.log('PASS: member Home group visibility, owner edit/delete and stale-edit conflicts, 1–50 photos with ownership/order limits, public custom profiles/avatars, and preserved deal history after removal.');
