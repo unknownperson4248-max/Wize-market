@@ -85,3 +85,14 @@ assert.equal((await control('overview')).status,200);assert.equal((await control
 assert.equal((await control('setup',{...adminLogin,password:'Replacement!Password999'})).status,403);
 assert.equal((await control('setup',{...adminLogin,currentPassword:adminLogin.password,password:'Replacement!Password999'})).status,200);assert.equal((await control('overview')).status,401);
 console.log('PASS: unique usernames and share resolution, instant safe posts, safety quarantine, 3-hour suspension/automatic expiry, scanner failure without punishment, independent admin password sessions and revocation.');
+// Google owner recovery creates an independent admin session without changing saved credentials.
+const existingCredentials=sql.prepare("SELECT value FROM wm_settings WHERE key='admin_credentials'").get().value;
+assert.equal((await call('/api/control/owner-access','POST',{})).status,401);
+assert.equal((await call('/api/control/owner-access','POST',{},'buyer')).status,403);
+let ownerEntry=await worker.fetch(new Request('https://test.local/api/control/owner-access',{method:'POST',headers:{origin:'https://test.local','content-type':'application/json',cookie:'wm_session='+tokens.owner},body:'{}'}),env);assert.equal(ownerEntry.status,200);const recoveredCookie=ownerEntry.headers.get('set-cookie').split(';')[0];
+const ownerSession=await worker.fetch(new Request('https://test.local/api/control/session',{headers:{cookie:recoveredCookie}}),env);assert.equal((await ownerSession.json()).user.role,'owner');assert.equal(sql.prepare("SELECT value FROM wm_settings WHERE key='admin_credentials'").get().value,existingCredentials);
+assert.equal((await call('/api/control/session')).data.adminId,undefined);assert.equal((await call('/api/control/session','GET',undefined,'owner')).data.adminId,adminLogin.username);
+// Resetting a forgotten admin password requires a recent verified owner Google session.
+sql.prepare('UPDATE sessions SET created_at=? WHERE user_id=?').run(Date.now()-660000,'owner');const recovery={username:'recovered_owner',password:'Recovered!LongPassword97',recover:true};assert.equal((await call('/api/admin/setup','POST',recovery,'owner')).status,403);assert.equal((await call('/api/admin/setup','POST',recovery,'buyer')).status,403);
+sql.prepare('UPDATE sessions SET created_at=? WHERE user_id=?').run(Date.now(),'owner');assert.equal((await call('/api/admin/setup','POST',recovery,'owner')).status,200);assert.equal((await call('/api/control/login','POST',recovery)).status,200);
+console.log('PASS: owner-only Google admin entry, private admin ID visibility, fresh-login password recovery, and rejection of non-owner/stale-session resets.');
