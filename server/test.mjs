@@ -20,8 +20,8 @@ const action=(action,version,id)=>call('/api/deals/'+deal+'/action','POST',{acti
 assert.equal((await call('/api/groups','POST',{name:'Missing logo'},'admin')).status,400);
 assert.equal((await call('/api/groups','POST',{name:'Foreign logo',logoId},'owner')).status,400);
 assert.equal((await call('/api/groups/'+group+'/ranges','POST',{label:'Bad admin',min:0,max:30000},'buyer')).status,403);
-assert.equal((await call('/api/posts','POST',{...post,groupId:group},'buyer')).status,400);
-assert.equal((await call('/api/posts','POST',{...post,price:6000,groupId:group,rangeId:firstRange},'buyer')).status,400);
+assert.equal((await call('/api/posts','POST',{...post,groupId:group},'buyer')).status,201);
+assert.equal((await call('/api/posts','POST',{...post,price:6000,groupId:group,rangeId:firstRange},'buyer')).status,201);
 assert.equal((await call('/api/feed?group='+group+'&range='+firstRange,'GET',undefined,'buyer')).data.posts.length,1);
 assert.equal((await call('/api/feed?group='+group+'&range='+groupRanges[1].id,'GET',undefined,'buyer')).data.posts.length,0);
 assert.equal((await call('/api/groups/'+group+'/messages','GET',undefined,'buyer')).data.messages[0].text,'Hello group');
@@ -42,3 +42,5 @@ const kp=await crypto.subtle.generateKey({name:'RSASSA-PKCS1-v1_5',modulusLength
 assert.equal((await call('/api/auth/google','POST',{credential:'forged'})).status,401);
 assert.equal((await call('/api/me')).data.user,null);
 console.log('PASS: Google signature/audience/expiry/nonce, session auth, CSRF, trusted groups, membership, private chat authorization, request consent, follow, moderated feeds, private deal rooms, version conflicts and dual-party completion counts.');
+
+const autoPost=await call('/api/posts','POST',{...post,price:6707,groupId:group},'buyer');assert.equal(autoPost.status,201);const rangeRow=sql.prepare('SELECT r.min_price,r.max_price FROM wm_posts p JOIN wm_group_ranges r ON r.id=p.range_id WHERE p.id=?').get(autoPost.data.id);assert.equal(rangeRow.min_price,5001);assert.equal(rangeRow.max_price,10000);console.log('PASS: 6707 automatically selects the 5001–10000 range.');
