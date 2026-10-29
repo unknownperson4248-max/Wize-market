@@ -2,8 +2,27 @@
   "name": "wize-market-preview-2026",
   "main": "dist/worker.mjs",
   "compatibility_date": "2026-10-29",
-  "build": { "command": "node build.mjs" },
-  "d1_databases": [{"binding":"DB","database_name":"wize-market-auth","database_id":"f9c563ed-7561-42f4-8853-30bcf5338880"}],
-  "r2_buckets": [{"binding":"MEDIA","bucket_name":"wize-market-media"}],
-  "observability": {"enabled":true,"head_sampling_rate":0.1}
+  "build": {
+    "command": "node build.mjs"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "wize-market-auth",
+      "database_id": "f9c563ed-7561-42f4-8853-30bcf5338880"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "wize-market-media"
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 0.1
+  },
+  "ai": {
+    "binding": "AI"
+  }
 }
