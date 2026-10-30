@@ -74,10 +74,19 @@ Verified locally with `node server/test.mjs` and the additive migration against 
 
 Apply `server/migrations/011_completion_profile_and_guest_views.sql` after 010, before deploying this revision. Existing completed statuses, identifiers and counter mappings remain intact. Historical completion dates are backfilled; historical records are not marked as newly Admin-confirmed. Unresolved cancellation requests attached to terminal records are closed without deleting their reasons.
 
-Guest visitors can browse Home and public listings. Visible posts record a deduplicated view immediately, using the existing account identity or an opaque HttpOnly visitor cookie. Private profiles, messages, deals, saves and posting still require authentication. Views and the bookmark are displayed beside the listing price.
+Guest visitors can browse Home and public listings. Visible posts record a deduplicated view immediately, using the existing account identity or an opaque HttpOnly visitor cookie. Private profiles, messages, deals, saves and posting still require authentication. Views share the Like / Comment / Share reaction row; Save is in the post three-dot menu.
 
 Buyer/Seller completion moves a mediated deal to `awaiting_final`. Only the assigned current trusted Admin can finalize it. Completed and cancelled records are excluded from the default ongoing list; Previous deals includes completed totals by responsible Admin and counterparties. Direct Seller/Admin deals support two distinct server-checked actions: confirm seller completion, then explicitly finalize with an acknowledgement and reason if the buyer has not confirmed. Pending cancellation requests and disputes must be resolved before finalization.
 
 Deal messages display public profile pictures and authoritative verification badges. The profile editor saves name, bio, picture, banner and optional username in one atomic operation from one final Save button. A database trigger and API checks enforce seven days between username changes; saving the unchanged username does not restart the timer. Edit and Sign out are in the own-profile menu.
 
 Validation includes local permission, migration, guest view deduplication, direct double-confirmation, atomic username cooldown tests and an isolated Cloudflare mobile-browser workflow covering guest browsing/login gates, immediate views, bookmark placement, single-save profile editing, participant badges, final Admin completion and completed history totals.
+
+
+## Feed preferences and profile drawer
+
+Apply `server/migrations/012_personal_post_preferences.sql` after 011. `POST /api/posts/:id/interest` records an account-scoped Not interested preference; Home and group feeds exclude every copy of that listing for that member. Other viewers and the underlying listing are unchanged. Guest Not interested preferences remain local to their browser. Saved posts remain separately accessible.
+
+Post menus contain Save/Unsave, Not interested and Report post, with owner editing and the existing profile-share action retained where applicable. The reactions row displays Like, Comment, Share and Views together. The centered profile hero has a compact banner and a three-line toggle at its top left, opening a dismissible keyboard-accessible left drawer for profile actions. The old profile three-dot location is removed.
+
+Validated with local per-account feed preference tests and isolated mobile browser checks for menu persistence, guest preferences, duplicate Save state, four aligned reactions, centered avatar/compact spacing, drawer focus/escape behavior and the existing single-save editor.

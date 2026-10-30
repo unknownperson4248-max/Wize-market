@@ -64,3 +64,6 @@ CREATE INDEX wm_cancel_pending ON wm_deal_cancel_requests(deal_id,resolved_at);
 
 CREATE TABLE wm_guest_post_views(post_id TEXT NOT NULL REFERENCES wm_posts(id),visitor_hash TEXT NOT NULL,created_at INTEGER NOT NULL,PRIMARY KEY(post_id,visitor_hash));
 CREATE TRIGGER wm_username_cooldown BEFORE UPDATE OF username ON wm_profiles WHEN NEW.username!=OLD.username AND NEW.updated_at<OLD.updated_at+604800000 BEGIN SELECT RAISE(ABORT,'username_cooldown'); END;
+
+CREATE TABLE wm_hidden_posts(user_id TEXT NOT NULL REFERENCES users(id),post_id TEXT NOT NULL REFERENCES wm_posts(id),created_at INTEGER NOT NULL,PRIMARY KEY(user_id,post_id));
+CREATE INDEX wm_hidden_post ON wm_hidden_posts(post_id);
