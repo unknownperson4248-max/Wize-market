@@ -2,6 +2,18 @@
 
 Five tabs: Home, Messages, Post (+), Deals, Profile.
 
+## Sell / Need posts and notifications
+
+Apply `server/migrations/017_need_posts_notifications.sql` once to databases already on migration 016 before deploying this revision. The additive migration keeps old posts as Sell posts and retains existing accounts, media, conversations, deal references and independent listing/deal counters. It does not backfill historical notification alerts.
+
+The Post button opens an animated Sell / Need chooser. Need posts require only a title; optional photos, budget, category, details and a longer description use the existing upload and safety pipeline. Their only contact action is Message Buyer. The seller can propose a referenced Need deal from the accepted private conversation; the buyer cannot initiate it. Existing Admin permissions, acceptance, confirmation and completion rules apply.
+
+Notification history and per-user category preferences live in D1. Source-table triggers create deduplicated friend, request, private/group message and deal notifications in the same transaction as each event. The header bell shows the persisted unread count (99+ above 99), supports individual/all read actions, and links to the relevant profile, request, chat or deal. Muted events remain in history without badges; unmute applies to future events. Visible pages poll a compact count endpoint every 15 seconds; hidden pages pause polling. No sounds are played.
+
+Admin Panel → Website & app → App name & description controls the website header/title/description and install manifest using the same owner-only settings. Gallery photos start loading ahead of lazy thumbnails, reuse authenticated in-memory image requests, and retain access checks for private media.
+
+Validation: `node build.mjs` and `node server/test.mjs`. Tests use isolated Buyer, Seller, trusted Admin, Owner and normal-member fixtures, including API permission bypass attempts, notification transaction rollback, migration preservation, read/mute persistence, pagination and HTML escaping for branding.
+
 ## Build and test
 
 Use Node 22 or newer with node:sqlite.

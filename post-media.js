@@ -12,6 +12,7 @@ async function loadMediaImage(img){const source=img.dataset.mediaSource;if(!sour
 const mediaVisibility='IntersectionObserver' in window?new IntersectionObserver(entries=>{for(const entry of entries)if(entry.isIntersecting){mediaVisibility.unobserve(entry.target);void loadMediaImage(entry.target)}},{rootMargin:'350px'}):null;
 function bindMediaImage(img){if(img.dataset.mediaBound)return;const source=img.dataset.mediaSource||img.getAttribute('src');if(!source?.startsWith('/media/'))return;img.dataset.mediaBound='1';img.dataset.mediaSource=source;if(img.getAttribute('src')===source)img.src=mediaPlaceholder;if(img.loading==='lazy'&&mediaVisibility)mediaVisibility.observe(img);else void loadMediaImage(img)}
 new MutationObserver(records=>{for(const record of records)for(const added of record.addedNodes){if(added.nodeType!==1)continue;for(const img of added.matches?.('img')?[added]:added.querySelectorAll('img'))bindMediaImage(img)}}).observe(document.body,{childList:true,subtree:true});
+document.querySelectorAll('img').forEach(bindMediaImage);
 
 let photoScale=1,photoX=0,photoY=0,photoGesture=null,lastPhotoTap=0;const photoPointers=new Map();
 function drawFullPhoto(){const image=$('fullScreenPhoto'),stage=$('photoGestureStage'),boundX=Math.max(0,(image.offsetWidth*photoScale-stage.clientWidth)/2),boundY=Math.max(0,(image.offsetHeight*photoScale-stage.clientHeight)/2);photoX=Math.max(-boundX,Math.min(boundX,photoX));photoY=Math.max(-boundY,Math.min(boundY,photoY));image.style.transform='translate3d('+photoX+'px,'+photoY+'px,0) scale('+photoScale+')'}
