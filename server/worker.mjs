@@ -293,7 +293,57 @@ if(!control&&method==='POST'&&u.role!=='owner'){
 if(!control&&!['GET','HEAD'].includes(method)&&!/^\/api\/posts\/[^/]+\/(delete|view)$/.test(p)&&p!=='/api/reports'&&p!=='/api/blocks'&&p!=='/api/chats/action'&&p!=='/api/account/security'&&p!=='/api/chats/read'){const suspended=await one(db,'SELECT until_at FROM wm_suspensions WHERE user_id=? AND until_at>?',u.id,now());need(!suspended,'Account suspended until '+new Date(suspended?.until_at||0).toISOString()+'. Open Profile for details.',423)}
 const reactions=p.match(/^\/api\/posts\/([^/]+)\/(like|comments)$/);if(reactions){const [,id,action]=reactions;await visiblePost(db,id,u);if(action==='like'&&method==='POST'){const d=await body(req);need(typeof d.like==='boolean','Invalid reaction');if(d.like)await run(db,'INSERT OR IGNORE INTO wm_post_likes(user_id,post_id,created_at) VALUES(?,?,?)',u.id,id,now());else await run(db,'DELETE FROM wm_post_likes WHERE user_id=? AND post_id=?',u.id,id);return reply({liked:d.like,count:(await one(db,'SELECT count(*) n FROM wm_post_likes WHERE post_id=?',id)).n})}if(action==='comments'&&method==='GET')return reply({comments:await rows(db,'SELECT c.id,c.user_id,c.text,c.created_at,u.name,u.picture,u.verified FROM wm_post_comments c JOIN wm_public_users u ON u.id=c.user_id WHERE c.post_id=? AND c.deleted_at IS NULL ORDER BY c.created_at DESC LIMIT 100',id)});if(action==='comments'&&method==='POST'){await throttle(db,'comment:'+u.id,10);const d=await body(req),value=text(d.text,1500,'comment');const verdict=await scanSafety(env,[{type:'text',text:JSON.stringify({comment:value})}]);need(verdict.decision!=='unsafe','Explicit sexual content is not allowed',422);await run(db,'INSERT INTO wm_post_comments(id,post_id,user_id,text,created_at) VALUES(?,?,?,?,?)',uuid(),id,u.id,value,now());return reply({ok:true},201)}}
 const postSocial=p.match(/^\/api\/posts\/([^/]+)\/(view|share)$/);if(postSocial&&method==='POST'){const [,id,action]=postSocial;if(action==='view'){await visiblePost(db,id,u);await run(db,'INSERT OR IGNORE INTO wm_post_views(post_id,user_id,created_at) VALUES(?,?,?)',id,u.id,now());return reply({count:(await one(db,'SELECT count(*) n FROM wm_post_views WHERE post_id=?',id)).n})}const d=await body(req);need(typeof d.share==='boolean','Invalid share');if(d.share){await visiblePost(db,id,u);await run(db,'INSERT OR IGNORE INTO wm_post_shares(id,post_id,user_id,created_at) VALUES(?,?,?,?)',uuid(),id,u.id,now())}else await run(db,'DELETE FROM wm_post_shares WHERE post_id=? AND user_id=?',id,u.id);return reply({shared:d.share,count:(await one(db,'SELECT count(*) n FROM wm_post_shares WHERE post_id=?',id)).n})}
-if(p==='/api/reports'&&method==='POST'){await throttle(db,'report:'+u.id,5);const d=await body(req);need(['scam','inappropriate','harassment','external-contact','other'].includes(d.reason),'Choose a report reason');const details=text(d.details,1000,'report details');need(d.postId===null||d.postId===undefined||typeof d.postId==='string','Invalid post');if(d.postId)await visiblePost(db,d.postId,u);const id=uuid();await run(db,'INSERT OR IGNORE INTO wm_reports(id,post_id,user_id,reason,details,created_at) VALUES(?,?,?,?,?,?)',id,d.postId||null,u.id,d.reason,details,now());return reply({ok:true},201)}
+// Private evidence files never enter wm_uploads or the publicly served /media route.
+if(p==='/api/private-evidence'&&method==='POST'){
+ need(env.MEDIA,'Private media storage unavailable',503);
+ const kind=req.headers.get('x-evidence-kind'),type=req.headers.get('content-type');
+ need(['report','verification'].includes(kind),'Invalid evidence type',400);
+ need(['image/jpeg','image/png','image/webp'].includes(type),'Upload JPG, PNG or WebP only',415);
+ await throttle(db,'private-evidence:'+u.id,8);
+ const bytes=await bounded(req,6*1024*1024),sig=String.fromCharCode(...bytes.slice(0,12));
+ const valid=type==='image/png'?bytes[0]===137&&sig.slice(1,4)==='PNG':type==='image/jpeg'?bytes[0]===255&&bytes[1]===216:sig.startsWith('RIFF')&&sig.slice(8)==='WEBP';
+ need(valid&&bytes.length>12,'Invalid image file',415);
+ const id=uuid(),key='private-evidence/'+id;
+ await env.MEDIA.put(key,bytes,{httpMetadata:{contentType:type}});
+ await run(db,'INSERT INTO wm_private_uploads(id,user_id,kind,object_key,type,size,created_at) VALUES(?,?,?,?,?,?,?)',id,u.id,kind,key,type,bytes.length,now());
+ return reply({id},201);
+}
+const ownerEvidence=p.match(/^\/api\/admin\/evidence\/([\da-f-]{36})$/);
+if(ownerEvidence&&method==='GET'){
+ need(u.role==='owner','Owner only',403);
+ const file=await one(db,'SELECT object_key,type FROM wm_private_uploads WHERE id=?',ownerEvidence[1]);
+ need(file,'File not found',404);
+ const object=await env.MEDIA.get(file.object_key);
+ need(object,'File unavailable',404);
+ return new Response(object.body,{headers:{'content-type':file.type,'cache-control':'private, no-store','x-content-type-options':'nosniff','content-security-policy':"default-src 'none'"}});
+}
+if(p==='/api/verification'&&method==='GET'){
+ return reply({requests:await rows(db,'SELECT id,kind,status,created_at,reviewed_at FROM wm_verification_requests WHERE user_id=? ORDER BY created_at DESC LIMIT 12',u.id)});
+}
+if(p==='/api/verification'&&method==='POST'){
+ await throttle(db,'verification:'+u.id,4);
+ const d=await body(req);
+ need(['seller','trusted'].includes(d.kind),'Choose seller or trusted verification');
+ const contact=text(d.contact,500,'contact details');
+ const evidence=await one(db,"SELECT id FROM wm_private_uploads WHERE id=? AND user_id=? AND kind='verification'",d.documentId,u.id);
+ need(evidence,'Upload your NID photo first',400);
+ const pending=await one(db,"SELECT id FROM wm_verification_requests WHERE user_id=? AND kind=? AND status='pending'",u.id,d.kind);
+ need(!pending,'You already have a pending request for this type',409);
+ await run(db,'INSERT INTO wm_verification_requests(id,user_id,kind,contact,document_id,status,created_at) VALUES(?,?,?,?,?,?,?)',uuid(),u.id,d.kind,contact,evidence.id,'pending',now());
+ return reply({ok:true},201);
+}
+if(p==='/api/admin/verifications'&&method==='GET'){
+ need(u.role==='owner','Owner only',403);
+ return reply({requests:await rows(db,"SELECT v.*,a.name applicant_name,a.picture applicant_picture FROM wm_verification_requests v JOIN wm_public_users a ON a.id=v.user_id ORDER BY (v.status='pending') DESC,v.created_at DESC LIMIT 100")});
+}
+if(p==='/api/admin/verification-action'&&method==='POST'){
+ need(u.role==='owner','Owner only',403);
+ const d=await body(req);
+ need(['approve','reject'].includes(d.action),'Invalid verification action',400);
+ const changed=await run(db,"UPDATE wm_verification_requests SET status=?,reviewed_by=?,reviewed_at=? WHERE id=? AND status='pending'",d.action==='approve'?'approved':'rejected',u.id,now(),d.id);
+ return reply({ok:true,reviewed:changed.meta?.changes||0});
+}
+if(p==='/api/reports'&&method==='POST'){await throttle(db,'report:'+u.id,5);const d=await body(req);need(['website-issue','glitch','scam','other','inappropriate','harassment','external-contact'].includes(d.reason),'Choose a report reason');const details=text(d.details,1000,'report details');need(d.postId===null||d.postId===undefined||typeof d.postId==='string','Invalid post');if(d.postId)await visiblePost(db,d.postId,u);let evidence=null;if(d.attachmentId){evidence=await one(db,"SELECT id FROM wm_private_uploads WHERE id=? AND user_id=? AND kind='report'",d.attachmentId,u.id);need(evidence,'Invalid report attachment',400)}const id=uuid();await run(db,'INSERT OR IGNORE INTO wm_reports(id,post_id,user_id,reason,details,created_at,attachment_id) VALUES(?,?,?,?,?,?,?)',id,d.postId||null,u.id,d.reason,details,now(),evidence?.id||null);return reply({ok:true},201)}
 if(p==='/api/admin/reports'&&method==='GET'){need(u.role==='owner','Owner only',403);return reply({reports:await rows(db,"SELECT r.*,u.name reporter_name,p.title post_title,p.details post_details,p.status post_status FROM wm_reports r JOIN wm_public_users u ON u.id=r.user_id LEFT JOIN wm_posts p ON p.id=r.post_id ORDER BY (r.status='open') DESC,r.created_at DESC LIMIT 100")})}
 if(p==='/api/admin/report-action'&&method==='POST'){need(u.role==='owner','Owner only',403);const d=await body(req);need(['resolve','dismiss','restrict'].includes(d.action),'Invalid action');const r=await one(db,"SELECT * FROM wm_reports WHERE id=? AND status='open'",d.reportId);need(r,'Open report not found',404);need(d.action!=='restrict'||r.post_id,'This issue is not linked to a post');await db.batch([stmt(db,'UPDATE wm_reports SET status=?,resolved_by=?,resolved_at=? WHERE id=?',d.action==='dismiss'?'dismissed':'resolved',u.id,now(),r.id),...(d.action==='restrict'?[stmt(db,"UPDATE wm_posts SET status='rejected',version=version+1,updated_at=? WHERE id=? AND deleted_at IS NULL",now(),r.post_id)]:[])]);return reply({ok:true})}
 if(p==='/api/admin/member-access'&&method==='POST'){need(u.role==='owner','Only the owner can edit badges and access',403);const d=await body(req);need(typeof d.userId==='string'&&d.userId.length>0&&d.userId.length<128&&typeof d.verified==='boolean'&&typeof d.trustedSeller==='boolean'&&['member','trusted','owner'].includes(d.role),'Invalid member settings');need(await one(db,'SELECT id FROM users WHERE id=?',d.userId),'Account not found',404);const owner=await one(db,"SELECT 1 FROM wm_roles WHERE user_id=? AND role='owner'",d.userId);need(owner?d.verified&&d.role==='owner':d.role!=='owner','Owner access is protected',403);const writes=[];if(d.permissions!==undefined){const v=d.permissions;need(v&&['can_post','can_message','can_start_deal'].every(k=>typeof v[k]==='boolean'),'Invalid permissions');need(!owner||Object.values(v).every(x=>x===true),'Owner permissions are protected',403);writes.push(stmt(db,'INSERT INTO wm_member_permissions(user_id,can_post,can_message,can_start_deal,updated_by,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET can_post=excluded.can_post,can_message=excluded.can_message,can_start_deal=excluded.can_start_deal,updated_by=excluded.updated_by,updated_at=excluded.updated_at',d.userId,+v.can_post,+v.can_message,+v.can_start_deal,u.id,now()))}if(!owner){writes.push(d.verified?stmt(db,'INSERT INTO wm_verifications(user_id,granted_by,created_at) VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET granted_by=excluded.granted_by,created_at=excluded.created_at',d.userId,u.id,now()):stmt(db,'DELETE FROM wm_verifications WHERE user_id=?',d.userId));writes.push(d.role==='trusted'?stmt(db,"INSERT INTO wm_roles(user_id,role) VALUES(?,'trusted') ON CONFLICT(user_id) DO UPDATE SET role='trusted'",d.userId):stmt(db,"DELETE FROM wm_roles WHERE user_id=? AND role!='owner'",d.userId))}writes.push(d.trustedSeller?stmt(db,'INSERT INTO wm_seller_badges(user_id,granted_by,created_at) VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET granted_by=excluded.granted_by,created_at=excluded.created_at',d.userId,u.id,now()):stmt(db,'DELETE FROM wm_seller_badges WHERE user_id=?',d.userId));await db.batch(writes);return reply({ok:true})}
