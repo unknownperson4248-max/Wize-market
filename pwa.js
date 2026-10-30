@@ -1,19 +1,40 @@
 let deferredInstall=null;
 const installedApp=()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+const installSeen=()=>{try{return localStorage.getItem('wm_install_first_offer')==='1'}catch{return false}};
+const markInstallSeen=()=>{try{localStorage.setItem('wm_install_first_offer','1')}catch{}};
+const knownInstalled=()=>{try{return localStorage.getItem('wm_app_installed')==='1'}catch{return false}};
 function closeInstallHelp(){$('installHelp').hidden=true}
+function displayInstallOffer(){
+ if(installedApp()||knownInstalled()||installSeen())return;
+ $('appInstallBanner').hidden=false;markInstallSeen();
+}
 async function installMarketApp(){
- if(installedApp())return toast('WIZE MARKET is already open as an app.');
- if(deferredInstall){const prompt=deferredInstall;deferredInstall=null;await prompt.prompt();const result=await prompt.userChoice;if(result.outcome==='accepted')$('appInstallBanner').hidden=true;return}
+ if(installedApp()||knownInstalled())return toast('WIZE MARKET is already installed or open as an app.');
+ if(deferredInstall){
+  const prompt=deferredInstall;deferredInstall=null;await prompt.prompt();
+  const result=await prompt.userChoice;
+  if(result.outcome==='accepted'){$('appInstallBanner').hidden=true;markInstallSeen()}
+  return;
+ }
  const ios=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
  $('installInstructions').textContent=ios?'Open this website in Safari. Tap Share, then Add to Home Screen and confirm Add.':'Open your browser menu (⋮), then choose Install app or Add to Home screen. If this is an in-app browser, open the website in Chrome first.';
  $('installHelp').hidden=false;$('closeInstallHelp').focus();
 }
-window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();deferredInstall=event;if(!installedApp())$('appInstallBanner').hidden=false});
-window.addEventListener('appinstalled',()=>{deferredInstall=null;$('appInstallBanner').hidden=true;closeInstallHelp();toast('WIZE MARKET installed.')});
+window.addEventListener('beforeinstallprompt',event=>{
+ event.preventDefault();deferredInstall=event;
+ // If Chrome offers installation again, an old saved install flag may be stale after uninstall.
+ if(knownInstalled()){try{localStorage.removeItem('wm_app_installed')}catch{}}
+ displayInstallOffer();
+});
+window.addEventListener('appinstalled',()=>{deferredInstall=null;try{localStorage.setItem('wm_app_installed','1')}catch{}$('appInstallBanner').hidden=true;closeInstallHelp();toast('WIZE MARKET installed.')});
 $('installApp').onclick=()=>void installMarketApp().catch(e=>toast(e.message));
-$('dismissInstall').onclick=()=>{$('appInstallBanner').hidden=true;try{sessionStorage.setItem('wm_install_dismissed','1')}catch{}};
-$('closeInstallHelp').onclick=closeInstallHelp;$('installHelp').onclick=e=>{if(e.target===$('installHelp'))closeInstallHelp()};document.addEventListener('keydown',e=>{if(e.key==='Escape')closeInstallHelp()});
-try{$('appInstallBanner').hidden=installedApp()||sessionStorage.getItem('wm_install_dismissed')==='1'}catch{$('appInstallBanner').hidden=installedApp()}
+$('dismissInstall').onclick=()=>{$('appInstallBanner').hidden=true;markInstallSeen()};
+$('closeInstallHelp').onclick=closeInstallHelp;
+$('installHelp').onclick=e=>{if(e.target===$('installHelp'))closeInstallHelp()};
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeInstallHelp()});
+$('appInstallBanner').hidden=true;displayInstallOffer();
+if(navigator.getInstalledRelatedApps)void navigator.getInstalledRelatedApps().then(apps=>{if(apps.length){try{localStorage.setItem('wm_app_installed','1')}catch{}$('appInstallBanner').hidden=true}}).catch(()=>{});
+
 if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('/sw.js',{scope:'/',updateViaCache:'none'}).catch(()=>{});
 
 function completedProfile(d,key){const p={id:d[key+'_id'],name:d[key+'_name']||'Admin',picture:d[key+'_picture']};const visit=button('',()=>showProfile(p.id),'completed-profile');visit.append(avatar(p),node('span',p.name));if(d[key+'_verified'])visit.append(verifiedMark('member'));return visit}
