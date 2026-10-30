@@ -1,0 +1,21 @@
+{
+  "id": "/",
+  "name": "WIZE MARKET",
+  "short_name": "WIZE MARKET",
+  "description": "Your gaming community marketplace. Connect, post and trade with trusted admins.",
+  "lang": "en",
+  "start_url": "/?source=pwa#home",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#070e1b",
+  "theme_color": "#090e19",
+  "icons": [
+    {"src":"/icons/app-192.png","sizes":"192x192","type":"image/png","purpose":"any"},
+    {"src":"/icons/app-512.png","sizes":"512x512","type":"image/png","purpose":"any"},
+    {"src":"/icons/app-maskable-512.png","sizes":"512x512","type":"image/png","purpose":"maskable"}
+  ],
+  "shortcuts": [
+    {"name":"Messages","url":"/#messages"},
+    {"name":"Create a post","url":"/#post"}
+  ]
+}

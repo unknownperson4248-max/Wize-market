@@ -56,7 +56,7 @@ rr=await worker.fetch(mediaRequest('buyer'),env);assert.equal(rr.status,200);ass
 // Even the website owner and other trusted admins cannot read somebody else's personal conversation.
 for(const id of ['owner','admin','outsider']){assert.equal((await call('/api/threads/'+thread+'/messages','GET',undefined,id)).status,404);assert.equal((await call('/api/threads','GET',undefined,id)).data.threads.length,0);}
 assert.equal((await call('/api/admin/overview')).status,401);assert.equal((await call('/api/admin/overview','GET',undefined,'buyer')).status,403);assert.equal((await call('/api/admin/overview','GET',undefined,'admin')).data.stats.Groups,1);
-assert.equal((await call('/api/admin/users','GET',undefined,'admin')).status,403);const adminPeople=await call('/api/admin/users?q=buyer','GET',undefined,'owner');assert.equal(adminPeople.data.users.length,1);assert.equal(adminPeople.data.users[0].email,undefined);
+assert.equal((await call('/api/admin/users','GET',undefined,'admin')).status,403);const adminPeople=await call('/api/admin/users?q=buyer','GET',undefined,'owner');assert.equal(adminPeople.data.users.length,1);assert.equal(adminPeople.data.users[0].email,'buyer@example.com');
 assert.equal((await call('/api/admin/settings','POST',{name:'Test Market',welcome:'Welcome players'},'admin')).status,403);assert.equal((await call('/api/admin/settings','POST',{name:'Test Market',welcome:'Welcome players'},'owner')).status,200);assert.deepEqual((await call('/api/site')).data,{name:'Test Market',welcome:'Welcome players'});
 assert.equal((await call('/api/admin/role','POST',{userId:'owner',role:'trusted'},'admin')).status,403);assert.equal((await call('/api/admin/role','POST',{userId:'outsider',role:'trusted'},'owner')).status,200);assert.equal((await call('/api/admin/role','POST',{userId:'owner',role:'trusted'},'outsider')).status,403);
 console.log('PASS: authenticated R2 group images, full response status, private chats hidden from owner/admin/outsiders, admin role boundaries and persistent website settings.');
@@ -214,7 +214,7 @@ assert.equal((await call('/api/posts/'+multiId+'/share','POST',{share:false},'bu
 const badgeSettings={userId:'buyer',verified:true,trustedSeller:true,role:'member'};for(const id of ['buyer','admin','seller'])assert.equal((await call('/api/admin/member-access','POST',badgeSettings,id)).status,403);
 assert.equal((await call('/api/admin/member-access','POST',badgeSettings,'owner')).status,200);const buyerBadges=(await call('/api/me','GET',undefined,'buyer')).data.user;assert.equal(buyerBadges.role,'member');assert.equal(buyerBadges.verified,1);assert.equal(buyerBadges.trusted_seller,1);assert.equal((await call('/api/groups','POST',{name:'Badge alone is not access'},'buyer')).status,403);
 assert.equal((await call('/api/admin/member-access','POST',{...badgeSettings,userId:'owner',role:'member'},'owner')).status,403);assert.equal((await call('/api/admin/member-access','POST',{...badgeSettings,role:'owner'},'owner')).status,403);
-assert.ok((await call('/api/admin/users?q=Rahat','GET',undefined,'owner')).data.users.some(u=>u.name==='Rahat Custom'));assert.equal((await call('/api/admin/users?q=Rahat','GET',undefined,'owner')).data.users[0].email,undefined);
+assert.ok((await call('/api/admin/users?q=Rahat','GET',undefined,'owner')).data.users.some(u=>u.name==='Rahat Custom'));assert.equal((await call('/api/admin/users?q=Rahat','GET',undefined,'owner')).data.users[0].email,'buyer@example.com');
 assert.equal((await call('/api/admin/member-access','POST',{...badgeSettings,verified:false,trustedSeller:false},'owner')).status,200);assert.equal((await call('/api/profile/buyer','GET',undefined,'buyer')).data.profile.trusted_seller,0);
 console.log('PASS: full/k/Bengali prices, multi-game filtering/editing, contact details pending without suspension, unique views, scoped/idempotent reposts and profile shares, private owner reports/restrictions, searchable members, and owner-only seller/blue badges without role escalation.');
 // Friend requests require recipient consent and expose only the viewer's own requests.
@@ -355,3 +355,39 @@ assert.ok(!(await call('/api/feed?group='+secondGroup,'GET',undefined,'buyer')).
 assert.equal((await call('/api/posts/'+dualId+'/interest','POST',{interested:false})).status,401);assert.equal((await call('/api/posts/'+dualId+'/interest','POST',{interested:false},'seller')).status,400);
 assert.equal((await call('/api/posts/'+dualId+'/interest','POST',{interested:'no'},'buyer')).status,400);assert.equal((await call('/api/posts/'+dualId+'/interest','POST',{interested:true},'buyer')).status,200);assert.ok((await call('/api/feed','GET',undefined,'buyer')).data.posts.some(p=>p.id===dualId));
 console.log('PASS: Not interested hides every feed copy only for the current member, persists across requests, respects group access and preserves the original listing for other viewers.');
+
+// Owner-only Gmail search and explicit permission overrides do not leak through public identities.
+const gmailMember=(await call('/api/admin/users?q=buyer%40example.com','GET',undefined,'owner')).data;
+assert.equal(gmailMember.total,1);assert.equal(gmailMember.users[0].email,'buyer@example.com');assert.deepEqual(gmailMember.users[0].permissions,{can_post:1,can_message:1,can_start_deal:1});
+assert.equal((await call('/api/admin/users?q=buyer%40example.com','GET',undefined,'buyer')).status,403);
+assert.equal((await call('/api/admin/users?q=buyer%40example.com','GET',undefined,'admin')).status,403);
+const caps={can_post:false,can_message:false,can_start_deal:false};
+const access={userId:'buyer',verified:false,trustedSeller:false,role:'member',permissions:caps};
+assert.equal((await call('/api/admin/member-access','POST',access,'buyer')).status,403);
+assert.equal((await call('/api/admin/member-access','POST',access,'owner')).status,200);
+assert.equal((await call('/api/posts','POST',post,'buyer')).status,403);
+assert.equal((await call('/api/posts/'+groupPost+'/edit','POST',{},'buyer')).status,403);
+assert.equal((await call('/api/threads','POST',{userId:'seller'},'buyer')).status,403);
+assert.equal((await call('/api/groups/'+group+'/messages','POST',{text:'Blocked'},'buyer')).status,403);
+assert.equal((await call('/api/deals','POST',{postId},'buyer')).status,403);
+// A restriction on starting trades does not block private history and safety actions.
+assert.equal((await call('/api/deals','GET',undefined,'buyer')).status,200);
+assert.equal((await call('/api/profile/seller','GET',undefined,'buyer')).data.profile.email,undefined);
+assert.equal((await call('/api/admin/member-access','POST',{...access,userId:'owner',verified:true,role:'owner'},'owner')).status,403);
+assert.equal((await call('/api/admin/member-access','POST',{...access,permissions:{...caps,can_post:'yes'}},'owner')).status,400);
+assert.equal((await call('/api/admin/member-access','POST',{...access,permissions:{can_post:true,can_message:true,can_start_deal:true}},'owner')).status,200);
+const groupIdentity=(await call('/api/groups/'+group+'/messages','GET',undefined,'buyer')).data.messages[0];
+assert.ok('picture' in groupIdentity);assert.ok('verified' in groupIdentity);assert.equal(groupIdentity.email,undefined);
+const publicTrades=(await call('/api/deals/public')).data;
+assert.equal(publicTrades.total,sql.prepare("SELECT count(*) n FROM wm_deals WHERE status='completed'").get().n);assert.ok(publicTrades.completed.length);
+for(const trade of publicTrades.completed){assert.ok(trade.buyer_id&&trade.seller_id);for(const privateKey of ['email','buyer_email','seller_email','price','fee','cancel_reasons','messages','events','completion_note'])assert.equal(trade[privateKey],undefined)}
+assert.equal((await call('/api/deals/public?offset=100000')).data.completed.length,0);
+const previous=(await call('/api/deals?status=previous','GET',undefined,'buyer')).data.deals;assert.ok(previous.every(d=>['completed','cancelled'].includes(d.status)));
+const manifestResponse=await worker.fetch(new Request('https://test.local/manifest.webmanifest'),env),manifest=await manifestResponse.json();assert.equal(manifestResponse.status,200);assert.equal(manifest.display,'standalone');assert.equal(manifest.scope,'/');assert.ok(manifest.icons.some(i=>i.sizes==='192x192'));assert.ok(manifest.icons.some(i=>i.sizes==='512x512'&&i.purpose==='maskable'));
+for(const icon of manifest.icons){const response=await worker.fetch(new Request('https://test.local'+icon.src),env);assert.equal(response.headers.get('content-type'),'image/png');assert.deepEqual([...new Uint8Array(await response.arrayBuffer()).slice(0,8)],[137,80,78,71,13,10,26,10])}
+const swResponse=await worker.fetch(new Request('https://test.local/sw.js'),env);assert.equal(swResponse.headers.get('cache-control'),'no-cache');assert.equal(swResponse.headers.get('service-worker-allowed'),'/');
+// Execute the actual service-worker fetch handler: API/private media is never intercepted/cached.
+const {runInNewContext}=await import('node:vm');const handlers={};runInNewContext(await swResponse.text(),{self:{location:{origin:'https://test.local'},addEventListener:(name,handler)=>handlers[name]=handler},URL});
+for(const path of ['/api/me','/api/threads/123/messages','/media/private','/avatar/member']){let intercepted=false;handlers.fetch({request:{url:'https://test.local'+path,method:'GET',mode:'cors'},respondWith:()=>intercepted=true});assert.equal(intercepted,false)}
+assert.equal((await worker.fetch(new Request('https://test.local/offline.html'),env)).status,200);
+console.log('PASS: owner-only Gmail search and capability editing; backend posting/messaging/new-deal enforcement; safe public completed profiles; previous-deal filter; install manifest/icons and private-data-free service-worker caching.');
