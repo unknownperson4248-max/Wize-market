@@ -26,9 +26,7 @@ async function renderPublicDeals(root,offset=0){
  if(!data.total)root.append(node('p','Completed trades will appear here.','hint'));
  if(data.nextOffset!==null)root.append(button('Show more',()=>renderPublicDeals(root,data.nextOffset),'btn secondary load-public-deals'));
 }
-let featureView='deals',featuresRequest=0;
-async function loadFeatures(){const request=++featuresRequest;const root=$('featureContent');root.replaceChildren();if(featureView==='deals'){await renderPublicDeals(root);return}const {groups:directory}=await api('/groups');if(request!==featuresRequest)return;root.append(node('h2','Community groups'));for(const g of directory){const row=button('',async()=>{if(!requireLogin())return;await api('/groups/'+g.id+'/join',{});navigate('messages');await loadMessages();await openChat('group',g.id)},'chat-row');row.append(avatar({name:g.name,picture:g.logo||null}),node('strong',g.name),node('small',g.joined?'Open group':'Join group'));root.append(row)}if(!directory.length)root.append(node('p','No community groups yet.','hint'))}
-$('featureDeals').onclick=()=>{featureView='deals';void loadFeatures().catch(e=>toast(e.message))};$('featureGroups').onclick=()=>{featureView='groups';void loadFeatures().catch(e=>toast(e.message))};$('featureInstall').onclick=()=>void installMarketApp().catch(e=>toast(e.message));
+async function loadFeatures(){}
 
 async function loadPwaBranding(){try{const config=await api('/pwa');$('appInstallBanner').querySelector('strong').textContent=config.name;$('appInstallBanner').querySelector('img').src=config.icons[0].src;document.querySelector('link[rel="apple-touch-icon"]').href=config.icons[0].src;$('installHelpTitle').textContent='Install '+config.name}catch{}}
 void loadPwaBranding();
