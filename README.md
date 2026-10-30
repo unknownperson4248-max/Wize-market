@@ -48,11 +48,11 @@ Migration server/migrations/002_group_ranges.sql has been applied to the existin
 
 Run `server/migrations/009_listing_deals_and_crossposting.sql` once on an existing database before deploying this version. Fresh test databases use `server/schema.sql`. The migration adds stable sequential independent listing and deal numbers (displayed as `ID No - 1` and `Deal - 1`) and preserves old records.
 
-Start Deal sends `POST /api/deals` with `postId`, without creating a Messenger conversation. The server snapshots the listing price and selects a seller Admin for direct deals, or an independent trusted admin for member listings. Direct requests start at `awaiting_admin`; mediated requests start at `awaiting_seller`, then move to `awaiting_admin` after seller consent. Only the assigned trusted admin can accept, reject or finally cancel. Members may submit a reasoned cancellation request, which leaves the deal open until the admin decides. Both buyer and seller must confirm completion. `/api/deal-management` and the control room show metadata to the owner (all deals) or assigned trusted admins. Room messages are participant-only.
+Start Deal sends `POST /api/deals` with `postId`, without creating a Messenger conversation. The server snapshots the listing price and selects a seller Admin for direct deals, or an independent trusted admin for member listings. Direct requests start at `awaiting_admin`; mediated requests start at `awaiting_seller`, then move to `awaiting_admin` after seller consent. Only the assigned trusted admin can accept, reject or finally cancel. Members may submit a reasoned cancellation request, which leaves the deal open until the admin decides. Buyer and seller confirm completion, then the assigned Admin gives the final confirmation. A direct Seller/Admin may use a separate, explicit second confirmation with an audit reason when the buyer has not confirmed. `/api/deal-management` and the control room show metadata to the owner (all deals) or assigned trusted admins. Room messages are participant-only.
 
 Public posts may include up to 20 joined `groupIds`. There is one underlying listing, moderation decision and set of reactions. Each group placement receives its own matching price range. Destination selection is fixed during editing; price edits recalculate the existing placements. Group-only posts remain supported.
 
-Prices above 9,999 display in k automatically; explicit k display is available for lower amounts. Friend requests immediately follow the target; accepted requests appear in Friends. Profile connection lists show public friends/following, while received requests remain private.
+Prices above 9,999 display in k automatically; explicit k display is available for lower amounts. Friend requests immediately follow the target; accepted requests appear in Friends. Profile connections require sign-in; received requests remain private to their recipient.
 
 Validation: `node server/test.mjs`, `node build.mjs`.
 
@@ -61,10 +61,23 @@ Validation: `node server/test.mjs`, `node build.mjs`.
 
 For databases already on migration 009, apply `server/migrations/010_admin_deal_permissions.sql` before deploying this version. It preserves listing/deal counter rows and UUID foreign keys, backfills an immutable account-name snapshot, adds cancellation requests, and moves any older mediated requests missing seller consent back to `awaiting_seller`.
 
-Only the assigned current trusted Admin can accept, reject, cancel, decide cancellation requests or resolve disputes. Buyer and seller can request cancellation and each confirm completion; both confirmations are required. Disputes clear previous completion flags. The assigned Admin may resume a disputed deal or cancel it; resuming requires fresh completion confirmations. Completed/cancelled deals are immutable and their opened rooms are read-only.
+Only the assigned current trusted Admin can accept, reject, cancel, decide cancellation requests or resolve disputes. Buyer and seller can request cancellation and each confirm completion; mediated deals also require the assigned Admin final confirmation. Direct Seller/Admin completion supports the explicit audited override described below. Disputes clear previous completion flags. The assigned Admin may resume a disputed deal or cancel it; resuming requires fresh completion confirmations. Completed/cancelled deals are immutable and their opened rooms are read-only.
 
 Deal Management supports All/Pending/Active/Completed/Cancelled/Disputed filters and qualified serial searches (`ID No - 1`, `Deal - 1`), including legacy WM/DL search aliases. The owner can inspect all metadata and non-chat audit history. Private messages remain limited to participants and the assigned trusted Admin.
 
 Chat inputs use explicit LTR direction. Polling updates message containers without replacing the input or its selection. Messages preserve the submitted character order, with timestamps and deal participant roles. The mobile room uses the visual viewport for keyboard resizing.
 
 Verified locally with `node server/test.mjs` and the additive migration against the preceding schema. An uploaded Cloudflare version bound to an isolated QA D1 database also exercises real Buyer/Seller/Admin sessions, native Chromium text insertion, 320px layout, backend authorization, cancellations, disputes, dual completion and audit/search behavior. QA sessions and fixtures are never inserted into the production database.
+
+
+## Public feed, final completion and profile save
+
+Apply `server/migrations/011_completion_profile_and_guest_views.sql` after 010, before deploying this revision. Existing completed statuses, identifiers and counter mappings remain intact. Historical completion dates are backfilled; historical records are not marked as newly Admin-confirmed. Unresolved cancellation requests attached to terminal records are closed without deleting their reasons.
+
+Guest visitors can browse Home and public listings. Visible posts record a deduplicated view immediately, using the existing account identity or an opaque HttpOnly visitor cookie. Private profiles, messages, deals, saves and posting still require authentication. Views and the bookmark are displayed beside the listing price.
+
+Buyer/Seller completion moves a mediated deal to `awaiting_final`. Only the assigned current trusted Admin can finalize it. Completed and cancelled records are excluded from the default ongoing list; Previous deals includes completed totals by responsible Admin and counterparties. Direct Seller/Admin deals support two distinct server-checked actions: confirm seller completion, then explicitly finalize with an acknowledgement and reason if the buyer has not confirmed. Pending cancellation requests and disputes must be resolved before finalization.
+
+Deal messages display public profile pictures and authoritative verification badges. The profile editor saves name, bio, picture, banner and optional username in one atomic operation from one final Save button. A database trigger and API checks enforce seven days between username changes; saving the unchanged username does not restart the timer. Edit and Sign out are in the own-profile menu.
+
+Validation includes local permission, migration, guest view deduplication, direct double-confirmation, atomic username cooldown tests and an isolated Cloudflare mobile-browser workflow covering guest browsing/login gates, immediate views, bookmark placement, single-save profile editing, participant badges, final Admin completion and completed history totals.

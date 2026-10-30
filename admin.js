@@ -34,22 +34,22 @@ for(const b of document.querySelectorAll('[data-view]'))b.onclick=()=>{controlMe
 async function loadChatArchiveStatus(){const d=await api('chat-history');$('chatArchiveStatus').textContent=d.archived+' archived messages. Deal records are kept separately.';$('restoreChatHistory').disabled=!d.archived}
 for(const [id,action]of [['archiveChatHistory','archive'],['restoreChatHistory','restore']])$(id).onclick=async()=>{const b=$(id);b.disabled=true;try{await api('chat-history',{action});await loadChatArchiveStatus();toast(action==='archive'?'Existing chat history archived.':'Archived chat history restored.')}catch(e){toast(e.message)}finally{b.disabled=false}};
 
-let controlDealStatus='all',controlDealQuery=0,controlDealSearchTimer;
+let controlDealStatus='current',controlDealQuery=0,controlDealSearchTimer;
 async function loadControlDeals(){
  const request=++controlDealQuery,params=new URLSearchParams({status:controlDealStatus,q:$('controlDealSearch').value});
- const {deals}=await api('deals?'+params);if(request!==controlDealQuery)return;
+ const {deals,summary}=await api('deals?'+params);if(request!==controlDealQuery)return;
  const tabs=$('controlDealTabs');tabs.replaceChildren();
- for(const [value,label]of [['all','All'],['pending','Pending'],['active','Active'],['completed','Completed'],['cancelled','Cancelled'],['disputed','Disputed']]){const tab=button(label,async()=>{controlDealStatus=value;await loadControlDeals()});tab.className='deal-filter-tab';tab.setAttribute('role','tab');tab.setAttribute('aria-selected',String(value===controlDealStatus));tabs.append(tab)}
- const root=$('controlDeals');root.replaceChildren();if(!deals.length)root.append(node('p','No matching deals.','muted'));
+ for(const [value,label]of [['current','Ongoing'],['pending','Pending'],['active','Active'],['disputed','Disputed'],['completed','Previous deals'],['cancelled','Cancelled']]){const tab=button(label,async()=>{controlDealStatus=value;await loadControlDeals()});tab.className='deal-filter-tab';tab.setAttribute('role','tab');tab.setAttribute('aria-selected',String(value===controlDealStatus));tabs.append(tab)}
+ const root=$('controlDeals');root.replaceChildren();const summaryCard=node('div',undefined,'card');summaryCard.append(node('strong',(summary?.total||0)+' completed deals'));for(const a of summary?.admins||[])summaryCard.append(node('p',a.name+' · '+a.completed+' completed','hint'));root.append(summaryCard);if(!deals.length)root.append(node('p','No matching deals.','muted'));
  for(const d of deals){
   const c=node('article',undefined,'card control-deal-card');c.append(node('span',d.status.replaceAll('_',' '),'pill'),node('h2',d.account_title||d.title||'Marketplace account'),node('p',d.deal_code+' · '+d.listing_code),node('p','Buyer: '+d.buyer_name+' · Seller: '+d.seller_name),node('p','৳'+d.price.toLocaleString('en-BD')+' · Admin: '+d.admin_name));
   if(d.cancel_pending)c.append(node('p','Cancellation requested · awaiting your decision\n'+(d.cancel_reasons||''),'control-cancel-notice'));
-  const assigned=d.admin_id===controlUser?.id,pending=['proposed','awaiting_admin','awaiting_seller'].includes(d.status),open=pending||['active','disputed'].includes(d.status);
+  const assigned=d.admin_id===controlUser?.id,pending=['proposed','awaiting_admin','awaiting_seller'].includes(d.status),open=pending||['active','awaiting_final','disputed'].includes(d.status);
   if(assigned){
    const actions=[];
    if(['awaiting_admin','proposed'].includes(d.status)&&d.buyer_ok&&(d.mode==='direct'||d.seller_ok))actions.push(['accept','Accept deal']);
-   if(pending)actions.push(['reject','Reject request']);if(open)actions.push(['cancel','Cancel deal']);if(open&&d.cancel_pending)actions.push(['reject_cancel','Decline cancellation']);if(d.status==='disputed')actions.push(['resolve_dispute','Resolve dispute & resume']);
-   for(const [action,label]of actions)c.append(button(label,async()=>{if(['cancel','reject'].includes(action)&&!confirm(label+'?'))return;await api('deals/'+d.id+'/action',{action,version:d.version});await loadControlDeals()}));
+   if(pending)actions.push(['reject','Reject request']);if(open)actions.push(['cancel','Cancel deal']);if(open&&d.cancel_pending)actions.push(['reject_cancel','Decline cancellation']);if(d.mode==='direct'&&d.seller_id===controlUser?.id&&d.status==='active'&&!d.seller_done)actions.push(['complete','Confirm seller completion']);if(['active','awaiting_final'].includes(d.status)&&!d.cancel_pending&&d.seller_done&&(d.buyer_done||d.mode==='direct'))actions.push(['finalize',d.buyer_done?'Admin final confirmation':'Second Admin confirmation']);if(d.status==='disputed')actions.push(['resolve_dispute','Resolve dispute & resume']);
+   for(const [action,label]of actions)c.append(button(label,async()=>{if(['cancel','reject'].includes(action)&&!confirm(label+'?'))return;let extra={};if(action==='finalize'&&!d.buyer_done){const reason=prompt('Buyer has not confirmed. Give a reason for completing this direct deal as Admin:');if(!reason?.trim()||!confirm('This is your second Admin confirmation. Finally complete this deal without buyer confirmation?'))return;extra={doubleConfirm:true,reason:reason.trim()}}await api('deals/'+d.id+'/action',{action,version:d.version,...extra});await loadControlDeals()}));
   }
   c.append(button('Status history',async()=>{const {events}=await api('deals/'+d.id+'/history');let history=c.querySelector('.control-deal-history');if(!history){history=node('div',undefined,'control-deal-history');c.append(history)}history.replaceChildren();for(const event of events)history.append(node('p',event.name+' · '+event.action.replaceAll('_',' ')+' · '+new Date(event.created_at).toLocaleString(),'hint'))}));
   const link=node('a','Open in Deals →','btn secondary');link.href='/?deal='+encodeURIComponent(d.id)+'#deals';c.append(link);root.append(c);
