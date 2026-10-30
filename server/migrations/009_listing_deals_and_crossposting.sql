@@ -1,0 +1,12 @@
+ALTER TABLE wm_threads ADD COLUMN is_deal INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE wm_deals ADD COLUMN post_id TEXT REFERENCES wm_posts(id);
+ALTER TABLE wm_deals ADD COLUMN mode TEXT NOT NULL DEFAULT 'mediated';
+CREATE TABLE wm_listing_ids(number INTEGER PRIMARY KEY AUTOINCREMENT,post_id TEXT NOT NULL UNIQUE REFERENCES wm_posts(id));
+INSERT INTO wm_listing_ids(post_id) SELECT id FROM wm_posts ORDER BY created_at,id;
+CREATE TRIGGER wm_listing_number AFTER INSERT ON wm_posts BEGIN INSERT INTO wm_listing_ids(post_id) VALUES(NEW.id); END;
+CREATE TABLE wm_deal_ids(number INTEGER PRIMARY KEY AUTOINCREMENT,deal_id TEXT NOT NULL UNIQUE REFERENCES wm_deals(id));
+INSERT INTO wm_deal_ids(deal_id) SELECT id FROM wm_deals ORDER BY created_at,id;
+CREATE TRIGGER wm_deal_number AFTER INSERT ON wm_deals BEGIN INSERT INTO wm_deal_ids(deal_id) VALUES(NEW.id); END;
+UPDATE wm_deals SET post_id=(SELECT post_id FROM wm_threads WHERE id=wm_deals.thread_id);
+CREATE TABLE wm_post_groups(post_id TEXT NOT NULL REFERENCES wm_posts(id),group_id TEXT NOT NULL REFERENCES wm_groups(id),range_id TEXT REFERENCES wm_group_ranges(id),PRIMARY KEY(post_id,group_id));
+CREATE INDEX wm_post_groups_feed ON wm_post_groups(group_id,range_id,post_id);
