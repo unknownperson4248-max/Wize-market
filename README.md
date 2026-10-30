@@ -181,3 +181,11 @@ Availability appears above the price; the author can open it to mark Sold or Ava
 Chat controls are +, Google Material gallery icon, emoji, message input and Send. Voice/Camera remain in the + menu. Private/deal chats and emoji selection do not automatically focus the keyboard.
 
 `GET /api/deal-admins` recommends the Admins who own groups joined by both buyer and seller, with the website owner offered as a fallback. Admin-owned listings retain the seller/Admin workflow. Mediated pending deals can propose another Admin; that change resets the other party's consent and requires both parties to agree before Admin acceptance. Accepted deals cannot switch Admins. No migration is needed for this update.
+
+### Post references and editable visibility
+
+The duplicate Edit button below an author's post is removed; Edit remains first in the three-dot menu. Message Seller / Message Buyer opens a compact preview of the selected listing in the composer. Sending stores that Post ID on the actual private message, and both participants see its ID, title, price and photo preview after refresh. Reusing a private conversation for another listing retains the correct reference on each message. A click alone does not send a message. Deleted/restricted/inaccessible listings show an unavailable reference without their private content.
+
+Migration `020_message_post_references.sql` adds a nullable `wm_messages.post_id` without changing existing messages or read cursors. Reference validation retains request consent, blocks, thread membership and group-media access.
+
+Post authors can edit Public / Public + Group destinations and select joined groups. Placement and post-version changes are committed together with version guards. Existing group-only posts keep their visibility until the author explicitly changes it. Save retry reconciliation also checks destinations.
