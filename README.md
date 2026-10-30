@@ -172,4 +172,12 @@ Sell posts show Available/Sold out. The author's first three-dot action is Edit 
 
 Owner Control Room → Website settings includes name, slogan, metadata, website/app logo, and Save & Publish. Navigation labels/order, feed heading and post spacing can be changed without code; all five navigation functions remain accessible. The existing App settings continue to manage installed app branding.
 
-Worker builds serve content-hashed public JS/CSS with long-lived browser caching and conditional ETags. Personalized HTML/API/chat/media retain their existing private cache rules. The self-contained `index.html` remains available for static previews. The ember-red theme from the existing GitHub update is preserved in `ember.css` so rebuilding does not drop it.
+Worker builds serve content-hashed public JS/CSS with long-lived browser caching and conditional ETags. Personalized HTML/API/chat/media retain their existing private cache rules. The self-contained `index.html` remains available for static previews. The blue/sky theme lives in `sky.css`; rebuilding retains it.
+
+### Blue theme and contextual Admin selection
+
+Availability appears above the price; the author can open it to mark Sold or Available. The author's three-dot menu starts with Edit and Delete, with deletion using the existing soft-delete confirmation and access checks. Post cards use a blue/sky palette with compact own-post controls.
+
+Chat controls are +, Google Material gallery icon, emoji, message input and Send. Voice/Camera remain in the + menu. Private/deal chats and emoji selection do not automatically focus the keyboard.
+
+`GET /api/deal-admins` recommends the Admins who own groups joined by both buyer and seller, with the website owner offered as a fallback. Admin-owned listings retain the seller/Admin workflow. Mediated pending deals can propose another Admin; that change resets the other party's consent and requires both parties to agree before Admin acceptance. Accepted deals cannot switch Admins. No migration is needed for this update.

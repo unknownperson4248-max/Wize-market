@@ -1,0 +1,1 @@
+The chat gallery button uses the Google Material Design `photo_library` icon shape, licensed under Apache License 2.0. Copyright Google LLC. Source: https://github.com/google/material-design-icons. License: assets/material-icons-LICENSE.txt.

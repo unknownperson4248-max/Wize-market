@@ -1,11 +1,8 @@
 let manageDeals=false,activeDealRoom=null,dealRoomBusy=false,dealListRequest=0,dealStatus='current',dealSearchTimer,cancelDealDraft=null;
 function selectedCrosspostGroups(){return [...document.querySelectorAll('#crosspostGroups input:checked')].map(input=>input.value)}
 function renderCrosspostGroups(selected=selectedCrosspostGroups()){const root=$('crosspostGroups');root.replaceChildren();for(const g of groups.filter(g=>g.joined)){const label=node('label',undefined,'crosspost-choice'),input=node('input');input.type='checkbox';input.value=g.id;input.checked=selected.includes(g.id);input.disabled=!!editingPost;label.append(input,avatar({name:g.name,picture:g.logo||null}),node('span',g.name));root.append(label)}if(!root.children.length)root.append(node('p','Join a group to share your public listing there.','hint'));$('crosspostField').hidden=$('postDestination').value!=='public-groups'||!!editingPost?.groupId;}
-async function startListingDeal(postId){
- const {deal}=await api('/deals',{postId});$('listingModal').hidden=true;manageDeals=false;dealStatus='current';$('dealSearch').value='';navigate('deals');await loadMessages();await loadDeals();
- toast(deal.status==='awaiting_seller'?'Waiting for seller agreement. Then the Admin can accept.':deal.status==='awaiting_admin'?'Request sent. Waiting for Admin Accept.':'Your existing request is in Messages → Deals.');
- document.querySelector('[data-deal-id="'+deal.id+'"]')?.scrollIntoView({block:'center',behavior:'smooth'});
-}
+async function startListingDeal(postId){if(!requireLogin())return;await openListingAdminChoice({postId})}
+
 const dealLabels={awaiting_final:'Waiting for Admin final confirmation',awaiting_admin:'Waiting for Admin',awaiting_seller:'Waiting for Seller',proposed:'Terms proposed',active:'Active',completed:'Completed',disputed:'Disputed',cancelled:'Cancelled'};
 function renderDealFilters(){
  const root=$('dealStatusTabs');root.replaceChildren();
@@ -25,7 +22,7 @@ function appendDealActions(root,d){
  if(d.status==='awaiting_seller'&&seller)add('Agree to deal terms','confirm','btn');
  if(d.status==='proposed'&&party&&!(buyer?d.buyer_ok:d.seller_ok))add('Agree to deal terms','confirm','btn');
  if(['awaiting_admin','proposed'].includes(d.status)&&isAdmin&&d.buyer_ok&&(d.mode==='direct'||d.seller_ok))add('Accept deal','accept','btn');
- if(pending&&isAdmin)add('Reject request','reject');
+ if(pending&&isAdmin)add('Reject request','reject');if(pending&&party&&d.mode!=='direct')root.append(button('Choose another Admin / Owner',()=>openListingAdminChoice({deal:d}),'btn secondary'));
  if(open&&isAdmin)add('Cancel deal','cancel');
  if(open&&party&&!isAdmin)root.append(button('Request cancellation',()=>openCancelRequest(d),'btn ghost'));
  if(open&&isAdmin&&d.cancel_pending)add('Decline cancellation request','reject_cancel');
@@ -85,7 +82,7 @@ function renderDealRoomSummary(deal){
 }
 async function openDealRoom(id){
  const {deal}=await api('/deals/'+id);if(deal.status==='completed'){dealStatus='completed';navigate('deals');await loadMessages();await loadDeals();return}activeDealRoom=deal;renderDealRoomSummary(deal);$('dealRoomModal').hidden=false;document.body.classList.add('deal-room-open');
- delete $('dealRoomMessages').dataset.signature;sizeDealRoomViewport();await refreshDealRoom();$('dealRoomText').focus();
+ delete $('dealRoomMessages').dataset.signature;sizeDealRoomViewport();await refreshDealRoom();
 }
 async function refreshDealRoom(){
  if(!activeDealRoom||dealRoomBusy)return;dealRoomBusy=true;const id=activeDealRoom.id;
