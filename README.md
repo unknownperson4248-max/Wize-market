@@ -12,9 +12,9 @@ The notification bell/tray has been replaced with Messenger-style unread message
 
 Apply `server/migrations/018_chat_unread.sql` once after 017. It adds indexed, per-member message read cursors while preserving messages, settings and legacy event history. Opening a visible conversation marks only the delivered snapshot read; monotonically increasing cursors prevent stale tabs from restoring unread counts or marking a message arriving later as read. Joining a group starts its unread baseline at join time. Visible pages poll a compact unread summary every four seconds; hidden pages pause polling.
 
-The mint/lavender visual refresh includes a player-exchange hero, circular Sell / Need actions that animate out from the central Post control, rounded listing cards, a floating mobile navigation dock, conversation badges, revised chat bubbles and updated profile/form styling.
+The compact neon gaming skin uses dark navy, violet and electric blue across listings, chats, forms and the mobile navigation. The Post control opens only a small 230 × 108 px fan anchored above the button, with Sell and Need moving to opposite sides. It does not open a page, cover the viewport, dim the feed or lock scrolling. Tapping outside or pressing Escape closes it; choosing an option then opens its existing form. Promotional hero banners and the added public header have been removed.
 
-Admin Panel → Website & app → App name & description controls the website header/title/description and install manifest using the same owner-only settings. Gallery photos start loading ahead of lazy thumbnails, reuse authenticated in-memory image requests, and retain access checks for private media.
+Admin Panel → Website & app → App name & description controls the page title/description and install manifest using the same owner-only settings. Gallery photos start loading ahead of lazy thumbnails, reuse authenticated in-memory image requests, and retain access checks for private media.
 
 Validation: `node build.mjs` and `node server/test.mjs`. Tests use isolated Buyer, Seller, trusted Admin, Owner and normal-member fixtures, including API permission bypass attempts, notification transaction rollback, migration preservation, read/mute persistence, pagination and HTML escaping for branding.
 
