@@ -159,6 +159,23 @@ async function setMemberBlock(db,u,id,blocked){
 }
 async function pwaConfiguration(db){const row=await one(db,"SELECT value FROM wm_settings WHERE key='pwa_config'");return row?JSON.parse(row.value):{name:PWA_MANIFEST.name,shortName:PWA_MANIFEST.short_name,description:PWA_MANIFEST.description,version:0}}
 function pwaManifest(config){return {...PWA_MANIFEST,name:config.name,short_name:config.shortName,description:config.description,icons:config.icon192Id?[{src:'/app-icon/'+config.icon192Id+'.png',sizes:'192x192',type:'image/png',purpose:'any'},{src:'/app-icon/'+config.icon512Id+'.png',sizes:'512x512',type:'image/png',purpose:'any'},{src:'/app-icon/'+config.iconMaskableId+'.png',sizes:'512x512',type:'image/png',purpose:'maskable'}]:PWA_MANIFEST.icons}}
+async function chatUnread(db,u){
+ const chats=await rows(db,`WITH viewer AS (SELECT ? id), counts AS (
+ SELECT 'private' kind,t.id,COALESCE(cp.muted,0) muted,(t.status='requested' AND t.seller_id=v.id) request,
+  (SELECT count(*) FROM wm_messages m WHERE m.thread_id=t.id AND m.user_id!=v.id AND m.deleted_at IS NULL AND m.archived_at IS NULL AND m.id>MAX(COALESCE(cr.last_read_id,0),COALESCE(cp.deleted_before,0))) unread
+ FROM wm_threads t CROSS JOIN viewer v LEFT JOIN wm_chat_reads cr ON cr.user_id=v.id AND cr.kind='private' AND cr.chat_id=t.id
+ LEFT JOIN wm_chat_preferences cp ON cp.user_id=v.id AND cp.kind='private' AND cp.chat_id=t.id
+ WHERE t.is_deal=0 AND (t.buyer_id=v.id OR t.seller_id=v.id) AND (t.status='accepted' OR (t.status='requested' AND t.seller_id=v.id))
+ AND NOT EXISTS(SELECT 1 FROM wm_user_blocks b WHERE (b.user_id=t.buyer_id AND b.target_id=t.seller_id) OR (b.user_id=t.seller_id AND b.target_id=t.buyer_id))
+ UNION ALL
+ SELECT 'group',gm.group_id,COALESCE(cp.muted,0),0,
+  (SELECT count(*) FROM wm_group_messages m WHERE m.group_id=gm.group_id AND m.user_id!=v.id AND m.deleted_at IS NULL AND m.archived_at IS NULL AND m.id>MAX(COALESCE(cr.last_read_id,0),COALESCE(cp.deleted_before,0)) AND NOT EXISTS(SELECT 1 FROM wm_user_blocks b WHERE b.user_id=v.id AND b.target_id=m.user_id))
+ FROM wm_group_members gm CROSS JOIN viewer v LEFT JOIN wm_chat_reads cr ON cr.user_id=v.id AND cr.kind='group' AND cr.chat_id=gm.group_id
+ LEFT JOIN wm_chat_preferences cp ON cp.user_id=v.id AND cp.kind='group' AND cp.chat_id=gm.group_id
+ WHERE gm.user_id=v.id AND COALESCE(cp.blocked,0)=0
+ ) SELECT * FROM counts WHERE unread>0 OR muted=1`,u.id);
+ return {chats,total:chats.reduce((sum,c)=>sum+(c.muted?0:c.unread),0),requests:chats.filter(c=>c.request&&!c.muted).reduce((sum,c)=>sum+c.unread,0)};
+}
 export function brandedPage(page,config){
  const escape=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
  return page.replace(/<title>[^<]*<\/title>/,'<title>'+escape(config.name)+'</title>').replace('<head>','<head><meta name="description" content="'+escape(config.description)+'">');
@@ -212,6 +229,15 @@ if(p.startsWith('/api/profile/')&&method==='GET'){const id=p.split('/').pop();co
 const publicView=p.match(/^\/api\/posts\/([^/]+)\/view$/);if(publicView&&method==='POST')return reply({error:'Post view tracking is no longer available'},410);
 need(u,'Sign in to continue',401);if(method!=='GET')await throttle(db,'write:'+u.id,120);
 const notificationCategories=['friend_requests','message_requests','private_messages','group_messages','deal_updates'];
+if(p==='/api/chat-unread'&&method==='GET')return reply(await chatUnread(db,u));
+if(p==='/api/chats/read'&&method==='POST'){
+ const d=await body(req);need(['private','group'].includes(d.kind)&&typeof d.id==='string'&&Number.isSafeInteger(d.messageId)&&d.messageId>0,'Invalid read cursor');
+ if(d.kind==='private')await threadAccess(db,d.id,u);else await groupAccess(db,d.id,u);
+ const table=d.kind==='private'?'wm_messages':'wm_group_messages',column=d.kind==='private'?'thread_id':'group_id';
+ need(await one(db,'SELECT id FROM '+table+' WHERE '+column+'=? AND id=? AND archived_at IS NULL',d.id,d.messageId),'Message not found',404);
+ await run(db,'INSERT INTO wm_chat_reads(user_id,kind,chat_id,last_read_id,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(user_id,kind,chat_id) DO UPDATE SET last_read_id=MAX(last_read_id,excluded.last_read_id),updated_at=excluded.updated_at',u.id,d.kind,d.id,d.messageId,now());
+ return reply({ok:true});
+}
 if(p==='/api/notifications'&&method==='GET'){
  const before=Number(url.searchParams.get('before')||0);need(Number.isSafeInteger(before)&&before>=0,'Invalid notification cursor');
  const count=await one(db,'SELECT count(*) n FROM wm_notifications WHERE user_id=? AND read_at IS NULL AND alert_enabled=1',u.id);
@@ -243,7 +269,7 @@ if(!control&&method==='POST'&&u.role!=='owner'){
  const permission=p==='/api/posts'||/^\/api\/posts\/[^/]+\/edit$/.test(p)?'can_post':p==='/api/threads'||/^\/api\/(?:threads|groups|deals)\/[^/]+\/messages$/.test(p)?'can_message':p==='/api/deals'?'can_start_deal':null;
  if(permission){const caps=await one(db,'SELECT can_post,can_message,can_start_deal FROM wm_member_permissions WHERE user_id=?',u.id);need(!caps||caps[permission]===1,'Your '+({can_post:'posting',can_message:'messaging',can_start_deal:'new deal'}[permission])+' permission is disabled. Contact the owner.',403)}
 }
-if(!control&&!['GET','HEAD'].includes(method)&&!/^\/api\/posts\/[^/]+\/(delete|view)$/.test(p)&&p!=='/api/reports'&&p!=='/api/blocks'&&p!=='/api/chats/action'&&p!=='/api/account/security'){const suspended=await one(db,'SELECT until_at FROM wm_suspensions WHERE user_id=? AND until_at>?',u.id,now());need(!suspended,'Account suspended until '+new Date(suspended?.until_at||0).toISOString()+'. Open Profile for details.',423)}
+if(!control&&!['GET','HEAD'].includes(method)&&!/^\/api\/posts\/[^/]+\/(delete|view)$/.test(p)&&p!=='/api/reports'&&p!=='/api/blocks'&&p!=='/api/chats/action'&&p!=='/api/account/security'&&p!=='/api/chats/read'){const suspended=await one(db,'SELECT until_at FROM wm_suspensions WHERE user_id=? AND until_at>?',u.id,now());need(!suspended,'Account suspended until '+new Date(suspended?.until_at||0).toISOString()+'. Open Profile for details.',423)}
 const reactions=p.match(/^\/api\/posts\/([^/]+)\/(like|comments)$/);if(reactions){const [,id,action]=reactions;await visiblePost(db,id,u);if(action==='like'&&method==='POST'){const d=await body(req);need(typeof d.like==='boolean','Invalid reaction');if(d.like)await run(db,'INSERT OR IGNORE INTO wm_post_likes(user_id,post_id,created_at) VALUES(?,?,?)',u.id,id,now());else await run(db,'DELETE FROM wm_post_likes WHERE user_id=? AND post_id=?',u.id,id);return reply({liked:d.like,count:(await one(db,'SELECT count(*) n FROM wm_post_likes WHERE post_id=?',id)).n})}if(action==='comments'&&method==='GET')return reply({comments:await rows(db,'SELECT c.id,c.user_id,c.text,c.created_at,u.name,u.picture,u.verified FROM wm_post_comments c JOIN wm_public_users u ON u.id=c.user_id WHERE c.post_id=? AND c.deleted_at IS NULL ORDER BY c.created_at DESC LIMIT 100',id)});if(action==='comments'&&method==='POST'){await throttle(db,'comment:'+u.id,10);const d=await body(req),value=text(d.text,1500,'comment');const verdict=await scanSafety(env,[{type:'text',text:JSON.stringify({comment:value})}]);need(verdict.decision!=='unsafe','Explicit sexual content is not allowed',422);await run(db,'INSERT INTO wm_post_comments(id,post_id,user_id,text,created_at) VALUES(?,?,?,?,?)',uuid(),id,u.id,value,now());return reply({ok:true},201)}}
 const postSocial=p.match(/^\/api\/posts\/([^/]+)\/(view|share)$/);if(postSocial&&method==='POST'){const [,id,action]=postSocial;if(action==='view'){await visiblePost(db,id,u);await run(db,'INSERT OR IGNORE INTO wm_post_views(post_id,user_id,created_at) VALUES(?,?,?)',id,u.id,now());return reply({count:(await one(db,'SELECT count(*) n FROM wm_post_views WHERE post_id=?',id)).n})}const d=await body(req);need(typeof d.share==='boolean','Invalid share');if(d.share){await visiblePost(db,id,u);await run(db,'INSERT OR IGNORE INTO wm_post_shares(id,post_id,user_id,created_at) VALUES(?,?,?,?)',uuid(),id,u.id,now())}else await run(db,'DELETE FROM wm_post_shares WHERE post_id=? AND user_id=?',id,u.id);return reply({shared:d.share,count:(await one(db,'SELECT count(*) n FROM wm_post_shares WHERE post_id=?',id)).n})}
 if(p==='/api/reports'&&method==='POST'){await throttle(db,'report:'+u.id,5);const d=await body(req);need(['scam','inappropriate','harassment','external-contact','other'].includes(d.reason),'Choose a report reason');const details=text(d.details,1000,'report details');need(d.postId===null||d.postId===undefined||typeof d.postId==='string','Invalid post');if(d.postId)await visiblePost(db,d.postId,u);const id=uuid();await run(db,'INSERT OR IGNORE INTO wm_reports(id,post_id,user_id,reason,details,created_at) VALUES(?,?,?,?,?,?)',id,d.postId||null,u.id,d.reason,details,now());return reply({ok:true},201)}

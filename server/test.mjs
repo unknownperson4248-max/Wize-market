@@ -517,3 +517,60 @@ console.log('PASS: notification defaults, friend/request deduplication, read sta
 // Website metadata shares the owner-controlled app settings and escapes HTML.
 assert.equal(brandedPage('<head><title>Old</title></head>',{name:'Wize & "Book" <safe>',description:'A "description" <script>'}),'<head><meta name="description" content="A &quot;description&quot; &lt;script&gt;"><title>Wize &amp; &quot;Book&quot; &lt;safe&gt;</title></head>');
 console.log('PASS: website/app metadata uses saved branding with HTML escaping.');
+
+// Per-conversation unread counters are based on real incoming messages, not event totals.
+{
+ sql.exec('DELETE FROM wm_limits');
+ for(const id of ['countBuyer','countSeller','countOther']){const token=Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('hex');tokens[id]=token;sql.prepare('INSERT INTO users VALUES(?,?,?,?,?,?,?)').run(id,id,id+'@example.com',id,'',Date.now(),Date.now());sql.prepare('INSERT INTO sessions VALUES(?,?,?,?)').run(await hash(token),id,Date.now()+1000000,Date.now())}
+ const target='countBuyer',sender='countSeller',other='countOther',conversation=crypto.randomUUID(),countGroup=crypto.randomUUID();
+ sql.prepare("INSERT INTO wm_threads(id,buyer_id,seller_id,pair_key,status,created_at) VALUES(?,?,?,?,'accepted',?)").run(conversation,sender,target,'counts-'+conversation,Date.now());
+ sql.prepare('INSERT INTO wm_groups(id,owner_id,name,created_at) VALUES(?,?,?,?)').run(countGroup,'admin','Unread test group',Date.now());
+ for(const id of [target,sender,'admin'])sql.prepare('INSERT INTO wm_group_members VALUES(?,?)').run(countGroup,id);
+ const unread=async(id=target)=>(await call('/api/chat-unread','GET',undefined,id)).data;
+ const send=async(text,id=sender)=>call('/api/threads/'+conversation+'/messages','POST',{text},id);
+ const count=(data,kind,id)=>data.chats.find(c=>c.kind===kind&&c.id===id)?.unread||0;
+ const read=async(kind,id,messageId,as=target)=>call('/api/chats/read','POST',{kind,id,messageId},as);
+ assert.equal((await call('/api/chat-unread')).status,401);assert.equal((await unread()).total,0);
+ const incoming=[];for(let i=0;i<3;i++){assert.equal((await send('Incoming '+i)).status,201);incoming.push(sql.prepare('SELECT max(id) id FROM wm_messages WHERE thread_id=?').get(conversation).id)}
+ await send('My own reply',target);assert.equal(count(await unread(),'private',conversation),3);assert.equal(count(await unread(sender),'private',conversation),1);assert.equal(count(await unread(other),'private',conversation),0);
+ // An event created after the displayed snapshot must survive marking that snapshot read.
+ await send('Arrived during read');const newest=sql.prepare('SELECT max(id) id FROM wm_messages WHERE thread_id=?').get(conversation).id;
+ assert.equal((await read('private',conversation,incoming.at(-1))).status,200);assert.equal(count(await unread(),'private',conversation),1);
+ await read('private',conversation,incoming[0]);assert.equal(count(await unread(),'private',conversation),1);assert.equal(sql.prepare("SELECT last_read_id FROM wm_chat_reads WHERE user_id=? AND kind='private' AND chat_id=?").get(target,conversation).last_read_id,incoming.at(-1));
+ assert.equal((await read('private',conversation,newest,other)).status,404);assert.equal((await read('group',countGroup,1,other)).status,403);assert.equal((await read('private',conversation,-1)).status,400);assert.equal((await call('/api/chats/read','POST',{kind:'private',id:conversation,messageId:newest},target,'https://evil.local')).status,403);
+ await read('private',conversation,newest);assert.equal(count(await unread(),'private',conversation),0);
+ for(let i=0;i<105;i++)sql.prepare('INSERT INTO wm_messages(thread_id,user_id,text,created_at) VALUES(?,?,?,?)').run(conversation,sender,'Count above 99 '+i,Date.now());
+ assert.equal(count(await unread(),'private',conversation),105);
+ await call('/api/chats/action','POST',{kind:'private',id:conversation,action:'mute'},target);
+ let summary=await unread();assert.equal(count(summary,'private',conversation),105);assert.equal(summary.total,0);assert.equal(summary.chats[0].muted,1);assert.equal((await unread(sender)).total,1);
+ await call('/api/chats/action','POST',{kind:'private',id:conversation,action:'unmute'},target);assert.equal((await unread()).total,105);
+ // Per-group mute suppresses only the global green badge, retaining a grey chat count.
+ for(const text of ['Group one','Group two'])assert.equal((await call('/api/groups/'+countGroup+'/messages','POST',{text},sender)).status,201);
+ assert.equal(count(await unread(),'group',countGroup),2);assert.equal(count(await unread(sender),'group',countGroup),0);
+ await call('/api/groups/'+countGroup+'/preferences','POST',{muted:true},target);summary=await unread();assert.equal(count(summary,'group',countGroup),2);assert.equal(summary.total,105);
+ await call('/api/groups/'+countGroup+'/preferences','POST',{muted:false},target);assert.equal((await unread()).total,107);
+ const lastGroup=sql.prepare('SELECT max(id) id FROM wm_group_messages WHERE group_id=?').get(countGroup).id;
+ assert.equal((await read('private',conversation,lastGroup)).status,404);
+ assert.equal((await read('group',countGroup,lastGroup)).status,200);assert.equal(count(await unread(),'group',countGroup),0);
+ sql.prepare('INSERT INTO wm_group_members VALUES(?,?)').run(countGroup,other);assert.equal(count(await unread(other),'group',countGroup),0);
+ await call('/api/groups/'+countGroup+'/messages','POST',{text:'After joining'},sender);assert.equal(count(await unread(other),'group',countGroup),1);
+ // Empty request threads never count as messages. Sending the request increments once.
+ const request=(await call('/api/threads','POST',{userId:target},other)).data.thread.id;
+ assert.equal((await unread()).requests,0);assert.equal(count(await unread(),'private',request),0);
+ await call('/api/threads/'+request+'/messages','POST',{text:'A real request'},other);assert.equal((await unread()).requests,1);assert.equal(count(await unread(),'private',request),1);
+ await call('/api/threads','POST',{userId:target},other);assert.equal((await unread()).requests,1);
+ const requestMessage=sql.prepare('SELECT max(id) id FROM wm_messages WHERE thread_id=?').get(request).id;await read('private',request,requestMessage);assert.equal((await unread()).requests,0);
+ // Deletion is viewer-scoped and blocks do not disclose or count blocked conversations.
+ await call('/api/chats/action','POST',{kind:'private',id:conversation,action:'delete'},target);assert.equal(count(await unread(),'private',conversation),0);await send('After clearing my history');assert.equal(count(await unread(),'private',conversation),1);
+ await call('/api/blocks','POST',{userId:sender,blocked:true},target);assert.equal(count(await unread(),'private',conversation),0);await call('/api/blocks','POST',{userId:sender,blocked:false},target);assert.equal(count(await unread(),'private',conversation),1);
+ console.log('PASS: real per-chat incoming counts, requests, >99, persistent monotonic read cursors, in-flight message safety, user isolation/CSRF, private/group mute, join baselines, deletions and blocks.');
+}
+// Migration 018 preserves messages and saved mute, carrying unread legacy events forward.
+{
+ const before=readFileSync(new URL('./schema.sql',import.meta.url),'utf8').split('-- Message counts use per-member read cursors')[0];
+ const migrated=new DatabaseSync(':memory:');migrated.exec('PRAGMA foreign_keys=ON;CREATE TABLE users(id TEXT PRIMARY KEY,google_sub TEXT UNIQUE,email TEXT,name TEXT,picture TEXT,created_at INTEGER,updated_at INTEGER);CREATE TABLE sessions(token_hash TEXT PRIMARY KEY,user_id TEXT REFERENCES users(id),expires_at INTEGER,created_at INTEGER);'+before);
+ migrated.exec("INSERT INTO users(id,name) VALUES('m-buyer','Migration Buyer'),('m-seller','Migration Seller'); INSERT INTO wm_threads(id,buyer_id,seller_id,pair_key,status,created_at) VALUES('m-thread','m-seller','m-buyer','m-pair','accepted',1); INSERT INTO wm_messages(thread_id,user_id,text,created_at) VALUES('m-thread','m-seller','Already read',1); UPDATE wm_notifications SET read_at=2; INSERT INTO wm_messages(thread_id,user_id,text,created_at) VALUES('m-thread','m-seller','Still unread',3); INSERT INTO wm_chat_preferences(user_id,kind,chat_id,muted,updated_at) VALUES('m-buyer','private','m-thread',1,1);");
+ const messages=JSON.stringify(migrated.prepare('SELECT * FROM wm_messages').all());migrated.exec(readFileSync(new URL('./migrations/018_chat_unread.sql',import.meta.url),'utf8'));
+ assert.equal(JSON.stringify(migrated.prepare('SELECT * FROM wm_messages').all()),messages);assert.equal(migrated.prepare("SELECT last_read_id FROM wm_chat_reads WHERE user_id='m-buyer'").get().last_read_id,1);assert.equal(migrated.prepare('SELECT muted FROM wm_chat_preferences').get().muted,1);migrated.close();
+ console.log('PASS: migration 018 retains prior messages, unread legacy history and saved conversation mutes.');
+}
