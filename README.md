@@ -161,3 +161,15 @@ Browser-decodable photos are optimized to WebP at high quality with a maximum di
 The Profile Deals tab is removed. The Completed deals count opens a custom history with total, counterpart profile, deal serial, responsible Admin and completion date. It requires sign-in and omits prices, messages, emails and private audit data. Existing secure deal permissions are unchanged.
 
 Validation: API regression suite plus custom-game validation/editing, idempotent publication and serial preservation, completion-summary privacy and verified comment identities. Isolated Cloudflare D1/Chromium tests at 320px/390px cover all 11 existing photos, request deduplication, album/fullscreen gestures, post comments, profile history, real optimized R2 uploads, immediate profile navigation, in-app background progress, group placement and duplicate-free retry.
+
+### Friends, chat tools and listing availability
+
+The fourth navigation item is Friends: incoming requests have Confirm/Remove, with Suggestions, Your friends and Sent tabs. Request badges use the existing request records, with no bell or separate notification tray. Existing consent, blocking, chat mute and read rules still apply.
+
+Chat's compact + menu offers Emoji, Gallery, Camera and Voice. Select up to ten photos/clips, review and remove them before sending with ➤. Larger chat photos are resized to a maximum 1600 px edge when this reduces transfer size. Voice clips are recorded only after a microphone action, stop after two minutes and have a preview before sending. Browser microphone permission and MediaRecorder support are required. Deal rooms retain their existing text-only behavior. Voice uploads have container/type/size checks and inherit private/group media access controls.
+
+Sell posts show Available/Sold out. The author's first three-dot action is Edit post; the author alone can change availability with optimistic version checks. Migration `019_friends_composer_sold.sql` adds the state and marks Sell Game IDs sold when their referenced deal reaches Admin-confirmed completion. It also backfills already completed Sell IDs without deleting posts or deals. Need posts and existing deal permissions are unchanged.
+
+Owner Control Room → Website settings includes name, slogan, metadata, website/app logo, and Save & Publish. Navigation labels/order, feed heading and post spacing can be changed without code; all five navigation functions remain accessible. The existing App settings continue to manage installed app branding.
+
+Worker builds serve content-hashed public JS/CSS with long-lived browser caching and conditional ETags. Personalized HTML/API/chat/media retain their existing private cache rules. The self-contained `index.html` remains available for static previews. The ember-red theme from the existing GitHub update is preserved in `ember.css` so rebuilding does not drop it.

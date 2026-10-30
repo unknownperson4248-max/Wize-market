@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS wm_roles(user_id TEXT PRIMARY KEY REFERENCES users(id
 CREATE TABLE IF NOT EXISTS wm_settings(key TEXT PRIMARY KEY,value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS wm_groups(id TEXT PRIMARY KEY,owner_id TEXT NOT NULL REFERENCES users(id),name TEXT NOT NULL,price INTEGER,logo_id TEXT,created_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS wm_group_members(group_id TEXT NOT NULL REFERENCES wm_groups(id),user_id TEXT NOT NULL REFERENCES users(id),PRIMARY KEY(group_id,user_id));
-CREATE TABLE IF NOT EXISTS wm_posts(id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id),group_id TEXT REFERENCES wm_groups(id),range_id TEXT,title TEXT NOT NULL,details TEXT NOT NULL,price INTEGER,kind TEXT NOT NULL,status TEXT NOT NULL CHECK(status IN ('pending','approved','rejected')),media TEXT NOT NULL DEFAULT '[]',created_at INTEGER NOT NULL,deleted_at INTEGER,updated_at INTEGER,version INTEGER NOT NULL DEFAULT 0,game_category TEXT NOT NULL DEFAULT 'free-fire',price_format TEXT NOT NULL DEFAULT 'full',custom_game_name TEXT NOT NULL DEFAULT '',post_intent TEXT NOT NULL DEFAULT 'sell' CHECK(post_intent IN ('sell','need')),description TEXT NOT NULL DEFAULT '');
+CREATE TABLE IF NOT EXISTS wm_posts(id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id),group_id TEXT REFERENCES wm_groups(id),range_id TEXT,title TEXT NOT NULL,details TEXT NOT NULL,price INTEGER,kind TEXT NOT NULL,status TEXT NOT NULL CHECK(status IN ('pending','approved','rejected')),media TEXT NOT NULL DEFAULT '[]',created_at INTEGER NOT NULL,deleted_at INTEGER,updated_at INTEGER,version INTEGER NOT NULL DEFAULT 0,game_category TEXT NOT NULL DEFAULT 'free-fire',price_format TEXT NOT NULL DEFAULT 'full',custom_game_name TEXT NOT NULL DEFAULT '',post_intent TEXT NOT NULL DEFAULT 'sell' CHECK(post_intent IN ('sell','need')),description TEXT NOT NULL DEFAULT '',availability TEXT NOT NULL DEFAULT 'available' CHECK(availability IN ('available','sold')));
 CREATE TABLE IF NOT EXISTS wm_uploads(id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id),type TEXT NOT NULL,size INTEGER NOT NULL,created_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS wm_threads(id TEXT PRIMARY KEY,buyer_id TEXT NOT NULL REFERENCES users(id),seller_id TEXT NOT NULL REFERENCES users(id),post_id TEXT REFERENCES wm_posts(id),pair_key TEXT UNIQUE NOT NULL,status TEXT NOT NULL DEFAULT 'requested',created_at INTEGER NOT NULL,is_deal INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS wm_messages(id INTEGER PRIMARY KEY AUTOINCREMENT,thread_id TEXT NOT NULL REFERENCES wm_threads(id),user_id TEXT NOT NULL REFERENCES users(id),text TEXT NOT NULL,created_at INTEGER NOT NULL,deleted_at INTEGER,archived_at INTEGER);
@@ -207,3 +207,15 @@ BEGIN
  VALUES(NEW.user_id,'group',NEW.group_id,COALESCE((SELECT MAX(id) FROM wm_group_messages WHERE group_id=NEW.group_id),0),CAST(strftime('%s','now') AS INTEGER)*1000)
  ON CONFLICT(user_id,kind,chat_id) DO UPDATE SET last_read_id=MAX(last_read_id,excluded.last_read_id),updated_at=excluded.updated_at;
 END;
+
+CREATE TRIGGER IF NOT EXISTS wm_deal_auto_sold AFTER UPDATE OF status ON wm_deals
+WHEN NEW.status='completed' AND OLD.status!='completed'
+BEGIN
+ UPDATE wm_posts SET availability='sold',updated_at=NEW.completed_at,version=version+1
+ WHERE id=COALESCE(NEW.post_id,(SELECT post_id FROM wm_threads WHERE id=NEW.thread_id))
+ AND post_intent='sell' AND kind='Game ID' AND availability!='sold';
+END;
+UPDATE wm_posts SET availability='sold',version=version+1
+WHERE post_intent='sell' AND kind='Game ID' AND availability!='sold' AND id IN (
+ SELECT COALESCE(d.post_id,t.post_id) FROM wm_deals d JOIN wm_threads t ON t.id=d.thread_id WHERE d.status='completed'
+);
