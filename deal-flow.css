@@ -355,3 +355,52 @@ body.create-menu-open::after{content:'';position:fixed;inset:0;z-index:140;backg
 .admin-discover-toggle{width:100%;margin:12px 0 4px}
 .admin-discover{margin-top:6px}
 .admin-discover[hidden],.admin-discover-toggle[hidden]{display:none}
+
+/* Admin agreement box on a pending deal */
+.admin-agreement{margin:10px 0;padding:12px;border-radius:16px;background:#ffffff08;border:1px solid #3b6584}
+.admin-agreement.agreed{border-color:#2bd38a66;background:#0d2f2414}
+.admin-agreement-title{display:block;font-size:14px;margin-bottom:8px}
+.admin-agreement-person{display:flex;align-items:center;gap:10px}
+.admin-agreement-person>.avatar{width:42px;height:42px;flex:none;border-radius:50%;overflow:hidden;margin:0}
+.admin-agreement-person>.avatar img{width:100%;height:100%;object-fit:cover}
+.admin-agreement-name{flex:1;min-width:0}
+.admin-agreement-chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 2px}
+.agree-chip{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700;background:#3a2f12;color:#f6dc9a}
+.agree-chip.ok{background:#0d3b2a;color:#7ff0b8}
+.admin-agreement .action-row{margin-top:8px}
+
+/* Login page: compact and standard (centered logo, short title, icons inside the fields). */
+#loginModal .dialog.auth-card{position:relative;width:min(400px,100%);max-width:400px!important;padding:24px 22px 20px!important;border-radius:24px;max-height:94dvh;overflow:auto;box-sizing:border-box}
+#loginModal .auth-close{position:absolute;top:12px;right:12px;width:36px;height:36px;padding:0;border-radius:50%;border:1px solid var(--line);background:#ffffff08;color:#cfe4f7;font-size:20px;line-height:1;cursor:pointer}
+#loginModal .auth-head{display:flex;flex-direction:column;align-items:center;text-align:center;gap:4px;margin:2px 26px 14px}
+#loginModal .auth-logo{width:54px!important;height:54px!important;font-size:27px!important;margin:0 0 8px!important;transform:none!important;border-radius:16px!important;box-shadow:0 10px 28px #3b9dff33}
+#loginModal #loginTitle{font-size:22px;line-height:1.25;margin:0;overflow-wrap:anywhere}
+#loginModal .auth-sub{margin:0;font-size:14px;color:var(--muted)}
+#loginModal .auth-sub strong{color:#bfe1ff;font-weight:800;letter-spacing:.3px}
+#loginModal .auth-tabs{margin:0 0 12px}
+#loginModal #authGoogle{gap:4px;margin:0}
+#loginModal #googleStatus{margin:0;font-size:12px}
+#loginModal #googleStatus[hidden]{display:none}
+#loginModal .auth-divider{margin:10px 0 8px}
+#loginModal .auth-form{gap:10px}
+#loginModal .auth-form label{font-size:13px;margin:0}
+#loginModal .auth-field{gap:5px}
+#loginModal .auth-method{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:4px;margin:0;border:1px solid var(--line);border-radius:14px}
+#loginModal .auth-method-option{position:relative;display:flex;align-items:center;justify-content:center;gap:8px;min-height:40px;border-radius:10px;color:var(--muted);font-weight:700;font-size:14px;cursor:pointer}
+#loginModal .auth-method-option input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+#loginModal .auth-method-option.is-active{background:#16334c;color:#fff;box-shadow:inset 0 0 0 1px #3b9dff66}
+#loginModal .auth-method-option:focus-within{outline:2px solid #79d4ff;outline-offset:1px}
+#loginModal .auth-svg{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+#loginModal .auth-input{position:relative}
+#loginModal .auth-input>.auth-svg,#loginModal .auth-input-icon{position:absolute;left:14px;top:50%;transform:translateY(-50%);display:grid;place-items:center;color:#8ea9c3;pointer-events:none}
+#loginModal .auth-input .input{width:100%;min-height:46px;margin:0;padding-left:44px;border-radius:14px;box-sizing:border-box}
+#loginModal .auth-input:has(.auth-eye) .input{padding-right:46px}
+#loginModal .auth-eye{position:absolute;right:5px;top:50%;transform:translateY(-50%);width:38px;height:38px;padding:0;display:grid;place-items:center;border:0;border-radius:10px;background:none;color:#8ea9c3;cursor:pointer}
+#loginModal .auth-eye[aria-pressed=true]{color:#79d4ff}
+#loginModal .auth-link{font-size:13px;margin-top:-4px}
+#loginModal #authStatus:empty{display:none}
+#loginModal .auth-submit{width:100%;min-height:48px;border-radius:14px;font-size:16px;font-weight:800}
+.logged-out #loginModal .dialog.auth-card{padding:24px 22px 20px!important}
+@media(max-width:420px){#loginModal .dialog.auth-card{padding:20px 16px 16px!important}}
+.admin-agreement-person>.avatar{width:44px!important;height:44px!important;min-width:44px;font-size:15px}
+.admin-agreement .admin-info{flex:none;width:34px;height:34px;padding:0;display:grid;place-items:center;border:1px solid #3b6584;border-radius:50%;background:#0f2a42;font-size:15px;cursor:pointer}

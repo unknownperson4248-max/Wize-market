@@ -227,9 +227,10 @@ function setAuthMode(mode){
  $('authMethodField').hidden=reset;$('authLoginField').hidden=reset;$('authNameField').hidden=!signup;$('authPasswordField').hidden=forgot;$('authConfirmField').hidden=!reset;$('authForgot').hidden=authMode!=='signin';$('authGoogle').hidden=forgot||reset;
  $('authIntro').hidden=!(forgot||reset);$('authIntro').textContent=forgot?'Type the email or number (WhatsApp) of your account and send a request. The Owner will send you a reset link on WhatsApp or email.':reset?'Choose a new password for your account. This link works only once.':'';
  $('authPasswordLabel').textContent=reset?'New password':'Password';$('authSubmit').textContent=signup?'Register':forgot?'Send request':reset?'Save new password':'Login';
- $('authPassword').autocomplete=signup||reset?'new-password':'current-password';const lt=globalThis.wmSiteContent?.login||{};$('loginTitle').textContent=signup?lt.registerTitle||'Create your account':forgot?'Forgot password':reset?'Set a new password':lt.title||globalThis.wmSiteWelcome||'Welcome to your community.';$('authStatus').textContent='';
+ $('authPassword').autocomplete=signup||reset?'new-password':'current-password';const lt=globalThis.wmSiteContent?.login||{};$('loginTitle').textContent=signup?lt.registerTitle||'Create your account':forgot?'Forgot password':reset?'Set a new password':lt.title||globalThis.wmSiteWelcome||'Welcome back';$('authSubText').textContent=signup?'Register on':forgot?'Get a reset link for':reset?'New password for':'Login to';$('authStatus').textContent='';
 }
-function syncAuthMethod(){const phone=document.querySelector('input[name=authMethod]:checked')?.value==='phone',input=$('authLogin');$('authLoginLabel').textContent=phone?'Phone number (WhatsApp)':'Email';input.type=phone?'tel':'email';input.inputMode=phone?'tel':'email';input.placeholder=phone?'01XXXXXXXXX':'you@example.com'}
+const AUTH_ICONS={mail:document.querySelector('#authMethodField input[value=email]')?.nextElementSibling?.outerHTML||'',phone:document.querySelector('#authMethodField input[value=phone]')?.nextElementSibling?.outerHTML||''};
+function syncAuthMethod(){const phone=document.querySelector('input[name=authMethod]:checked')?.value==='phone',input=$('authLogin');for(const option of document.querySelectorAll('.auth-method-option'))option.classList.toggle('is-active',option.querySelector('input').checked);$('authLoginIcon').innerHTML=phone?AUTH_ICONS.phone:AUTH_ICONS.mail;$('authLoginLabel').textContent=phone?'Phone number (WhatsApp)':'Email';input.type=phone?'tel':'email';input.inputMode=phone?'tel':'email';input.placeholder=phone?'01XXXXXXXXX':'you@example.com'}
 function openAuth(mode){setAuthMode(mode);showLogin()}
 $('authSignInTab').onclick=()=>setAuthMode('signin');$('authSignUpTab').onclick=()=>setAuthMode('signup');$('authForgot').onclick=()=>setAuthMode('forgot');
 for(const radio of document.querySelectorAll('input[name=authMethod]'))radio.onchange=syncAuthMethod;
@@ -394,3 +395,22 @@ function drawerItem(item){
  if(item.group){const box=node('details',undefined,'profile-drawer-group'),summary=node('summary',undefined,'profile-drawer-item');summary.append(socialIcon(item.icon,'drawer-icon'),node('span',item.group,'drawer-label'),node('span','⌄','drawer-chevron'));box.append(summary);const list=node('div',undefined,'profile-drawer-sub');for(const sub of item.items)list.append(drawerItem(sub));box.append(list);return box}
  const [label,icon,action]=item,b=button('',async()=>{closeProfileDrawer(false);await action()},'profile-drawer-item');b.append(socialIcon(icon,'drawer-icon'),node('span',label,'drawer-label'));return b;
 }
+
+// Deal: the buyer and the seller must agree on the same Admin. The Admin is asked only after both agree.
+function appendAdminAgreement(root,d){
+ if(d.mode==='direct'||!['proposed','awaiting_seller','awaiting_admin'].includes(d.status))return;
+ const buyer=me?.id===d.buyer_id,seller=me?.id===d.seller_id,party=buyer||seller,isAdmin=me?.id===d.admin_id&&['owner','trusted'].includes(me?.role),agreed=!!d.buyer_ok&&!!d.seller_ok;
+ const box=node('div',undefined,'admin-agreement'+(agreed?' agreed':''));box.append(node('strong','🛡️ Admin for this deal','admin-agreement-title'));
+ const person=node('div',undefined,'admin-agreement-person'),who=node('div',undefined,'admin-agreement-name'),line=node('div',undefined,'admin-choice-name');
+ line.append(node('strong',d.admin_name||'Admin'),verifiedMark(d.admin_role||'trusted',undefined,!!d.admin_verified));who.append(line);
+ const info=node('button','ℹ️','admin-info');info.type='button';info.setAttribute('aria-label','See '+(d.admin_name||'this Admin'));info.onclick=()=>void openTrustCard(d.admin_id);
+ person.append(avatar({name:d.admin_name,picture:d.admin_picture,role:d.admin_role,verified:d.admin_verified}),who,info);box.append(person);
+ const chips=node('div',undefined,'admin-agreement-chips');for(const [label,ok] of [['Buyer',d.buyer_ok],['Seller',d.seller_ok]])chips.append(node('span',(ok?'✅ ':'⏳ ')+label+(ok?' agreed':' not yet'),'agree-chip'+(ok?' ok':'')));box.append(chips);
+ const mine=buyer?!!d.buyer_ok:!!d.seller_ok,other=buyer?'seller':'buyer';
+ box.append(node('p',agreed?(isAdmin?'The buyer and the seller agreed on you. Accept to open the deal room.':'Both agreed on this Admin. Waiting for the Admin to accept.'):party?(mine?'Waiting for the '+other+' to agree on this Admin.':'The '+other+' chose this Admin. Agree, or choose another Admin.'):'The buyer and the seller have not agreed on the Admin yet. You can accept after both agree.','hint'));
+ if(party){const row=node('div',undefined,'action-row');if(!mine)row.append(button('✅ Agree with '+String(d.admin_name||'Admin').split(' ')[0],()=>dealActionRequest(d,'confirm'),'btn'));row.append(button('🔁 Choose another Admin',()=>openListingAdminChoice({deal:d}),agreed||mine?'btn ghost':'btn secondary'));box.append(row)}
+ root.append(box);
+}
+
+// Show / hide the password while typing.
+$('authShowPassword').onclick=()=>{const input=$('authPassword'),show=input.type==='password';input.type=show?'text':'password';$('authShowPassword').setAttribute('aria-pressed',String(show));$('authShowPassword').setAttribute('aria-label',show?'Hide password':'Show password');input.focus()};
