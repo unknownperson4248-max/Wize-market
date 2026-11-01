@@ -80,10 +80,10 @@ button.trust-badges{cursor:pointer}
 .avatar.ring-admin{outline:2px solid #f2c14e;outline-offset:1px}
 .avatar.ring-owner{outline:2px solid #ffb547;outline-offset:1px;box-shadow:0 0 10px #ff9d2e55}
 
-/* Profile picture: a rounded photo frame in one solid colour per badge level (no circle). */
-.gaming-portrait{border-radius:30%!important;padding:6px!important;box-shadow:0 10px 26px #000a!important;background:var(--frame,#3a6d8f)!important}
-.gaming-portrait::before{content:none!important}
-.gaming-portrait>.avatar,.gaming-portrait .avatar img{border-radius:24%!important}
+/* Profile picture: a normal circle with a thin ring in the badge colour (no crown, light shadow). */
+.gaming-portrait{border-radius:50%!important;padding:3px!important;box-shadow:0 4px 14px #0007!important;background:var(--frame,#3a6d8f)!important}
+.gaming-portrait::before,.gaming-portrait::after{content:none!important}
+.gaming-portrait>.avatar,.gaming-portrait .avatar img{border-radius:50%!important}
 .gaming-portrait>.avatar{border-color:#071321!important}
 .gaming-portrait.frame-owner{--frame:#f2b233}
 .gaming-portrait.frame-admin{--frame:#8c4cff}
@@ -91,7 +91,6 @@ button.trust-badges{cursor:pointer}
 .gaming-portrait.frame-member{--frame:#3a6d8f}
 .gaming-portrait>.avatar{position:relative;z-index:1}
 .gaming-portrait>button,.gaming-portrait .portrait-camera{z-index:2}
-.gaming-portrait.frame-owner::after{content:'👑';position:absolute;top:-19px;left:50%;transform:translateX(-50%) rotate(-10deg);font-size:28px;line-height:1;z-index:3;filter:drop-shadow(0 2px 3px #000a)}
 
 /* Taller, Facebook-like cover photo. */
 .social-profile .gaming-cover{height:clamp(240px,28vw,340px)!important}
@@ -145,9 +144,11 @@ button.trust-badges{cursor:pointer}
 .auth-divider{display:flex;align-items:center;gap:10px;margin:14px 0 8px;color:var(--muted);font-size:12px}
 .auth-divider::before,.auth-divider::after{content:'';flex:1;height:1px;background:var(--line)}
 .auth-help{margin-top:8px}
-.guest-auth{display:none;justify-content:flex-end;gap:8px;margin:0 0 10px}
+/* Logged out: Sign in / Sign up sit where Search and Refresh are; after login Search and Refresh come back. */
+.guest-auth{display:none;gap:8px;margin-left:auto;align-items:center}
 body.logged-out .guest-auth{display:flex}
-.guest-auth .btn{min-height:38px;padding:8px 16px}
+body.logged-out #openMarketSearch,body.logged-out #feedOptions{display:none!important}
+.guest-auth .btn{min-height:40px;padding:8px 16px;white-space:nowrap}
 #loginModal{z-index:130}
 #loginModal .dialog{max-height:92dvh;overflow:auto}
 .auth-field{display:grid;gap:6px}
