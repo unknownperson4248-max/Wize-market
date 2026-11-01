@@ -17,3 +17,5 @@ body{background:radial-gradient(ellipse at 0 0,#20483a44,transparent 55%),radial
 .rule-switch{display:flex;gap:9px;align-items:flex-start;margin:14px 0 2px;font-weight:600;line-height:1.4}
 .rule-switch input{width:18px;height:18px;flex:none;margin-top:2px}
 .rules-fields .hint{margin:2px 0 6px 27px}
+.rules-section{margin:22px 0 4px;font-size:16px}
+.rules-section:first-child{margin-top:8px}

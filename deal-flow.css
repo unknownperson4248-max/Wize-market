@@ -62,3 +62,60 @@ button.listing-label.add-uid{color:#ffd56b;border-color:#f2c14e80;background:#33
 .chat-safety-note{margin:0 0 6px;padding:8px 10px;border-radius:10px;background:#33270b;border:1px solid #f2c14e55;color:#ffe3a1;font-size:12px;line-height:1.4}
 .terms-notice h2{margin-top:18px}
 @media(max-width:380px){.deal-step small{font-size:9px}.trust-pill{font-size:10px;padding:1px 6px 1px 3px}}
+
+/* Badges: gold Owner / Admin pill and a blue verified tick, both with a moving shine that typed emoji cannot copy. */
+.trust-badges{display:inline-flex;align-items:center;gap:4px;margin-left:6px;padding:0;border:0;background:none;vertical-align:middle;flex:none;min-height:0;height:auto;width:auto;box-shadow:none;font:inherit;color:inherit;cursor:default}
+button.trust-badges{cursor:pointer}
+.trust-badges .trust-pill{margin-left:0;position:relative;overflow:hidden}
+.verified-tick{position:relative;overflow:hidden;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;flex:none;background:radial-gradient(circle at 32% 28%,#7fd0ff,#1877f2 58%,#0b57c9);box-shadow:0 0 0 1.5px #071321,0 0 8px #1877f280}
+.verified-tick svg{position:relative;z-index:1;width:12px;height:12px;fill:none;stroke:#fff;stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.trust-badges .trust-pill::after,.verified-tick::after{content:'';position:absolute;inset:0;background:linear-gradient(105deg,transparent 30%,#ffffffb3 50%,transparent 70%);transform:translateX(-130%);animation:wm-shine 3.6s ease-in-out infinite;pointer-events:none}
+.verified-tick::after{animation-delay:.4s}
+@keyframes wm-shine{0%{transform:translateX(-130%)}55%,100%{transform:translateX(130%)}}
+.profile-name h1+.trust-badges .verified-tick,.gaming-profile .trust-badges .verified-tick{width:20px;height:20px}
+.gaming-profile .trust-badges .verified-tick svg{width:14px;height:14px}
+
+/* Avatar rings by role (static on small avatars to keep the feed light). */
+.avatar.ring-verified{outline:2px solid #3b9dff;outline-offset:1px}
+.avatar.ring-admin{outline:2px solid #f2c14e;outline-offset:1px}
+.avatar.ring-owner{outline:2px solid #ffb547;outline-offset:1px;box-shadow:0 0 10px #ff9d2e55}
+
+/* Profile picture frames: each role has its own animated frame; members keep the classic one. */
+.gaming-portrait.frame-owner,.gaming-portrait.frame-admin,.gaming-portrait.frame-verified{background:none;box-shadow:none}
+.gaming-portrait.frame-owner::before,.gaming-portrait.frame-admin::before,.gaming-portrait.frame-verified::before{content:'';position:absolute;inset:0;border-radius:50%;z-index:0;animation:wm-spin 6s linear infinite}
+.gaming-portrait.frame-owner::before{background:conic-gradient(#ffd56b,#ff8a3d,#ff4fb8,#a06dff,#33dfff,#ffd56b);box-shadow:0 0 26px #ff9d2e66}
+.gaming-portrait.frame-admin::before{background:conic-gradient(#fff1b8,#f2b233,#fff7d6,#c98612,#fff1b8);box-shadow:0 0 22px #f2c14e55}
+.gaming-portrait.frame-verified::before{background:conic-gradient(#9fdcff,#1877f2,#d6f0ff,#0b57c9,#9fdcff);box-shadow:0 0 22px #1877f255}
+.gaming-portrait>.avatar{position:relative;z-index:1}
+.gaming-portrait>button,.gaming-portrait .portrait-camera{z-index:2}
+.gaming-portrait.frame-owner::after{content:'👑';position:absolute;top:-17px;left:50%;transform:translateX(-50%) rotate(-10deg);font-size:28px;line-height:1;z-index:3;filter:drop-shadow(0 2px 3px #000a)}
+@keyframes wm-spin{to{transform:rotate(360deg)}}
+
+/* Taller, Facebook-like cover photo. */
+.social-profile .gaming-cover{height:clamp(240px,28vw,340px)!important}
+@media(max-width:720px){.social-profile .gaming-cover{height:min(58vw,300px)!important}}
+
+/* Boost next to Share. */
+.social-post-footer .boost-button{justify-self:end;display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;border:1px solid #f2c14e66;background:#33270b;color:#ffd56b;font-weight:700}
+.social-post-footer .boost-button .social-icon{width:16px;height:16px}
+.boost-label{font-size:12px}
+@media(prefers-reduced-motion:reduce){.gaming-portrait::before,.trust-badges .trust-pill::after,.verified-tick::after{animation:none}}
+
+/* Deal popup, Deals count, deal rows in All chat, Start deal in chat. */
+.deal-popup{position:fixed;z-index:160;left:50%;top:max(12px,env(safe-area-inset-top));transform:translateX(-50%);width:min(440px,calc(100% - 24px));display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:8px;padding:12px 12px 12px 14px;border-radius:16px;background:#0f2a44;border:1px solid #4bafff88;box-shadow:0 12px 32px #000a;animation:wm-drop .25s ease-out}
+.deal-popup-copy{display:grid;gap:2px;min-width:0}
+.deal-popup-copy strong{font-size:14px}
+.deal-popup-copy span{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.deal-popup .btn{min-height:38px;padding:8px 14px}
+.deal-popup-close{padding:6px 10px!important}
+@keyframes wm-drop{from{transform:translate(-50%,-14px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
+.deal-alert-count{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;margin-left:6px;border-radius:999px;background:#ff4d5e;color:#fff;font-size:11px;font-weight:800;line-height:1;vertical-align:middle}
+#mobileNav [data-tab] .deal-alert-count,#desktopNav [data-tab] .deal-alert-count{position:absolute;top:2px;right:18%;margin:0;box-shadow:0 0 0 2px #071321}
+#mobileNav [data-tab],#desktopNav [data-tab]{position:relative}
+.deal-chat-row .chat-row-label strong{color:#ffd56b}
+.chat-start-deal{margin-left:auto;min-height:36px;padding:7px 12px;font-size:13px;white-space:nowrap;flex:none}
+.deal-pick{width:100%;justify-content:flex-start;text-align:left}
+.deal-direct{display:grid;gap:6px;margin-top:8px}
+@media(prefers-reduced-motion:reduce){.deal-popup{animation:none}}
+.social-post-footer.has-boost{display:grid!important;grid-template-columns:repeat(3,auto) minmax(0,1fr)!important;align-items:center;column-gap:18px}
+.social-post-footer.has-boost .boost-button{justify-self:end;grid-column:4;grid-row:1}

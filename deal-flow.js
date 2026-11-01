@@ -2,35 +2,36 @@
 let marketRulesCache=null;
 async function loadMarketRules(){try{marketRulesCache=(await api('/market-rules')).rules}catch{}return marketRulesCache}
 const dealTime=t=>t?new Date(t).toLocaleString([],{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
-const DEAL_EVENT_LABELS={requested:'Deal requested',accept:'Admin accepted · deal room opened',activate:'Admin accepted · deal room opened',payment_sent:'Buyer reported the payment',payment_received:'Admin confirmed the payment is received',handover_ready:'Buyer is ready for the login details',handover_submitted:'Seller sent login details securely',handover_revealed:'Buyer opened the login details',delivered:'Seller marked the account delivered',buyer_confirmed:'Buyer checked and confirmed the account',auto_confirmed:'Auto-confirmed: no dispute within the check time',dispute:'Dispute raised',resolve_dispute:'Dispute resolved · deal resumed',resolve_redeliver:'Dispute resolved · seller must deliver again',finalize:'Admin completed the deal',cancel:'Deal cancelled',reject:'Admin rejected the request',cancel_requested:'Cancellation requested',cancel_request_rejected:'Cancellation request declined',admin_changed:'Admin changed'};
+const DEAL_EVENT_LABELS={requested:'Deal requested',accept:'Admin accepted · deal room opened',activate:'Admin accepted · deal room opened',payment_sent:'Buyer sent the money (screenshot added)',payment_received:'Admin received the money',handover_ready:'Buyer is ready for the login details',handover_submitted:'Seller sent login details securely',handover_revealed:'Buyer opened the login details',delivered:'Seller handed over the ID',buyer_confirmed:'Buyer got the ID and confirmed',seller_paid:'Seller got the money · deal done',auto_confirmed:'Auto-confirmed: no dispute within the check time',dispute:'Dispute raised',resolve_dispute:'Dispute resolved · deal resumed',resolve_redeliver:'Dispute resolved · seller must deliver again',finalize:'Admin completed the deal',cancel:'Deal cancelled',reject:'Admin rejected the request',cancel_requested:'Cancellation requested',cancel_request_rejected:'Cancellation request declined',admin_changed:'Admin changed'};
 const CHECKLIST_LABELS={login_checked:'I logged in and the account matches the post (level, items, rank).',email_changed:'I bound my own email / Gmail and removed the seller’s.',password_changed:'I changed every password (game login, Facebook / Google).',links_removed:'I removed the seller’s Facebook / Google / VK / X links.',recovery_changed:'I changed the recovery phone and 2-step verification.'};
-const PROTECTED_STEPS=['Accepted','Paid','Secured','Delivered','Checked','Completed'];
+const PROTECTED_STEPS=['Accepted','Paid','Received','ID given','Confirmed','Done'];
 
 function dealSystemLine(m){const line=node('div',undefined,'deal-system-line');line.append(node('span',(DEAL_EVENT_LABELS[m.text]||String(m.text).replaceAll('_',' '))+(m.name?' · '+m.name:'')),node('time',new Date(m.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})));return line}
 function dealRoles(d){const buyer=me?.id===d.buyer_id,seller=me?.id===d.seller_id,isAdmin=me?.id===d.admin_id&&['owner','trusted'].includes(me?.role);return {buyer,seller,isAdmin,participant:buyer||seller||isAdmin}}
 function protectedStage(d){if(d.status==='completed')return 6;if(d.status==='cancelled')return -1;if(['proposed','awaiting_admin','awaiting_seller'].includes(d.status))return 0;if(d.buyer_done)return 5;if(d.delivered_at)return 4;if(d.funded_at)return 3;if(d.paid_at)return 2;return 1}
 function protectedTimes(d){const rules=marketRulesCache||{holdHours:d.hold_hours??24,autoConfirmHours:d.auto_confirm_hours??72};return {holdUntil:d.hold_until??(d.delivered_at?d.delivered_at+rules.holdHours*3600000:null),autoAt:d.auto_confirm_at??(d.delivered_at?d.delivered_at+rules.autoConfirmHours*3600000:null)}}
 function protectedStepText(d){
- const {buyer,seller,isAdmin}=dealRoles(d),{holdUntil,autoAt}=protectedTimes(d),stage=protectedStage(d);
- if(d.status==='disputed')return 'Dispute: '+(d.dispute_reason||'details in the chat')+'. '+(d.admin_id===d.seller_id?'The Owner decides.':'The Admin decides.');
- if(stage===1)return buyer?'Pay only to the number the Admin shares in this room, then tap “I paid”.':isAdmin?'Share your payment number in this room. Confirm when the money arrives.':'Waiting for the buyer to pay the Admin.';
- if(stage===2)return isAdmin?'Buyer says they paid. Check your account, then tap “Payment received”.':'Waiting for the Admin to confirm the payment.';
- if(stage===3){const secure=d.secure_handover!==false;return seller?'Payment is secured with the Admin. Hand over the account'+(secure?' with Secure handover':'')+', then tap “Mark account delivered”.':buyer?(secure?'Payment is secured. Tap “I’m ready” in Secure handover to receive the login.':'Payment is secured. The seller will hand over the account here. Check it, then confirm.'):'Payment secured. Waiting for the seller to hand over the account.'}
- if(stage===4)return buyer?'Log in, finish the secure checklist and confirm. Raise a dispute if anything is wrong.':'Waiting for the buyer to check the account'+(autoAt?' (auto-confirms '+dealTime(autoAt)+' without a dispute).':'.');
- if(stage===5)return Date.now()<holdUntil?'Safety hold until '+dealTime(holdUntil)+(isAdmin?'. Then pay the seller and give the final confirmation.':', then the Admin pays the seller and completes the deal.'):isAdmin?'Pay the seller, then give the final confirmation.':'Waiting for the Admin’s final confirmation.';
- if(stage===6)return 'Deal completed.';
+ const {buyer,seller,isAdmin}=dealRoles(d),{holdUntil,autoAt}=protectedTimes(d),stage=protectedStage(d),direct=d.admin_id===d.seller_id;
+ if(d.status==='disputed')return '⚠️ Dispute: '+(d.dispute_reason||'details in the chat')+'. '+(direct?'The Owner decides.':'The Admin decides.');
+ if(stage===1)return buyer?'💳 Send the money to the Admin’s number in this chat, then tap “I paid” and add the screenshot.':isAdmin?'💳 Share your payment number in this chat. Tap “Money received” when the money arrives.':'⏳ Waiting for the buyer to pay the Admin.';
+ if(stage===2)return isAdmin?'🧾 The buyer sent a payment screenshot. Check your account, then tap “Money received”.':'⏳ Waiting for the Admin to confirm the money.';
+ if(stage===3)return seller?'🔑 The Admin has the money. Give the ID to the buyer, then tap “ID handed over”.':buyer?'🔒 Your money is safe with the Admin. The seller will give you the ID here.':'⏳ Waiting for the seller to hand over the ID.';
+ if(stage===4)return buyer?'✅ Log in, change the password and linked email, then tap “I got the ID”. Something wrong? Raise a dispute.':'⏳ Waiting for the buyer to check the ID'+(autoAt?' (auto-confirms '+dealTime(autoAt)+' if no dispute).':'.');
+ if(stage===5)return isAdmin?'💸 The buyer got the ID. Send the money to the seller'+(Date.now()<holdUntil?' after the safety hold ('+dealTime(holdUntil)+')':'')+'.':seller?'💸 The buyer confirmed. The Admin will send your money. Tap “Money received” when it arrives.':'🎉 Done on your side. Waiting for the seller to get paid.';
+ if(stage===6)return '🎉 Deal completed.';
  return '';
 }
 function appendProtectedSteps(root,d,ctx){
- const {buyer,seller,isAdmin,participant}=ctx,owner=me?.role==='owner',live=['active','awaiting_final'].includes(d.status),time=Date.now();
+ const {buyer,seller,isAdmin,participant}=ctx,owner=me?.role==='owner',live=['active','awaiting_final'].includes(d.status),time=Date.now(),direct=d.admin_id===d.seller_id;
  const step=(label,fn,cls='btn')=>{const b=button(label,fn,cls);b.dataset.dealStep='1';root.append(b);return b};
- if(d.status==='active'&&buyer&&!d.paid_at&&!d.funded_at)step('I paid',()=>openDealStep(d,'mark_paid'));
- if(d.status==='active'&&isAdmin&&!d.funded_at)step('Payment received',()=>openDealStep(d,'confirm_payment'));
- if(d.status==='active'&&seller&&d.funded_at&&!d.delivered_at)step('Mark account delivered',()=>openDealStep(d,'mark_delivered'));
- if(d.status==='active'&&buyer&&d.delivered_at&&!d.buyer_done)step('Check & confirm account',()=>openDealStep(d,'buyer_confirm'));
- if(isAdmin&&live&&d.delivered_at&&!d.cancel_pending){const {holdUntil,autoAt}=protectedTimes(d),opensAt=d.buyer_done?holdUntil:Math.max(holdUntil,autoAt),ready=time>=opensAt;const b=step(ready?'Final confirm & pay seller':'Final confirm opens '+dealTime(opensAt),()=>openDealStep(d,'finalize'));b.disabled=!ready}
- if(live&&participant)step('Raise dispute',()=>openDealStep(d,'dispute'),'btn ghost');
- if(d.status==='disputed'&&(owner||isAdmin&&d.admin_id!==d.seller_id)){step('Resume deal',()=>protectedRequest(d,'resolve_dispute',{}),'btn secondary');step('Seller must deliver again',()=>protectedRequest(d,'resolve_dispute',{redeliver:true}),'btn secondary');if(owner&&!isAdmin)step('Cancel & refund buyer',()=>protectedRequest(d,'cancel',{},'Cancel this disputed deal? Refund the buyer first.'),'btn ghost')}
+ if(d.status==='active'&&buyer&&!d.paid_at&&!d.funded_at)step('💳 I paid',()=>openDealStep(d,'mark_paid'));
+ if(d.status==='active'&&isAdmin&&!d.funded_at)step('✅ Money received',()=>openDealStep(d,'confirm_payment'));
+ if(d.status==='active'&&seller&&d.funded_at&&!d.delivered_at)step('🔑 ID handed over',()=>openDealStep(d,'mark_delivered'));
+ if(d.status==='active'&&buyer&&d.delivered_at&&!d.buyer_done)step('✅ I got the ID',()=>openDealStep(d,'buyer_confirm'));
+ if(live&&seller&&!direct&&d.delivered_at&&!d.cancel_pending){const {autoAt}=protectedTimes(d),ready=d.buyer_done||time>=autoAt;const b=step(ready?'💸 Money received':'💸 Money received (after buyer confirms)',()=>openDealStep(d,'seller_paid'));b.disabled=!ready}
+ if(isAdmin&&live&&d.delivered_at&&!d.cancel_pending&&(direct?!d.buyer_done:true)){const {holdUntil,autoAt}=protectedTimes(d),opensAt=d.buyer_done?holdUntil:Math.max(holdUntil,autoAt);if(time>=opensAt)step(direct?'Complete deal (buyer silent)':'Seller paid · complete deal',()=>openDealStep(d,'finalize'),'btn secondary')}
+ if(live&&participant)step('⚠️ Raise dispute',()=>openDealStep(d,'dispute'),'btn ghost');
+ if(d.status==='disputed'&&(owner||isAdmin&&!direct)){step('▶️ Resume deal',()=>protectedRequest(d,'resolve_dispute',{}),'btn secondary');step('🔁 Seller must give the ID again',()=>protectedRequest(d,'resolve_dispute',{redeliver:true}),'btn secondary');if(owner&&!isAdmin)step('✖️ Cancel & refund buyer',()=>protectedRequest(d,'cancel',{},'Cancel this disputed deal? Refund the buyer first.'),'btn ghost')}
 }
 async function afterDealChange(d){try{await refreshMe()}catch{}if(activeDealRoom?.id===d.id)await refreshDealRoom();await loadDeals().catch(()=>{})}
 async function protectedRequest(d,action,extra={},confirmText){if(confirmText&&!confirm(confirmText))return;await api('/deals/'+d.id+'/action',{action,version:d.version,...extra});await afterDealChange(d)}
@@ -61,12 +62,14 @@ async function uploadDealProof(dealId,file,kind){
 }
 function openDealStep(d,action){
  const send=async extra=>{await api('/deals/'+d.id+'/action',{action,version:d.version,...extra});await afterDealChange(d)};
- if(action==='mark_paid')return openStepDialog('I paid',body=>{body.append(node('p','Send money only to the number the Admin gives inside this Deal Room. Never pay outside it.','hint'));field(body,'Transaction ID / sender last digits (optional)',textInput(120,false,'e.g. bKash TrxID 8N7A6B5C'))},'Report payment',body=>send({note:body.querySelector('input').value.trim()}));
- if(action==='confirm_payment')return openStepDialog('Payment received',body=>{body.append(node('p','Confirm only after the money is in your account. The seller hands over the account after this.','hint'));if(d.paid_note)body.append(node('p','Buyer’s note: '+d.paid_note,'deal-step-note'));const trx=field(body,'Transaction ID',textInput(120,true));trx.value=(d.paid_note.match(/[A-Z0-9]{8,12}/i)||[''])[0];const proof=field(body,'Payment screenshot (optional, private)',proofInput());proof.dataset.role='proof'},'Confirm payment',async body=>{const trx=body.querySelector('input:not([type=file])').value.trim();const proofId=await uploadDealProof(d.id,body.querySelector('[data-role=proof]').files[0],'payment');await send({trx,proofId})});
- if(action==='mark_delivered')return openStepDialog('Account delivered',body=>{body.append(node('p','Confirm that the buyer has the account: login sent with Secure handover or bound in-game, and your own links are removed.','hint'));const ack=node('label',undefined,'deal-check');const box=node('input');box.type='checkbox';box.required=true;ack.append(box,node('span','I handed over the account and removed my own login links.'));body.append(ack)},'Mark delivered',()=>send({}));
- if(action==='buyer_confirm')return openStepDialog('Check & confirm account',body=>{body.append(node('p','Tick every step after you do it. '+(marketRulesCache?.holdHours?'A '+marketRulesCache.holdHours+'-hour safety hold still protects you before the seller is paid.':'Raise a dispute instead if anything is wrong.'),'hint'));for(const key of d.checklist_items||Object.keys(CHECKLIST_LABELS)){const label=node('label',undefined,'deal-check');const box=node('input');box.type='checkbox';box.required=true;box.value=key;label.append(box,node('span',CHECKLIST_LABELS[key]||key));body.append(label)}const proof=field(body,'Screenshot of your new linked email (optional, private)',proofInput());proof.dataset.role='proof'},'Confirm account is mine',async body=>{const checklist=[...body.querySelectorAll('input[type=checkbox]:checked')].map(b=>b.value);const proofId=await uploadDealProof(d.id,body.querySelector('[data-role=proof]').files[0],'checklist');await send({checklist,proofId})});
- if(action==='dispute')return openStepDialog('Raise dispute',body=>{body.append(node('p','Explain what went wrong. The payment stays with the Admin until the dispute is decided.','hint'));const reason=node('textarea',undefined,'input');reason.maxLength=500;reason.required=true;field(body,'What happened?',reason)},'Raise dispute',body=>send({reason:body.querySelector('textarea').value.trim()}));
- if(action==='finalize')return openStepDialog('Final confirmation',body=>{body.append(node('p','Pay the seller first, then confirm. This completes the deal and marks the listing sold.','hint'));if(!d.buyer_done)body.append(node('p','The buyer did not confirm, but the check time ended without a dispute. It will be recorded as auto-confirmed.','deal-step-note'));field(body,'Seller payout reference (optional)',textInput(200,false,'e.g. Paid via bKash, TrxID'))},'Complete deal',body=>send({payout:body.querySelector('input').value.trim()}));
+ const confirmBox=(body,text)=>{const label=node('label',undefined,'deal-check'),box=node('input');box.type='checkbox';box.required=true;label.append(box,node('span',text));body.append(label)};
+ if(action==='mark_paid')return openStepDialog('💳 I paid',body=>{body.append(node('p','Pay only to the Admin’s number shared in this Deal Room. Then add the payment screenshot (bKash / Nagad / Rocket).','hint'));const proof=field(body,'Payment screenshot',proofInput());proof.required=true;proof.dataset.role='proof'},'Send to Admin',async body=>{const file=body.querySelector('[data-role=proof]').files[0];if(!file)throw Error('Add the payment screenshot.');const proofId=await uploadDealProof(d.id,file,'payment');await send({proofId})});
+ if(action==='confirm_payment')return openStepDialog('✅ Money received',body=>{body.append(node('p','Confirm only after the money is really in your account. Then the seller gives the ID to the buyer.','hint'));if(d.proofs?.some(p=>p.kind==='payment'))body.append(button('🧾 View buyer’s payment screenshot',()=>window.open('/api/deals/'+d.id+'/proofs/'+d.proofs.find(p=>p.kind==='payment').id,'_blank','noopener'),'btn ghost'));confirmBox(body,'I received '+formatPrice(d.price)+' in my account.')},'Money received',()=>send({}));
+ if(action==='mark_delivered')return openStepDialog('🔑 ID handed over',body=>{body.append(node('p','Give the ID to the buyer (login details or in-game bind), and remove your own email / Facebook / Google links.','hint'));confirmBox(body,'I gave the ID to the buyer and removed my links.')},'ID handed over',()=>send({}));
+ if(action==='buyer_confirm')return openStepDialog('✅ I got the ID',body=>{body.append(node('p','Before confirming: log in, change the password, bind your own email / Gmail and remove the seller’s links. After this the seller gets paid.','hint'));confirmBox(body,'I got the ID, it matches the post, and I changed its login details.');const proof=field(body,'Screenshot (optional, only you, Admin and Owner see it)',proofInput());proof.dataset.role='proof'},'I got the ID',async body=>{const proofId=await uploadDealProof(d.id,body.querySelector('[data-role=proof]').files[0],'checklist');await send({received:true,proofId})});
+ if(action==='seller_paid')return openStepDialog('💸 Money received',body=>{body.append(node('p','Confirm only after the Admin’s payment is in your account. This completes the deal.','hint'));confirmBox(body,'I received my money from the Admin.')},'Complete deal',()=>send({}));
+ if(action==='dispute')return openStepDialog('⚠️ Raise dispute',body=>{body.append(node('p','Explain what went wrong. The money stays with the Admin until the dispute is decided.','hint'));const reason=node('textarea',undefined,'input');reason.maxLength=500;reason.required=true;field(body,'What happened?',reason)},'Raise dispute',body=>send({reason:body.querySelector('textarea').value.trim()}));
+ if(action==='finalize')return openStepDialog('Complete deal',body=>{body.append(node('p',d.admin_id===d.seller_id?'The buyer did not confirm or dispute in time. Complete the deal?':'Send the money to the seller first. Use this only if the seller cannot confirm it.','hint'));field(body,'Note (optional)',textInput(200,false,'e.g. Paid via bKash'))},'Complete deal',body=>send({payout:body.querySelector('input').value.trim()}));
 }
 
 // Secure handover: encrypted on the server, readable once by the buyer, never by Admin or Owner.
@@ -117,30 +120,25 @@ function renderDealProgress(d){
  box.append(steps,node('p',protectedStepText(d),'deal-next-step'));
  const facts=[];if(d.game_uid)facts.push(['Game UID',d.game_uid]);if(d.paid_note)facts.push(['Buyer payment note',d.paid_note]);if(d.payment_trx)facts.push(['Payment TrxID',d.payment_trx]);if(d.payout_note)facts.push(['Seller payout',d.payout_note]);
  if(facts.length){const list=node('dl',undefined,'deal-facts');for(const [k,v]of facts)list.append(node('dt',k),node('dd',v));box.append(list)}
- if(d.proofs?.length){const row=node('div',undefined,'deal-proof-row');for(const proof of d.proofs)row.append(button({payment:'Payment proof',checklist:'Buyer check proof',delivery:'Delivery proof'}[proof.kind]||'Proof',()=>window.open('/api/deals/'+d.id+'/proofs/'+proof.id,'_blank','noopener'),'btn ghost'));box.append(row)}
- if(d.funded_at&&['active','awaiting_final','disputed'].includes(d.status))box.append(renderHandoverBox(d));
+ if(d.proofs?.length){const row=node('div',undefined,'deal-proof-row');for(const proof of d.proofs)row.append(button({payment:'🧾 Payment screenshot',checklist:'🖼️ Buyer’s screenshot',delivery:'🖼️ Delivery screenshot'}[proof.kind]||'Screenshot',()=>window.open('/api/deals/'+d.id+'/proofs/'+proof.id,'_blank','noopener'),'btn ghost'));box.append(row)}
+ // Secure handover appears only once the money is with the Admin, until the ID is handed over (and only if the Owner set it up).
+ if(d.secure_handover!==false&&d.funded_at&&['active','awaiting_final','disputed'].includes(d.status)&&(!d.delivered_at||d.handover?.waiting))box.append(renderHandoverBox(d));
  const actions=node('div',undefined,'action-row deal-step-actions');appendProtectedSteps(actions,d,dealRoles(d));if(actions.children.length)box.append(actions);
  return box;
 }
 
-// Listing tools: private game UID field, bump/renew, Updated and Expired labels.
-function sellGameListing(p){return p.post_intent!=='need'&&p.kind==='Game ID'&&p.price>0&&p.game_category!=='community'}
+// Listing tools: Boost (free bump / renew) next to Share, Updated and Expired labels.
 function listingExpiredForOwner(p){const days=marketRulesCache?.expireDays;return !!days&&Math.max(p.created_at||0,p.bumped_at||0,p.renewed_at||0)<Date.now()-days*86400000}
-function syncGameUidField(){
- const field=$('gameUidField');if(!field)return;const sell=postIntent!=='need';field.hidden=!sell;const input=$('postGameUid');if(!sell){input.value='';return}
- const saved=editingPost?.hasGameUid;input.placeholder=saved?'Saved (ends with '+(editingPost.gameUidHint||'•••')+'). Leave empty to keep it':'e.g. 1234567890';
- $('postGameUidHint').textContent=saved?'Your saved game UID stays private. Enter a new one only if it changed.':'Private: shown only inside your Deal Room. One active post per game ID'+(marketRulesCache?.requireGameUid===false?'.':'. Required for game ID Sell Posts.');
-}
-function listingOwnerMenu(p){
- if(p.user_id!==me?.id||p.status!=='approved'||p.availability==='sold')return [];
- const expired=listingExpiredForOwner(p);
- return [[expired?'Renew post':'Bump post',async()=>{if(sellGameListing(p)&&!p.has_game_uid&&marketRulesCache?.requireGameUid!==false){toast('Add the game UID to this post first (Edit post).');return editPost(p.id)}await api('/posts/'+p.id+'/bump',{});toast(expired?'Post renewed for '+(marketRulesCache?.expireDays||30)+' days.':'Post moved to the top of the feed.');if(active==='profile')await loadProfileView();else if(active==='home')await loadFeed()}]];
+function boostButton(p){
+ if(p.user_id!==me?.id||p.status!=='approved'||p.availability==='sold')return null;
+ const expired=listingExpiredForOwner(p),b=iconButton(expired?'Renew post':'Boost post to the top of the feed','bolt',async()=>{
+  try{await api('/posts/'+p.id+'/bump',{});toast(expired?'🚀 Post renewed and back in the feed.':'🚀 Boosted! Your post is now at the top of the feed.');if(active==='profile')await loadProfileView();else if(active==='home')await loadFeed()}catch(error){toast(error.message)}
+ },'reaction-button boost-button');b.append(node('span',expired?'Renew':'Boost','boost-label'));return b;
 }
 function appendListingLabels(root,p){
  const labels=node('div',undefined,'listing-labels');
  if(p.media_updated_at)labels.append(node('span','Updated','listing-label updated'));
- if(p.user_id===me?.id&&p.status==='approved'&&p.availability!=='sold'&&listingExpiredForOwner(p))labels.append(node('span','Expired · Renew to show in feed','listing-label expired'));
- if(p.user_id===me?.id&&sellGameListing(p)&&!p.has_game_uid&&marketRulesCache?.requireGameUid!==false){const add=button('Add game UID',()=>editPost(p.id),'listing-label add-uid');labels.append(add)}
+ if(p.user_id===me?.id&&p.status==='approved'&&p.availability!=='sold'&&listingExpiredForOwner(p))labels.append(node('span','Expired · tap Renew to show it in the feed','listing-label expired'));
  if(labels.children.length)root.append(labels);
 }
 async function precheckPost(payload,editId){await api('/posts/precheck',{postIntent:payload.postIntent,kind:payload.kind,price:payload.price,gameCategory:payload.gameCategory,customGameName:payload.customGameName,gameUid:payload.gameUid,...(editId?{editId}:{})})}
@@ -169,6 +167,41 @@ function syncChatSafetyNote(){
  note.hidden=false;
 }
 $('messageText')?.addEventListener('input',syncChatSafetyNote);
-void loadMarketRules().then(()=>{try{syncGameUidField()}catch{}});
+void loadMarketRules();
 
 $('closeTermsPage')?.addEventListener('click',()=>navigate('home'));
+
+// Start a deal straight from a private chat, using one of the other member's available Sell Posts.
+async function startDealFromChat(peer){
+ const {posts}=await api('/profile/'+encodeURIComponent(peer.id));
+ const sellable=posts.filter(p=>p.user_id===peer.id&&!p.shared_by_id&&p.post_intent!=='need'&&p.status==='approved'&&p.availability!=='sold'&&p.price>0);
+ if(!sellable.length)return toast(peer.name+' has no available Sell Post right now.');
+ if(sellable.length===1)return startListingDeal(sellable[0].id);
+ openStepDialog('🤝 Start a deal',body=>{body.append(node('p','Which ID do you want to buy from '+peer.name+'?','hint'));for(const p of sellable.slice(0,20))body.append(button((p.listing_code?p.listing_code+' · ':'')+p.title+' · '+formatPrice(p.price,p.price_format),async()=>{closeStepDialog();await startListingDeal(p.id)},'btn secondary deal-pick'))},'Close',null);
+}
+
+// Deal popup: new requests, each deal step and deal messages, plus a count on the Deals tab.
+let dealAlertSeen=(()=>{try{return Number(sessionStorage.getItem('wm_deal_alert_seen'))||0}catch{return 0}})(),dealAlertBusy=false,dealPopupTimer;
+function paintDealAlertCount(count){
+ for(const target of [$('dealChatsTab'),document.querySelector('#mobileNav [data-tab="messages"]'),document.querySelector('#desktopNav [data-tab="messages"]')]){if(!target)continue;let dot=target.querySelector('.deal-alert-count');if(!count){dot?.remove();continue}if(!dot){dot=node('span',undefined,'deal-alert-count');target.append(dot)}dot.textContent=count>9?'9+':String(count);dot.title=count+' deal update'+(count===1?'':'s')}
+}
+function hideDealPopup(){clearTimeout(dealPopupTimer);document.getElementById('dealPopup')?.remove()}
+function showDealPopup(alert,more){
+ if(activeDealRoom?.id===alert.deal_id)return;hideDealPopup();const card=node('div',undefined,'deal-popup');card.id='dealPopup';card.setAttribute('role','status');
+ const copy=node('div',undefined,'deal-popup-copy');copy.append(node('strong','🔔 '+alert.title),node('span',(alert.deal_code||'Deal')+' · '+(alert.account||'')+(alert.actor_name?' · '+alert.actor_name:'')+(more>1?' · +'+(more-1)+' more':'')));
+ const open=button('Open',async()=>{hideDealPopup();const ids=(await api('/deal-alerts')).alerts.filter(a=>a.deal_id===alert.deal_id).map(a=>a.id);if(ids.length)await api('/notifications/read',{ids});paintDealAlertCount(0);void pollDealAlerts();if(['active','awaiting_final','disputed'].includes(alert.status))await openDealRoom(alert.deal_id);else navigate('deals')},'btn');
+ const close=button('×',async()=>{hideDealPopup()},'btn ghost deal-popup-close');close.setAttribute('aria-label','Dismiss');
+ card.append(copy,open,close);document.body.append(card);dealPopupTimer=setTimeout(hideDealPopup,12000);
+}
+async function pollDealAlerts(){
+ if(!me||document.hidden||dealAlertBusy)return;dealAlertBusy=true;
+ try{
+  const {alerts}=await api('/deal-alerts');let pending=alerts;
+  // Updates for the deal room that is already open are read on the spot.
+  const here=activeDealRoom?alerts.filter(a=>a.deal_id===activeDealRoom.id):[];if(here.length){await api('/notifications/read',{ids:here.map(a=>a.id)});pending=alerts.filter(a=>a.deal_id!==activeDealRoom.id)}
+  paintDealAlertCount(pending.length);const fresh=pending.filter(a=>a.id>dealAlertSeen);
+  if(alerts.length){dealAlertSeen=Math.max(dealAlertSeen,...alerts.map(a=>a.id));try{sessionStorage.setItem('wm_deal_alert_seen',String(dealAlertSeen))}catch{}}
+  if(fresh.length)showDealPopup(fresh[0],fresh.length);
+ }catch{}finally{dealAlertBusy=false}
+}
+setInterval(()=>void pollDealAlerts(),12000);setTimeout(()=>void pollDealAlerts(),2500);document.addEventListener('visibilitychange',()=>{if(!document.hidden)void pollDealAlerts()});
