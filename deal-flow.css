@@ -1,0 +1,64 @@
+/* Protected deal steps, secure handover, listing labels, trust badges. Uses the existing sky palette. */
+.trust-pill{display:inline-flex;align-items:center;gap:3px;margin-left:6px;padding:2px 7px 2px 4px;border-radius:999px;border:1px solid;font-size:11px;font-weight:700;line-height:1.2;vertical-align:middle;white-space:nowrap;flex:none;cursor:default}
+button.trust-pill{cursor:pointer;min-height:0;height:auto;width:auto;box-shadow:none;margin-top:0;margin-bottom:0;font-family:inherit;letter-spacing:0;text-transform:none}
+.trust-pill .social-icon{width:13px;height:13px;display:inline-flex}
+.trust-pill .social-icon svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2}
+.trust-pill.verified{color:#78f0b4;background:#0d2f24;border-color:#2bd38a66}
+.trust-pill.admin{color:#ffd56b;background:#33270b;border-color:#f2c14e80}
+.avatar.ring-verified{outline:2px solid #2bd38a;outline-offset:1px}
+.avatar.ring-admin{outline:2px solid #f2c14e;outline-offset:1px}
+
+.deal-room #dealRoomSummary{max-height:52dvh;overflow:auto;overscroll-behavior:contain}
+.deal-progress{margin-top:8px;padding:10px;border:1px solid var(--line);border-radius:12px;background:#0a1b2c;display:grid;gap:8px}
+.deal-steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:2px;counter-reset:step}
+.deal-step{display:grid;justify-items:center;gap:3px;position:relative;text-align:center;min-width:0}
+.deal-step:not(:first-child)::before{content:'';position:absolute;top:6px;right:50%;width:100%;height:2px;background:#29485f;z-index:0}
+.deal-step.done:not(:first-child)::before{background:#2bd38a}
+.deal-step-dot{width:14px;height:14px;border-radius:50%;border:2px solid #4b6f8c;background:#071321;position:relative;z-index:1}
+.deal-step.done .deal-step-dot{background:#2bd38a;border-color:#2bd38a}
+.deal-step.current .deal-step-dot{border-color:var(--mint);box-shadow:0 0 0 3px #79d4ff33}
+.deal-step small{font-size:10px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.deal-step.done small,.deal-step.current small{color:var(--text)}
+.deal-next-step{margin:0;font-size:13px;line-height:1.45;color:var(--text)}
+p.hint.deal-next-step{color:var(--mint)}
+.deal-facts{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;margin:0;font-size:12px}
+.deal-facts dt{color:var(--muted)}
+.deal-facts dd{margin:0;overflow-wrap:anywhere;font-weight:600}
+.deal-proof-row,.deal-step-actions{display:flex;flex-wrap:wrap;gap:6px}
+.deal-step-actions .btn,.deal-proof-row .btn{min-height:38px;padding:8px 12px;font-size:13px}
+.handover-box{border:1px solid #3b5a73;border-radius:10px;padding:8px 10px;background:#0c2236}
+.handover-box summary{display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:700;font-size:13px;list-style:none}
+.handover-box summary::-webkit-details-marker{display:none}
+.handover-box summary small{margin-left:auto;color:var(--muted);font-weight:500}
+.handover-box summary .social-icon{width:16px;height:16px}
+.handover-status{list-style:none;margin:8px 0;padding:0;display:grid;gap:3px;font-size:12px;color:var(--muted)}
+.handover-status li::before{content:'○ ';color:#4b6f8c}
+.handover-status li.ok{color:var(--text)}
+.handover-status li.ok::before{content:'● ';color:#2bd38a}
+.handover-box .hint{margin:6px 0 0;font-size:12px}
+.deal-system-line{align-self:center;display:flex;gap:8px;align-items:baseline;max-width:92%;padding:5px 10px;border-radius:999px;background:#0f2a40;border:1px solid #29485f;font-size:12px;color:#b8d3e7;text-align:center}
+.deal-system-line time{color:var(--muted);font-size:11px;flex:none}
+
+.deal-step-modal{z-index:140}
+.deal-room-open #toast{z-index:150}
+.deal-step-form{width:min(460px,100%);max-height:88dvh;overflow:auto;display:grid;gap:8px}
+.deal-step-form .page-heading{margin:0}
+.deal-step-form .page-heading h2{margin:0;font-size:20px;line-height:1.25;flex:1;min-width:0}
+.deal-step-form label{font-size:13px;font-weight:600}
+.deal-check{display:flex;gap:9px;align-items:flex-start;font-weight:500!important;line-height:1.4;padding:6px 0}
+.deal-check input{width:18px;height:18px;flex:none;margin-top:1px;accent-color:#2bd38a}
+.deal-step-note{margin:0;padding:8px 10px;border-radius:10px;background:#33270b;border:1px solid #f2c14e55;color:#ffe3a1;font-size:13px}
+.secret-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:#071321}
+.secret-row small{grid-column:1/-1;color:var(--muted)}
+.secret-row code{font-size:15px;overflow-wrap:anywhere;user-select:all}
+.trust-head{display:flex;align-items:center;gap:10px}
+
+.listing-labels{display:flex;flex-wrap:wrap;gap:5px;margin:4px 0}
+.listing-label{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;border:1px solid}
+.listing-label.updated{color:#9fd8ff;border-color:#4bafff66;background:#0d2a44}
+.listing-label.expired{color:#ffc9a8;border-color:#ff8b3c66;background:#3a1d0d}
+button.listing-label.add-uid{color:#ffd56b;border-color:#f2c14e80;background:#33270b;cursor:pointer;min-height:0}
+.private-tag{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;font-size:10px;font-weight:700;color:#78f0b4;background:#0d2f24;border:1px solid #2bd38a55;vertical-align:middle}
+.chat-safety-note{margin:0 0 6px;padding:8px 10px;border-radius:10px;background:#33270b;border:1px solid #f2c14e55;color:#ffe3a1;font-size:12px;line-height:1.4}
+.terms-notice h2{margin-top:18px}
+@media(max-width:380px){.deal-step small{font-size:9px}.trust-pill{font-size:10px;padding:1px 6px 1px 3px}}
