@@ -150,3 +150,7 @@ body.logged-out .guest-auth{display:flex}
 .guest-auth .btn{min-height:38px;padding:8px 16px}
 #loginModal{z-index:130}
 #loginModal .dialog{max-height:92dvh;overflow:auto}
+.auth-field{display:grid;gap:6px}
+.auth-field[hidden],#authGoogle[hidden],.auth-tabs[hidden]{display:none}
+.auth-link{justify-self:end;background:none;border:0;color:#79d4ff;font-weight:700;padding:4px 0;min-height:0;cursor:pointer}
+.auth-intro{margin:0 0 6px}

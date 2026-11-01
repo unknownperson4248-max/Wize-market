@@ -418,6 +418,27 @@ if(p==='/api/auth/signup'&&method==='POST'){
  try{await db.batch([stmt(db,'INSERT INTO users(id,google_sub,email,name,picture,created_at,updated_at) VALUES(?,?,?,?,?,?,?)',id,'password:'+id,login,name,'/assets/default-avatar.svg',time,time),stmt(db,'INSERT INTO wm_credentials(user_id,login,kind,password_hash,salt,created_at,updated_at) VALUES(?,?,?,?,?,?,?)',id,login,d.method,await passwordHash(d.password,salt),salt,time,time)])}catch(error){if(/UNIQUE/i.test(error.message))throw new HttpError('This account already exists. Please sign in.',409);throw error}
  return await sessionResponse(db,id,201);
 }
+// Forgot password: the request goes to the Owner, who sends a one-time link from their own WhatsApp / email.
+if(p==='/api/auth/forgot'&&method==='POST'){
+ await throttle(db,'forgot:'+(req.headers.get('cf-connecting-ip')||'unknown'),3);const d=await body(req);need(['email','phone'].includes(d.method),'Choose WhatsApp number or email');
+ const login=loginId(d.method,d.login);await throttle(db,'forgot-login:'+login,2);
+ const account=await one(db,'SELECT user_id FROM wm_credentials WHERE login=?',login),open=await one(db,'SELECT id FROM wm_reset_requests WHERE login=? AND handled_at IS NULL',login),time=now();
+ if(open)await run(db,'UPDATE wm_reset_requests SET created_at=?,user_id=? WHERE id=?',time,account?.user_id||null,open.id);
+ else await run(db,'INSERT INTO wm_reset_requests(id,user_id,login,kind,created_at) VALUES(?,?,?,?,?)',uuid(),account?.user_id||null,login,d.method,time);
+ // Same answer whether or not the account exists, so nobody can test which numbers are registered.
+ return reply({ok:true});
+}
+if(p==='/api/auth/reset'&&method==='POST'){
+ await throttle(db,'reset:'+(req.headers.get('cf-connecting-ip')||'unknown'),10);const d=await body(req);
+ need(typeof d.token==='string'&&/^[a-f0-9]{64}$/.test(d.token),'This reset link is not valid. Ask the Owner for a new one.',400);
+ need(typeof d.password==='string'&&d.password.length>=8&&d.password.length<=128,'Use a password with at least 8 characters');
+ const hash=await digest(d.token),time=now(),reset=await one(db,'SELECT user_id FROM wm_password_resets WHERE token_hash=? AND used_at IS NULL AND expires_at>?',hash,time);
+ need(reset,'This reset link has expired or was already used. Ask the Owner for a new one.',410);
+ const salt=Array.from(crypto.getRandomValues(new Uint8Array(16)),x=>x.toString(16).padStart(2,'0')).join(''),passwordHashValue=await passwordHash(d.password,salt);
+ const result=await db.batch([stmt(db,'UPDATE wm_password_resets SET used_at=? WHERE token_hash=? AND used_at IS NULL',time,hash),stmt(db,'UPDATE wm_credentials SET password_hash=?,salt=?,failed=0,locked_until=NULL,updated_at=? WHERE user_id=? AND changes()=1',passwordHashValue,salt,time,reset.user_id),stmt(db,'DELETE FROM sessions WHERE user_id=? AND changes()=1',reset.user_id)]);
+ need(result[0].meta.changes===1&&result[1].meta.changes===1,'This reset link was already used. Ask the Owner for a new one.',410);
+ return await sessionResponse(db,reset.user_id,200);
+}
 if(p==='/api/auth/signin'&&method==='POST'){
  await throttle(db,'signin:'+(req.headers.get('cf-connecting-ip')||'unknown'),10);const d=await body(req),wrong='Wrong phone / email or password';
  let login;try{login=loginId(typeof d.login==='string'&&d.login.includes('@')?'email':'phone',d.login)}catch{throw new HttpError(wrong,401)}
@@ -590,6 +611,18 @@ if(p==='/api/admin/pwa'&&method==='POST'){
  let icons=d.resetIcons?{}:{icon192Id:old.icon192Id,icon512Id:old.icon512Id,iconMaskableId:old.iconMaskableId};const writes=[];
  if(d.icons){icons={};for(const [key,size]of [['icon192Id',192],['icon512Id',512],['iconMaskableId',512]]){const id=d.icons[key],file=await one(db,"SELECT * FROM wm_uploads WHERE id=? AND user_id=? AND type='image/png' AND size<=1048576",id,u.id);need(file,'Upload the generated PNG app icons');const object=await env.MEDIA.get(id);need(object,'App icon not found');const bytes=new Uint8Array(object.arrayBuffer?await object.arrayBuffer():await new Response(object.body).arrayBuffer());need(bytes.length>=24&&bytes[0]===137&&String.fromCharCode(...bytes.slice(1,4))==='PNG','Invalid PNG icon');const view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);need(view.getUint32(16)===size&&view.getUint32(20)===size,'Incorrect app icon dimensions');icons[key]=id;writes.push(stmt(db,'INSERT OR IGNORE INTO wm_pwa_icons(upload_id,created_by,created_at) VALUES(?,?,?)',id,u.id,now()))}}
  const config={name,shortName,description,...icons,version:now()};writes.push(stmt(db,"INSERT INTO wm_settings(key,value) VALUES('pwa_config',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",JSON.stringify(config)));await db.batch(writes);return reply({ok:true,config});
+}
+// Owner tools for password help: open requests, member search and one-time reset links.
+if(p==='/api/admin/reset-requests'&&method==='GET'){need(u.role==='owner','Owner only',403);return reply({requests:await rows(db,"SELECT r.id,r.user_id,r.login,r.kind,r.created_at,u.name,EXISTS(SELECT 1 FROM wm_credentials c WHERE c.user_id=r.user_id) has_password FROM wm_reset_requests r LEFT JOIN wm_public_users u ON u.id=r.user_id WHERE r.handled_at IS NULL ORDER BY r.created_at DESC LIMIT 100")})}
+if(p==='/api/admin/reset-requests/dismiss'&&method==='POST'){need(u.role==='owner','Owner only',403);const d=await body(req);need(typeof d.id==='string'&&d.id.length<100,'Choose a request');await run(db,'UPDATE wm_reset_requests SET handled_at=?,handled_by=? WHERE id=? AND handled_at IS NULL',now(),u.id,d.id);return reply({ok:true})}
+if(p==='/api/admin/password-accounts'&&method==='GET'){need(u.role==='owner','Owner only',403);const q=(url.searchParams.get('q')||'').trim().toLowerCase().slice(0,80);need(q.length>=2,'Type at least 2 letters');const digits=q.replace(/[^0-9]/g,'');return reply({accounts:await rows(db,"SELECT c.user_id,c.login,c.kind,u.name,u.picture FROM wm_credentials c JOIN wm_public_users u ON u.id=c.user_id WHERE instr(lower(u.name),?)>0 OR instr(c.login,?)>0"+(digits.length>=4?" OR instr(c.login,?)>0":'')+" ORDER BY u.name LIMIT 30",q,q,...(digits.length>=4?[digits]:[]))})}
+if(p==='/api/admin/reset-link'&&method==='POST'){
+ need(u.role==='owner','Owner only',403);const d=await body(req);need(typeof d.userId==='string'&&d.userId.length<100,'Choose a member');
+ const account=await one(db,'SELECT c.user_id,c.login,c.kind,u.name FROM wm_credentials c JOIN wm_public_users u ON u.id=c.user_id WHERE c.user_id=?',d.userId);need(account,'This member signs in with Google, so there is no password to reset.',404);
+ const token=Array.from(crypto.getRandomValues(new Uint8Array(32)),x=>x.toString(16).padStart(2,'0')).join(''),time=now();
+ // Only the newest link works: older unused links for this member stop working.
+ const writes=[stmt(db,'UPDATE wm_password_resets SET used_at=? WHERE user_id=? AND used_at IS NULL',time,account.user_id),stmt(db,'INSERT INTO wm_password_resets(token_hash,user_id,created_by,created_at,expires_at) VALUES(?,?,?,?,?)',await digest(token),account.user_id,u.id,time,time+86400000),stmt(db,'UPDATE wm_reset_requests SET handled_at=?,handled_by=? WHERE user_id=? AND handled_at IS NULL',time,u.id,account.user_id)];
+ await db.batch(writes);return reply({link:url.origin+'/#reset='+token,login:account.login,kind:account.kind,name:account.name,expires_at:time+86400000});
 }
 if(p==='/api/admin/market-rules'&&method==='POST'){need(u.role==='owner','Owner only',403);const rules=validRules(await body(req));await run(db,"INSERT INTO wm_settings(key,value) VALUES('market_rules',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",JSON.stringify(rules));return reply({ok:true,rules})}
 if(p==='/api/admin/appearance'&&method==='POST'){

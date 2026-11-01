@@ -832,6 +832,23 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  assert.equal((await authCall('signup',{method:'email',login:'Mim@Example.com',password:'mimpass123',name:'মিম আক্তার'})).status,201);assert.equal((await authCall('signin',{login:'mim@example.com',password:'mimpass123'})).status,200);
  const throttled=[];for(let i=0;i<6;i++)throttled.push((await authCall('signin',{login:'mim@example.com',password:'nope-'+i})).status);assert.ok(throttled.includes(429),throttled.join(','));
  assert.equal((await worker.fetch(new Request('https://test.local/api/auth/signin',{method:'POST',headers:{origin:'https://evil.local','content-type':'application/json'},body:JSON.stringify({login:'mim@example.com',password:'mimpass123'})}),env)).status,403);
+ // Owner-assisted password reset: request -> Owner makes a one-time link -> member sets a new password.
+ assert.equal((await authCall('forgot',{method:'phone',login:'01712345678'})).status,200);assert.equal((await authCall('forgot',{method:'email',login:'nobody@example.com'})).status,200);
+ assert.equal((await call('/api/admin/reset-requests','GET',undefined,'admin')).status,403);
+ const resetRequests=(await call('/api/admin/reset-requests','GET',undefined,'owner')).data.requests,rafiRequest=resetRequests.find(x=>x.login==='8801712345678');
+ assert.ok(rafiRequest&&rafiRequest.user_id&&rafiRequest.has_password&&rafiRequest.name==='Rafi Hasan');assert.ok(resetRequests.some(x=>x.login==='nobody@example.com'&&!x.user_id));
+ assert.equal((await call('/api/admin/password-accounts?q=rafi','GET',undefined,'owner')).data.accounts[0].login,'8801712345678');assert.equal((await call('/api/admin/password-accounts?q=1712345','GET',undefined,'owner')).data.accounts.length,1);
+ assert.equal((await call('/api/admin/reset-link','POST',{userId:'buyer'},'owner')).status,404);assert.equal((await call('/api/admin/reset-link','POST',{userId:rafiRequest.user_id},'admin')).status,403);
+ const resetLink=(await call('/api/admin/reset-link','POST',{userId:rafiRequest.user_id},'owner')).data;assert.match(resetLink.link,/^https:\/\/test\.local\/#reset=[a-f0-9]{64}$/);assert.equal(resetLink.login,'8801712345678');
+ const resetToken=resetLink.link.split('#reset=')[1];assert.equal(sql.prepare('SELECT count(*) n FROM wm_password_resets WHERE token_hash=?').get(resetToken).n,0);assert.equal(sql.prepare('SELECT count(*) n FROM wm_password_resets WHERE token_hash=?').get(await hash(resetToken)).n,1);
+ assert.equal((await call('/api/admin/reset-requests','GET',undefined,'owner')).data.requests.some(x=>x.user_id===rafiRequest.user_id),false);
+ assert.equal((await authCall('reset',{token:resetToken,password:'short'})).status,400);assert.equal((await authCall('reset',{token:'f'.repeat(64),password:'brandnew123'})).status,410);
+ const resetDone=await authCall('reset',{token:resetToken,password:'brandnew123'});assert.equal(resetDone.status,200);assert.match(resetDone.headers.get('set-cookie'),/^wm_session=[a-f0-9]{64}/);
+ assert.equal((await authCall('reset',{token:resetToken,password:'another123'})).status,410);
+ assert.equal((await (await worker.fetch(new Request('https://test.local/api/me',{headers:{cookie:sessionCookie}}),env)).json()).user,null);
+ assert.equal((await authCall('signin',{login:'01712345678',password:'goodpass123'})).status,401);assert.equal((await authCall('signin',{login:'01712345678',password:'brandnew123'})).status,200);
+ const olderToken=(await call('/api/admin/reset-link','POST',{userId:rafiRequest.user_id},'owner')).data.link.split('#reset=')[1];
+ const staleToken=(await call('/api/admin/reset-link','POST',{userId:rafiRequest.user_id},'owner')).data.link.split('#reset=')[1];assert.equal((await authCall('reset',{token:olderToken,password:'brandnew789'})).status,410);sql.prepare('UPDATE wm_password_resets SET expires_at=? WHERE token_hash=?').run(Date.now()-1,await hash(staleToken));assert.equal((await authCall('reset',{token:staleToken,password:'brandnew456'})).status,410);
  delete env.WM_DATA_KEY;assert.equal((await adeal()).secure_handover,false);env.AI=previousAI;
  console.log('PASS: protected deals (payment proof, one-time encrypted handover, delivery, checklist, safety hold, auto-confirm, Owner dispute decisions), private game UIDs with one active listing, post limits, bump/expiry/sold feed rules, safe names, trust card and share previews.');
 }
@@ -854,5 +871,6 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  migrated.exec(readFileSync(new URL('./migrations/023_deal_notification_titles.sql',import.meta.url),'utf8'));migrated.exec("INSERT INTO wm_deal_events(deal_id,user_id,action,created_at) VALUES('d','b','payment_sent',11)");
  assert.deepEqual(migrated.prepare("SELECT user_id,title FROM wm_notifications WHERE target_id='d' ORDER BY user_id").all().map(r=>r.user_id+':'+r.title),['a:Buyer sent the money','s:Buyer sent the money']);
  migrated.exec(readFileSync(new URL('./migrations/024_password_sign_in.sql',import.meta.url),'utf8'));migrated.exec("INSERT INTO wm_credentials(user_id,login,kind,password_hash,salt,created_at,updated_at) VALUES('b','8801711111111','phone','h','s',1,1)");assert.equal(migrated.prepare('SELECT count(*) n FROM users').get().n,3);
+ migrated.exec(readFileSync(new URL('./migrations/025_password_reset_requests.sql',import.meta.url),'utf8'));assert.equal(migrated.prepare("SELECT count(*) n FROM wm_credentials").get().n,1);
  migrated.close();console.log('PASS: migrations 021 and 022 add protected-deal and listing-rule data without changing existing deals, posts or counters, and keep game UIDs out of wm_posts.');
 }

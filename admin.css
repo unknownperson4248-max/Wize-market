@@ -19,3 +19,8 @@ body{background:radial-gradient(ellipse at 0 0,#20483a44,transparent 55%),radial
 .rules-fields .hint{margin:2px 0 6px 27px}
 .rules-section{margin:22px 0 4px;font-size:16px}
 .rules-section:first-child{margin-top:8px}
+.reset-row{border:1px solid var(--line);border-radius:12px;padding:12px;margin:8px 0;display:grid;gap:8px}
+.reset-row-head{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:baseline}
+.reset-actions,.reset-share{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.reset-share-box{display:grid;gap:8px}
+.reset-share a.btn{text-decoration:none}

@@ -247,3 +247,8 @@ END;
 
 -- Email or phone + password sign-in (migration 024).
 CREATE TABLE IF NOT EXISTS wm_credentials(user_id TEXT PRIMARY KEY REFERENCES users(id),login TEXT NOT NULL UNIQUE,kind TEXT NOT NULL CHECK(kind IN ('email','phone')),password_hash TEXT NOT NULL,salt TEXT NOT NULL,failed INTEGER NOT NULL DEFAULT 0,locked_until INTEGER,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL);
+
+-- Owner-assisted password reset (migration 025).
+CREATE TABLE IF NOT EXISTS wm_reset_requests(id TEXT PRIMARY KEY,user_id TEXT REFERENCES users(id),login TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('email','phone')),created_at INTEGER NOT NULL,handled_at INTEGER,handled_by TEXT REFERENCES users(id));
+CREATE INDEX IF NOT EXISTS wm_reset_requests_open ON wm_reset_requests(handled_at,created_at);
+CREATE TABLE IF NOT EXISTS wm_password_resets(token_hash TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id),created_by TEXT NOT NULL REFERENCES users(id),created_at INTEGER NOT NULL,expires_at INTEGER NOT NULL,used_at INTEGER);
