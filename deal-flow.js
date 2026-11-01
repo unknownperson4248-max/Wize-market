@@ -125,11 +125,18 @@ function renderDealProgress(d){
 
 // Listing tools: Boost (free bump / renew) next to Share, Updated and Expired labels.
 function listingExpiredForOwner(p){const days=marketRulesCache?.expireDays;return !!days&&Math.max(p.created_at||0,p.bumped_at||0,p.renewed_at||0)<Date.now()-days*86400000}
+// Boost: after each boost the button shows a live countdown (default 3 hours) until it can be used again.
+function nextBoostAt(p){return Math.max(p.created_at||0,p.bumped_at||0)+(marketRulesCache?.bumpHours??3)*3600000}
+function boostLeftText(ms){const total=Math.max(0,Math.ceil(ms/1000)),h=Math.floor(total/3600),m=Math.floor(total%3600/60),sec=total%60;return (h?h+':'+String(m).padStart(2,'0'):String(m))+':'+String(sec).padStart(2,'0')}
+function tickBoost(b){const left=Number(b.dataset.boostUntil||0)-Date.now(),label=b.querySelector('.boost-label');if(left<=0){delete b.dataset.boostUntil;b.classList.remove('boost-waiting');b.title=b.dataset.readyTitle||'Boost';if(label)label.textContent='Boost';return}if(label)label.textContent='⏳ '+boostLeftText(left);b.title='You can boost again in '+boostLeftText(left)}
+function setBoostWait(b,until){if(until>Date.now()){b.dataset.boostUntil=String(until);b.classList.add('boost-waiting');tickBoost(b)}else{delete b.dataset.boostUntil;b.classList.remove('boost-waiting')}}
+setInterval(()=>{for(const b of document.querySelectorAll('[data-boost-until]'))tickBoost(b)},1000);
 function boostButton(p){
  if(p.user_id!==me?.id||p.status!=='approved'||p.availability==='sold')return null;
  const expired=listingExpiredForOwner(p),b=iconButton(expired?'Renew post':'Boost post to the top of the feed','bolt',async()=>{
-  try{await api('/posts/'+p.id+'/bump',{});toast(expired?'🚀 Post renewed and back in the feed.':'🚀 Boosted! Your post is now at the top of the feed.');if(active==='profile')await loadProfileView();else if(active==='home')await loadFeed()}catch(error){toast(error.message)}
- },'reaction-button boost-button');b.append(node('span',expired?'Renew':'Boost','boost-label'));return b;
+  const wait=Number(b.dataset.boostUntil||0)-Date.now();if(wait>0){toast('⏳ You can boost this post again in '+boostLeftText(wait)+'.');return}
+  try{const result=await api('/posts/'+p.id+'/bump',{});p.bumped_at=result.bumped_at;setBoostWait(b,result.next_boost_at||nextBoostAt(p));toast(expired?'🚀 Post renewed and back in the feed.':'🚀 Boosted! Your post is now at the top of the feed.');if(active==='profile')await loadProfileView();else if(active==='home')await loadFeed()}catch(error){toast(error.message)}
+ },'reaction-button boost-button');b.dataset.readyTitle=b.title;b.append(node('span',expired?'Renew':'Boost','boost-label'));if(!expired)setBoostWait(b,nextBoostAt(p));return b;
 }
 function appendListingLabels(root,p){
  const labels=node('div',undefined,'listing-labels');
@@ -137,7 +144,7 @@ function appendListingLabels(root,p){
  if(p.user_id===me?.id&&p.status==='approved'&&p.availability!=='sold'&&listingExpiredForOwner(p))labels.append(node('span','Expired · tap Renew to show it in the feed','listing-label expired'));
  if(labels.children.length)root.append(labels);
 }
-async function precheckPost(payload,editId){await api('/posts/precheck',{postIntent:payload.postIntent,kind:payload.kind,price:payload.price,gameCategory:payload.gameCategory,customGameName:payload.customGameName,gameUid:payload.gameUid,...(editId?{editId}:{})})}
+async function precheckPost(payload,editId){await api('/posts/precheck',{postIntent:payload.postIntent,kind:payload.kind,price:payload.price,gameCategory:payload.gameCategory,customGameName:payload.customGameName,gameUid:payload.gameUid,title:payload.title,details:payload.details,...(editId?{editId}:{})})}
 
 // Badges come only from database flags. Tapping one opens the member's trust card.
 function openTrustCard(userId){
@@ -248,3 +255,81 @@ function checkResetLink(){const match=location.hash.match(/^#reset=([a-f0-9]{64}
 checkResetLink();window.addEventListener('hashchange',checkResetLink);
 
 $('closeLogin').addEventListener('click',()=>{if(authMode==='forgot')setAuthMode('signin')});
+
+// Group "Post an ID": choose one of my already published IDs and add it to this group's price range.
+async function openMyIdsForGroup(){
+ if(!chat||chat.kind!=='group')return;const groupId=chat.id,{posts}=await api('/my-posts');
+ const mine=posts.filter(p=>p.user_id===me?.id&&!p.shared_by_id&&p.status==='approved'&&p.availability!=='sold'&&!p.group_id&&p.post_intent!=='need');
+ openStepDialog('➕ Post your ID here',body=>{
+  if(!mine.length){body.append(node('p','You have no published ID yet. Make a new post first.','hint'),button('＋ Make a new post',async()=>{closeStepDialog();$('groupPostButton').click()},'btn'));return}
+  body.append(node('p','Pick one of your IDs. It goes into the matching price range of this group.','hint'));
+  for(const p of mine.slice(0,40)){
+   const card=node('div',undefined,'deal-id-pick'),photo=p.media?.find(m=>String(m.type||'').startsWith('image/'));
+   if(photo){const img=node('img');img.alt='';setMediaImage(img,photo.url);void loadMediaImage(img);card.append(img)}else card.append(node('div',undefined,'deal-id-thumb'));
+   const copy=node('div');copy.append(node('small',p.listing_code||'ID','hint'),node('strong',p.title),node('span',formatPrice(p.price,p.price_format)+' BDT'));card.append(copy);
+   card.append(button('➕ Post in this group',async()=>{const result=await api('/groups/'+groupId+'/share-post',{postId:p.id});closeStepDialog();toast(result.added?'✅ Your ID is now in this group.':'This ID is already in this group.');selectedGroupRange='all';$('groupTools').hidden=false;renderGroupTools();await loadGroupPosts()},'btn'));
+   body.append(card);
+  }
+ },'Close',null);
+}
+
+// Profile links under the bio (Owner and trusted Admins only).
+function linkIcon(url){let host='';try{host=new URL(url).hostname.replace(/^www\./,'')}catch{}return /(^|\.)(facebook\.com|fb\.com|fb\.me|m\.me)$/.test(host)?'📘':/(^|\.)(youtube\.com|youtu\.be)$/.test(host)?'▶️':/(^|\.)(wa\.me|whatsapp\.com)$/.test(host)?'🟢':/(^|\.)(t\.me|telegram\.me|telegram\.org)$/.test(host)?'✈️':/(^|\.)tiktok\.com$/.test(host)?'🎵':/(^|\.)instagram\.com$/.test(host)?'📸':/(^|\.)(discord\.gg|discord\.com)$/.test(host)?'🎮':'🔗'}
+function profileLinksList(links){const box=node('div',undefined,'profile-links');for(const l of links){const a=node('a',undefined,'profile-link');a.href=l.url;a.target='_blank';a.rel='noopener noreferrer nofollow ugc';a.append(node('span',linkIcon(l.url),'profile-link-icon'),node('span',l.label,'profile-link-label'));box.append(a)}return box}
+function profileLinksEditor(){
+ const box=node('div',undefined,'profile-links-editor'),list=node('div',undefined,'profile-link-rows');let loaded=false;
+ const add=button('＋ Add link',()=>{if(list.children.length<5)list.append(row({}));add.hidden=list.children.length>=5},'btn ghost');
+ function row(l){const r=node('div',undefined,'profile-link-row'),label=node('input',undefined,'input'),url=node('input',undefined,'input');label.placeholder='Name (e.g. Facebook page)';label.maxLength=40;label.value=l.label||'';label.setAttribute('aria-label','Link name');url.type='url';url.inputMode='url';url.placeholder='https://…';url.maxLength=300;url.value=l.url||'';url.setAttribute('aria-label','Link address');r.append(label,url,button('✕',()=>{r.remove();add.hidden=false},'btn ghost profile-link-remove'));return r}
+ box.append(node('label','🔗 Links'),node('p','Only Owner and Admins can add links. Add up to 5, like your Facebook page, YouTube or WhatsApp group.','hint'),list,add);
+ api('/profile/'+encodeURIComponent(me.id)).then(({profile})=>{list.replaceChildren(...(profile.links||[]).map(row));add.hidden=list.children.length>=5;loaded=true}).catch(()=>{});
+ return {element:box,value:()=>loaded?[...list.children].map(r=>{const [label,url]=r.querySelectorAll('input');return {label:label.value.trim(),url:url.value.trim()}}).filter(l=>l.url):undefined};
+}
+
+// Messenger-style chat: a small centred time line when there is a long gap between messages.
+function chatTimeDivider(time){const d=new Date(time),today=new Date(),sameDay=d.toDateString()===today.toDateString(),yesterday=new Date(today.getTime()-86400000).toDateString()===d.toDateString(),clock=d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});return node('div',sameDay?clock:yesterday?'Yesterday '+clock:d.toLocaleDateString([],{day:'numeric',month:'short',...(d.getFullYear()!==today.getFullYear()?{year:'numeric'}:{})})+' at '+clock,'chat-time-divider')}
+
+// Photo editor for chat pictures: crop, draw, blur (hide numbers or private details), rotate and undo.
+let photoEditor=null;
+function editorCanvas(w,h){const c=document.createElement('canvas');c.width=Math.max(1,Math.round(w));c.height=Math.max(1,Math.round(h));return c}
+function copyCanvas(src){const c=editorCanvas(src.width,src.height);c.getContext('2d').drawImage(src,0,0);return c}
+function pixelatedCanvas(src){const block=Math.max(6,Math.round(Math.max(src.width,src.height)/55)),small=editorCanvas(Math.ceil(src.width/block),Math.ceil(src.height/block));small.getContext('2d').drawImage(src,0,0,small.width,small.height);const out=editorCanvas(src.width,src.height),ctx=out.getContext('2d');ctx.imageSmoothingEnabled=false;ctx.drawImage(small,0,0,out.width,out.height);return out}
+async function editorSource(item){try{return await createImageBitmap(item.file)}catch{return await new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(Error('Could not open this photo for editing.'));img.src=item.url})}}
+async function openImageEditor(item){
+ if(!item?.type?.startsWith('image/')||photoEditor)return;
+ let source;try{source=await editorSource(item)}catch(e){return toast(e.message)}
+ const w0=source.width||source.naturalWidth,h0=source.height||source.naturalHeight,fit=Math.min(1,1600/Math.max(w0,h0));let work=editorCanvas(w0*fit,h0*fit);work.getContext('2d').drawImage(source,0,0,work.width,work.height);source.close?.();
+ const history=[],modal=node('div',undefined,'photo-editor'),top=node('div',undefined,'photo-editor-top'),stage=node('div',undefined,'photo-editor-stage'),frame=node('div',undefined,'photo-editor-frame'),options=node('div',undefined,'photo-editor-options'),tools=node('div',undefined,'photo-editor-tools'),box=node('div',undefined,'photo-crop-box');
+ modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');modal.setAttribute('aria-label','Edit photo');
+ let mode='draw',color='#ff3b30',size=2,crop=null,drag=null,stroke=null;const sizes=[['S',1],['M',2],['L',4]],colors=['#ff3b30','#ffcc00','#34c759','#0a7cff','#ffffff','#000000'];
+ const clamp=(v,lo,hi)=>Math.min(hi,Math.max(lo,v)),point=e=>{const r=work.getBoundingClientRect();return {x:(e.clientX-r.left)*work.width/r.width,y:(e.clientY-r.top)*work.height/r.height}};
+ const remember=()=>{history.push(copyCanvas(work));if(history.length>12)history.shift();undo.classList.remove('empty')};
+ function setWork(canvas){work.replaceWith(canvas);work=canvas;if(mode==='crop')startCrop()}
+ function close(){document.removeEventListener('keydown',onKey);removeEventListener('resize',placeCrop);modal.remove();photoEditor=null}
+ function onKey(e){if(e.key==='Escape'){e.preventDefault();close()}}
+ function placeCrop(){if(!crop)return;const r=work.getBoundingClientRect(),f=frame.getBoundingClientRect(),k=r.width/work.width;Object.assign(box.style,{left:(r.left-f.left+crop.x*k)+'px',top:(r.top-f.top+crop.y*k)+'px',width:crop.w*k+'px',height:crop.h*k+'px'})}
+ function startCrop(){const insetX=work.width*.06,insetY=work.height*.06;crop={x:insetX,y:insetY,w:work.width-insetX*2,h:work.height-insetY*2};box.hidden=false;placeCrop()}
+ function paint(a,b){const ctx=work.getContext('2d'),unit=Math.max(work.width,work.height)/180;if(mode==='draw'){ctx.strokeStyle=color;ctx.lineWidth=size*unit;ctx.lineCap='round';ctx.lineJoin='round';ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();return}
+  const radius=size*unit*2.5,steps=Math.max(1,Math.ceil(Math.hypot(b.x-a.x,b.y-a.y)/(radius/2)));ctx.save();ctx.beginPath();for(let i=0;i<=steps;i++){const x=a.x+(b.x-a.x)*i/steps,y=a.y+(b.y-a.y)*i/steps;ctx.moveTo(x+radius,y);ctx.arc(x,y,radius,0,Math.PI*2)}ctx.clip();ctx.drawImage(stroke.pixels,0,0);ctx.restore()}
+ frame.onpointerdown=e=>{if(mode==='crop'||e.target!==work)return;e.preventDefault();frame.setPointerCapture(e.pointerId);remember();const p=point(e);stroke={last:p,pixels:mode==='blur'?pixelatedCanvas(work):null};paint(p,p)};
+ frame.onpointermove=e=>{if(!stroke)return;const p=point(e);paint(stroke.last,p);stroke.last=p};
+ frame.onpointerup=frame.onpointercancel=()=>{stroke=null};
+ for(const h of ['nw','ne','sw','se']){const handle=node('span',undefined,'photo-crop-handle '+h);handle.dataset.h=h;box.append(handle)}
+ box.hidden=true;box.onpointerdown=e=>{e.preventDefault();e.stopPropagation();box.setPointerCapture(e.pointerId);drag={h:e.target.dataset.h||'move',start:point(e),orig:{...crop}}};
+ box.onpointermove=e=>{if(!drag)return;const p=point(e),dx=p.x-drag.start.x,dy=p.y-drag.start.y,o=drag.orig,min=Math.max(24,Math.min(work.width,work.height)*.08);let {x,y,w,h}=o;
+  if(drag.h==='move'){x=clamp(o.x+dx,0,work.width-o.w);y=clamp(o.y+dy,0,work.height-o.h)}else{if(drag.h.includes('w')){x=clamp(o.x+dx,0,o.x+o.w-min);w=o.x+o.w-x}if(drag.h.includes('e'))w=clamp(o.w+dx,min,work.width-o.x);if(drag.h.includes('n')){y=clamp(o.y+dy,0,o.y+o.h-min);h=o.y+o.h-y}if(drag.h.includes('s'))h=clamp(o.h+dy,min,work.height-o.y)}
+  crop={x,y,w,h};placeCrop()};
+ box.onpointerup=box.onpointercancel=()=>{drag=null};
+ function renderOptions(){options.replaceChildren();
+  if(mode==='crop'){options.append(button('✓ Apply crop',()=>{remember();const out=editorCanvas(crop.w,crop.h);out.getContext('2d').drawImage(work,crop.x,crop.y,crop.w,crop.h,0,0,out.width,out.height);setMode('draw');setWork(out)},'btn'),button('Cancel',()=>setMode('draw'),'btn ghost'));return}
+  if(mode==='draw')for(const c of colors){const sw=button('',()=>{color=c;renderOptions()},'photo-swatch'+(c===color?' active':''));sw.style.background=c;sw.setAttribute('aria-label','Colour '+c);sw.setAttribute('aria-pressed',String(c===color));options.append(sw)}
+  for(const [label,value] of sizes){const b=button(label,()=>{size=value;renderOptions()},'photo-size'+(value===size?' active':''));b.setAttribute('aria-label',(mode==='blur'?'Blur':'Brush')+' size '+label);b.setAttribute('aria-pressed',String(value===size));options.append(b)}
+  if(mode==='blur')options.append(node('span','Rub over numbers or private details to hide them.','photo-editor-hint'))}
+ function setMode(next){mode=next;crop=null;box.hidden=true;if(next==='crop')startCrop();for(const b of tools.querySelectorAll('[data-mode]'))b.classList.toggle('active',b.dataset.mode===mode);frame.classList.toggle('cropping',mode==='crop');renderOptions()}
+ const tool=(icon,label,action,m)=>{const b=button('',action,'photo-tool');b.append(node('span',icon),document.createTextNode(label));b.setAttribute('aria-label',label);if(m)b.dataset.mode=m;return b};
+ const undo=tool('↩️','Undo',()=>{const last=history.pop();if(last)setWork(last);undo.classList.toggle('empty',!history.length)});undo.classList.add('empty');
+ tools.append(tool('✂️','Crop',()=>setMode('crop'),'crop'),tool('🖌️','Draw',()=>setMode('draw'),'draw'),tool('🫥','Blur',()=>setMode('blur'),'blur'),tool('🔄','Rotate',()=>{remember();const out=editorCanvas(work.height,work.width),ctx=out.getContext('2d');ctx.translate(out.width,0);ctx.rotate(Math.PI/2);ctx.drawImage(work,0,0);setWork(out)}),undo);
+ const done=button('✓ Done',async()=>{done.disabled=true;try{let blob=await new Promise(resolve=>work.toBlob(resolve,'image/webp',.88));if(!blob||blob.type!=='image/webp')blob=await new Promise(resolve=>work.toBlob(resolve,'image/jpeg',.9));if(!blob)throw Error('Could not save this photo. Try again.');const index=composerFiles.indexOf(item);if(index<0){close();return}URL.revokeObjectURL(item.url);composerFiles[index]={file:blob,type:blob.type,url:URL.createObjectURL(blob)};renderComposerPreview();close();toast('✅ Photo ready. Tap ➤ to send.')}catch(e){toast(e.message);done.disabled=false}},'btn');
+ top.append(button('✕ Cancel',close,'btn ghost'),node('strong','Edit photo'),done);
+ frame.append(work,box);stage.append(frame);modal.append(top,stage,options,tools);document.body.append(modal);photoEditor=modal;
+ document.addEventListener('keydown',onKey);addEventListener('resize',placeCrop);setMode('draw');done.focus();
+}

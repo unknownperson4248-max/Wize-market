@@ -125,9 +125,10 @@ const RULE_FIELDS=[
  ['dailyPostsVerified','number','✔️ New posts per day · verified member'],
  ['activePostsVerified','number','✔️ Sell Posts at the same time · verified member','Admin ar Owner er kono limit nai.'],
  ['section','🚀 Boost & feed'],
- ['bumpHours','number','🚀 Free Boost once every (hours)','Post er nicher Boost button e chap dile post feed er upore jabe.'],
+ ['bumpHours','number','🚀 Boost wait time (hours)','Ekbar Boost korar por abar Boost korte koto ghonta wait korte hobe (default 3). Boost button e ulta countdown dekhabe.'],
  ['expireDays','number','📅 Post leaves the feed after (days, 0 = never)','Renew chaple abar feed e ashe. Profile theke kokhono muche na.'],
  ['hideSold','switch','🙈 Hide Sold posts from the feed'],
+ ['blockDuplicates','switch','♻️ Block the same post again','Keu same post (same title, details, price) abar korle post hobe na. Take agher post e 🚀 Boost korte bolbe.'],
  ['section','🔐 Safety'],
  ['nameRules','switch','🚫 Block emoji and badge words in names','Keu name e ✅ ba "Admin / Verified / Owner / Official / Wize" likhte parbe na.'],
  ['chatWarnings','switch','⚠️ Warn about outside payments in private chats','Private chat e phone number ba bKash / WhatsApp likhle warning dekhabe (block korbe na).']

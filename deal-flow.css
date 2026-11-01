@@ -157,3 +157,88 @@ body.logged-out #openMarketSearch,body.logged-out #feedOptions{display:none!impo
 .auth-intro{margin:0 0 6px}
 #verificationModal{z-index:130}
 #verificationModal .dialog{max-height:92dvh;overflow:auto}
+
+/* One background colour from top to bottom (like Facebook); no black or lighter blocks in headers and info pages. */
+body{background:var(--bg)!important}
+.chat-open #chatPanel,.chat-open #chatMessages,.chat-open #chatPanel>.page-heading,.chat-open #groupSettingsPanel,.chat-open .peer-info-panel,.info-nav,.peer-info-panel .info-nav,#groupPostComposer>.info-nav{background:var(--bg)!important}
+#groupSettingsPanel .info-row,.peer-info-panel .info-row{padding:16px!important;margin:6px 0;border-radius:12px}
+.danger-row{color:#ff8a8a!important}
+.info-shortcut>span{font-size:23px}
+/* ID ranges: chips are visible; when a range is open the posts use the whole chat area like a feed. */
+#groupTools #groupRangeChips{display:flex!important;gap:6px;overflow-x:auto;padding:4px 0 10px;scrollbar-width:none}
+#groupRangeChips .range-chip{flex:none}
+.chat-open #chatPanel.group-browsing #groupTools{flex:1;max-height:none;overflow-y:auto;overscroll-behavior:contain}
+.chat-open #chatPanel.group-browsing #groupListings{max-height:none;overflow:visible}
+.chat-open #chatPanel.group-browsing #chatMessages,.chat-open #chatPanel.group-browsing #chatForm,.chat-open #chatPanel.group-browsing #chatActions{display:none!important}
+#chatPanel.group-browsing #groupListings .social-post{margin:12px 0}
+
+/* Boost countdown */
+.boost-button.boost-waiting{opacity:.85;color:#9fc3dd!important}
+.boost-button.boost-waiting .boost-label{font-variant-numeric:tabular-nums;font-size:11px;white-space:nowrap}
+.boost-button.boost-waiting svg{display:none}
+
+/* Profile links (Facebook-style rows under the bio) */
+.profile-links{display:flex;flex-direction:column;gap:2px;width:auto;max-width:100%;margin:2px 0 0;align-self:center}
+.profile-link{display:flex;align-items:center;gap:10px;min-width:0;padding:7px 4px;border-radius:10px;text-decoration:none;color:#d8ecff}
+.profile-link:hover,.profile-link:focus-visible{background:#ffffff0d}
+.profile-link-icon{flex:none;width:30px;height:30px;display:grid;place-items:center;border-radius:50%;background:#16334c;font-size:15px}
+.profile-link-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;font-weight:600;color:#7cc4ff}
+.profile-links-editor{margin-top:16px}
+.profile-link-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr) auto;gap:6px;margin:6px 0;align-items:center}
+.profile-link-row .input{margin:0}
+.profile-link-remove{padding:8px 10px}
+@media(max-width:560px){.profile-link-row{grid-template-columns:minmax(0,1fr) auto}.profile-link-row input[type=url]{grid-column:1;grid-row:2}}
+
+/* Messenger-style chat bubbles: mine on the right in blue, others on the left in grey with a small photo. */
+.chat-open #chatMessages{gap:0;padding:12px 12px 16px}
+#chatMessages>.bubble{position:relative;align-self:flex-start;max-width:min(76%,520px);margin:1px 0 1px 36px;padding:8px 12px;border:0!important;border-radius:18px;background:#24384b!important;color:#eef6ff!important;box-shadow:none;line-height:1.4}
+#chatMessages>.bubble.mine{align-self:flex-end;margin:1px 0 1px 40px;background:#0a7cff!important;color:#fff!important}
+#chatMessages>.bubble.run-start{margin-top:10px}
+#chatMessages>.bubble:not(.mine):not(.run-end){border-bottom-left-radius:5px}
+#chatMessages>.bubble:not(.mine):not(.run-start){border-top-left-radius:5px}
+#chatMessages>.bubble.mine:not(.run-end){border-bottom-right-radius:5px}
+#chatMessages>.bubble.mine:not(.run-start){border-top-right-radius:5px}
+#chatMessages>.bubble p{margin:0;font-size:15px;color:inherit!important}
+#chatMessages>.bubble .msg-avatar{position:absolute;left:-36px;bottom:0;width:28px;height:28px;border-radius:50%;overflow:hidden;margin:0;font-size:11px}
+#chatMessages>.bubble .msg-avatar img{width:100%;height:100%;object-fit:cover}
+#chatMessages>.bubble .message-author{margin:0 0 3px;gap:5px;background:none}
+#chatMessages>.bubble .message-author>.avatar{display:none}
+#chatMessages>.bubble .message-author>strong{font-size:12px;color:#9fc2e0}
+#chatMessages>.bubble .message-time{display:none;margin-top:3px;font-size:10px;text-align:right;color:#ffffffb3!important}
+#chatMessages>.bubble:not(.mine) .message-time{color:#9fb6cc!important}
+#chatMessages>.bubble.run-end .message-time{display:block}
+#chatMessages>.bubble:has(.social-menu){padding-right:30px}
+#chatMessages>.bubble>.social-menu{top:3px;right:2px}
+#chatMessages>.bubble>.social-menu>summary{color:currentColor;opacity:.75}
+#chatMessages>.bubble.media-bubble{padding:3px!important;background:transparent!important}
+#chatMessages>.bubble.media-bubble .chat-media{margin:0;border-radius:16px;max-height:320px}
+#chatMessages>.bubble.media-bubble .message-time{padding:0 8px 3px;color:#9fb6cc!important}
+#chatMessages>.bubble.media-bubble .message-author{padding:4px 8px 0}
+#chatMessages>.bubble.message-removed{background:transparent!important;border:1px dashed #3d5873!important;color:#8ea6bf!important}
+.chat-time-divider{align-self:center;margin:16px 0 6px;font-size:11px;font-weight:600;color:#8ea6bf}
+
+/* Photo editor (chat pictures) */
+.composer-file .edit-composer-file{position:absolute;left:4px;bottom:4px;border:0;border-radius:10px;background:#000000b3;color:#fff;font-size:10px;padding:3px 6px}
+.photo-editor{position:fixed;inset:0;z-index:160;background:#000;display:flex;flex-direction:column;color:#fff;user-select:none;-webkit-user-select:none}
+.photo-editor-top{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:max(10px,env(safe-area-inset-top)) 12px 8px}
+.photo-editor-top strong{font-size:15px}
+.photo-editor-top .btn{min-height:40px;padding:8px 14px}
+.photo-editor-stage{flex:1;min-height:0;display:grid;place-items:center;overflow:hidden;padding:6px}
+.photo-editor-frame{position:relative;line-height:0;touch-action:none}
+.photo-editor-frame canvas{display:block;max-width:calc(100vw - 16px);max-height:calc(100dvh - 215px);touch-action:none;cursor:crosshair}
+.photo-editor-frame.cropping canvas{cursor:default}
+.photo-crop-box{position:absolute;border:2px solid #fff;box-shadow:0 0 0 9999px #000a;cursor:move;touch-action:none}
+.photo-crop-box[hidden]{display:none}
+.photo-crop-handle{position:absolute;width:24px;height:24px;border-radius:50%;background:#fff;border:3px solid #0a7cff;box-sizing:border-box}
+.photo-crop-handle.nw{left:-12px;top:-12px;cursor:nwse-resize}.photo-crop-handle.ne{right:-12px;top:-12px;cursor:nesw-resize}.photo-crop-handle.sw{left:-12px;bottom:-12px;cursor:nesw-resize}.photo-crop-handle.se{right:-12px;bottom:-12px;cursor:nwse-resize}
+.photo-editor-options{display:flex;justify-content:center;align-items:center;gap:10px;flex-wrap:wrap;min-height:50px;padding:4px 12px}
+.photo-swatch{width:28px;height:28px;border-radius:50%;border:2px solid #ffffff66;padding:0}
+.photo-swatch.active{border-color:#fff;transform:scale(1.15)}
+.photo-size{min-width:38px;height:32px;border-radius:16px;border:1px solid #ffffff55;background:#ffffff14;color:#fff;font-weight:700}
+.photo-size.active{background:#0a7cff;border-color:#0a7cff}
+.photo-editor-hint{width:100%;text-align:center;font-size:12px;color:#c9d8e6}
+.photo-editor-tools{display:flex;justify-content:space-around;gap:4px;padding:8px 8px max(12px,env(safe-area-inset-bottom));border-top:1px solid #ffffff1f}
+.photo-editor-tools button{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:56px;padding:6px 8px;border:0;border-radius:12px;background:none;color:#d9e8f6;font-size:11px}
+.photo-editor-tools button>span{font-size:21px;line-height:1.1}
+.photo-editor-tools button.active{background:#ffffff1f;color:#fff}
+.photo-editor-tools button.empty{opacity:.35}
