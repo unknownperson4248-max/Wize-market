@@ -306,3 +306,10 @@ body.create-menu-open::after{content:'';position:fixed;inset:0;z-index:140;backg
 #myPosts>.profile-groups{border-top:0;padding:4px 0 0;margin:0}
 /* The profile page used to stick out 13px on each side on phones (it could slide sideways and cut the edges). */
 @media(max-width:720px){.profile-page #page-profile{margin-left:0!important;margin-right:0!important}}
+
+/* Admin picker for many Admins: the list scrolls, search stays on top, the send button stays visible. */
+#listingAdminChoices{max-height:min(52dvh,520px);overflow:auto;margin:12px 0;padding-right:2px;overscroll-behavior:contain}
+#listingAdminChoices .admin-search{position:sticky;top:0;z-index:2;margin:0 0 6px;box-shadow:0 6px 12px #0c2236}
+#listingAdminChoices .admin-choice[hidden],#listingAdminChoices .admin-choice-section[hidden],.admin-search-empty[hidden]{display:none}
+.admin-choice .admin-info{flex:none;width:34px;height:34px;padding:0;border:1px solid #3b6584;border-radius:50%;background:#0f2a42;font-size:15px;cursor:pointer}
+.admin-choice .avatar{flex:none}

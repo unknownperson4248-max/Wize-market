@@ -749,6 +749,8 @@ if(p==='/api/deal-admins'&&method==='GET'){
   const done="(SELECT count(*) FROM wm_deals dd WHERE dd.admin_id=u.id AND dd.status='completed') deals_done";
   picks.myGroupAdmins=await rows(db,"SELECT DISTINCT u.id,u.name,u.picture,u.verified,r.role,"+done+" FROM wm_group_members m JOIN wm_groups g ON g.id=m.group_id JOIN wm_roles r ON r.user_id=g.owner_id AND r.role IN ('owner','trusted') JOIN wm_public_users u ON u.id=r.user_id WHERE m.user_id=? AND u.id NOT IN (?,?) LIMIT 30",u.id,buyerId,sellerId);
   picks.allAdmins=await rows(db,"SELECT u.id,u.name,u.picture,u.verified,r.role,"+done+" FROM wm_public_users u JOIN wm_roles r ON r.user_id=u.id WHERE r.role IN ('owner','trusted') AND u.id NOT IN (?,?) ORDER BY deals_done DESC,u.name LIMIT 200",buyerId,sellerId);
+  // "Your Admins": Admins this member already used in earlier deals, most recent first (every member sees their own list).
+  picks.usedBefore=await rows(db,"SELECT u.id,u.name,u.picture,u.verified,r.role,count(*) times,max(d.created_at) last_at,(SELECT count(*) FROM wm_deals dd WHERE dd.admin_id=u.id AND dd.status='completed') deals_done FROM wm_deals d JOIN wm_roles r ON r.user_id=d.admin_id AND r.role IN ('owner','trusted') JOIN wm_public_users u ON u.id=d.admin_id WHERE (d.buyer_id=? OR d.seller_id=?) AND d.admin_id NOT IN (?,?) AND EXISTS(SELECT 1 FROM wm_deal_events ev WHERE ev.deal_id=d.id AND ev.action IN ('accept','activate')) GROUP BY u.id ORDER BY last_at DESC LIMIT 10",u.id,u.id,buyerId,sellerId);
  }
  return reply({postId:post.id,title:post.title,...picks});
 }
