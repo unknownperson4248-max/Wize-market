@@ -345,7 +345,7 @@ function applySiteContent(){
  const powered=$('footerPowered');if(powered){powered.replaceChildren();powered.hidden=!c.poweredBy;if(c.poweredBy){if(c.poweredByUrl){const a=node('a',c.poweredBy);a.href=c.poweredByUrl;a.target='_blank';a.rel='noopener noreferrer';powered.append(a)}else powered.textContent=c.poweredBy}}
  renderSiteNotice();
  const v=c.verification||{},set=(id,value)=>{const el=$(id);if(el&&value)el.textContent=value};
- set('verificationIntro',v.intro);set('verificationWhatsappLabel',v.whatsappLabel);set('verificationLocationLabel',v.locationLabel);set('verificationNidLabel',v.nidLabel);set('verificationConsentText',v.consent);
+ set('verificationIntro',v.intro);set('verificationWhatsappLabel',v.whatsappLabel);set('verificationNidLabel',v.nidLabel);set('verificationConsentText',v.consent);
  if(active==='post'&&typeof syncPostIntent==='function'&&!editingPost)syncPostIntent();
 }
 // Notice line at the top of the feed (Owner turns it on in the Admin Panel). A member can hide it until the text changes.
@@ -362,3 +362,10 @@ function renderSiteNotice(){
 function renderVerificationQuestions(){const root=$('verificationQuestions');if(!root)return;root.replaceChildren();for(const [i,q] of (globalThis.wmSiteContent?.verification?.questions||[]).entries()){const label=node('label',q.label+(q.required?'':' (optional)'));label.htmlFor='verificationAnswer'+i;const input=node('input',undefined,'input verification-answer');input.id=label.htmlFor;input.maxLength=500;input.required=!!q.required;root.append(label,input)}}
 function verificationAnswers(){return [...document.querySelectorAll('#verificationQuestions .verification-answer')].map(input=>input.value.trim())}
 void loadSiteContent();
+
+// Own profile of a member without the blue tick: a dashed "?" that opens the verification form (or shows it is waiting).
+function verifyPrompt(){
+ const b=node('button',undefined,'verify-prompt'),icon=node('span','?','verify-prompt-icon'),label=node('span','Get verified','verify-prompt-text');b.type='button';b.title='Get the blue tick ✓';b.setAttribute('aria-label','Get verified: apply for the blue tick');b.append(icon,label);b.onclick=()=>void openVerificationRequest();
+ void api('/verification').then(({requests})=>{if(requests.some(r=>r.status==='pending')){b.classList.add('pending');icon.textContent='⏳';label.textContent='Verification pending';b.title='The Owner is checking your application';b.setAttribute('aria-label','Verification pending')}}).catch(()=>{});
+ return b;
+}

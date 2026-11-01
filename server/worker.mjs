@@ -180,7 +180,7 @@ const DEFAULT_CONTENT={
   need:{heading:'What are you looking for?',titleHint:'Example: Need FF ID with Evo guns',details:'',tip:''},
   normal:{heading:'Share something with the community',titleHint:'Example: ⚠️ Scammer alert',details:'',tip:'Scammer alerts, fun or community posts. No price or game needed.'}
  },
- verification:{intro:'Apply for Seller or Trusted verification. Only the website owner can review your documents and approve your account. Applying does not automatically grant a badge.',whatsappLabel:'WhatsApp number',locationLabel:'Live location',nidLabel:'NID image (private, required)',consent:'I agree to share my NID photo, WhatsApp number and live location with the Owner for verification.',questions:[]}
+ verification:{intro:'Send your NID photo and WhatsApp number. The Owner checks them and gives you the blue tick ✓. Verified members can post more IDs.',whatsappLabel:'WhatsApp number',nidLabel:'NID image (private, required)',consent:'I agree to share my NID photo and WhatsApp number with the Owner for verification.',questions:[]}
 };
 async function siteContent(db){const row=await one(db,"SELECT value FROM wm_settings WHERE key='site_content'");let saved={};try{saved=row?JSON.parse(row.value)||{}:{}}catch{}
  return {...DEFAULT_CONTENT,...saved,templates:Object.fromEntries(Object.entries(DEFAULT_CONTENT.templates).map(([k,v])=>[k,{...v,...(saved.templates?.[k]||{})}])),verification:{...DEFAULT_CONTENT.verification,...(saved.verification||{}),questions:Array.isArray(saved.verification?.questions)?saved.verification.questions:[]}}}
@@ -192,7 +192,7 @@ function cleanContent(d){
  const v=d.verification||{};need(v.questions===undefined||Array.isArray(v.questions)&&v.questions.length<=6,'Add up to 6 verification questions');
  const questions=(v.questions||[]).map((q,i)=>({label:str(q?.label,150,'question '+(i+1),true),required:q?.required===true}));
  return {footerText:str(d.footerText,200,'footer text'),poweredBy:str(d.poweredBy,80,'powered by text'),poweredByUrl:link(d.poweredByUrl,'powered by link'),noticeOn:d.noticeOn===true,noticeText:str(d.noticeText,300,'notice text'),noticeLink:link(d.noticeLink,'notice link'),templates,
-  verification:{intro:str(v.intro,600,'verification intro'),whatsappLabel:str(v.whatsappLabel,100,'WhatsApp label'),locationLabel:str(v.locationLabel,100,'location label'),nidLabel:str(v.nidLabel,100,'NID label'),consent:str(v.consent,300,'consent text'),questions}};
+  verification:{intro:str(v.intro,600,'verification intro'),whatsappLabel:str(v.whatsappLabel,100,'WhatsApp label'),nidLabel:str(v.nidLabel,100,'NID label'),consent:str(v.consent,300,'consent text'),questions}};
 }
 function listingActiveAt(p){return Math.max(p.created_at||0,p.bumped_at||0,p.renewed_at||0)}
 function listingExpired(p,rules,time=now()){return rules.expireDays>0&&listingActiveAt(p)<time-rules.expireDays*86400000}
@@ -616,15 +616,16 @@ if(p==='/api/verification'&&method==='POST'){
  need(['seller','trusted'].includes(d.kind),'Choose seller or trusted verification');
  const contact=d.contact===undefined||d.contact===''?'':text(d.contact,500,'contact details');
  // WhatsApp number and the live location shared while applying are required; only the Owner sees them.
- const whatsapp=loginId('phone',d.whatsapp),place=d.location;
- need(place&&typeof place==='object'&&Number.isFinite(place.lat)&&Math.abs(place.lat)<=90&&Number.isFinite(place.lng)&&Math.abs(place.lng)<=180&&Number.isFinite(place.accuracy)&&place.accuracy>=0&&place.accuracy<=100000,'Share your live location to apply',400);
+ const whatsapp=loginId('phone',d.whatsapp),place=d.location??null;
+ // Live location is no longer asked; an app that still sends one must send a valid one.
+ need(place===null||typeof place==='object'&&Number.isFinite(place.lat)&&Math.abs(place.lat)<=90&&Number.isFinite(place.lng)&&Math.abs(place.lng)<=180&&Number.isFinite(place.accuracy)&&place.accuracy>=0&&place.accuracy<=100000,'Invalid location',400);
  const evidence=await one(db,"SELECT id FROM wm_private_uploads WHERE id=? AND user_id=? AND kind='verification'",d.documentId,u.id);
  need(evidence,'Upload your NID photo first',400);
  const {verification:form}=await siteContent(db),given=Array.isArray(d.answers)?d.answers:[];
  const answers=form.questions.map((q,i)=>{const a=typeof given[i]==='string'?given[i].trim():'';need(a.length<=500,'Answers can be up to 500 characters');need(!q.required||a,'Please answer: '+q.label);return {q:q.label,a}});
  const pending=await one(db,"SELECT id FROM wm_verification_requests WHERE user_id=? AND kind=? AND status='pending'",u.id,d.kind);
  need(!pending,'You already have a pending request for this type',409);
- await run(db,'INSERT INTO wm_verification_requests(id,user_id,kind,contact,document_id,status,created_at,whatsapp,location_lat,location_lng,location_accuracy,location_at,answers) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',uuid(),u.id,d.kind,contact,evidence.id,'pending',now(),whatsapp,Math.round(place.lat*1e6)/1e6,Math.round(place.lng*1e6)/1e6,Math.round(place.accuracy),now(),JSON.stringify(answers));
+ await run(db,'INSERT INTO wm_verification_requests(id,user_id,kind,contact,document_id,status,created_at,whatsapp,location_lat,location_lng,location_accuracy,location_at,answers) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',uuid(),u.id,d.kind,contact,evidence.id,'pending',now(),whatsapp,place?Math.round(place.lat*1e6)/1e6:null,place?Math.round(place.lng*1e6)/1e6:null,place?Math.round(place.accuracy):null,place?now():null,JSON.stringify(answers));
  return reply({ok:true},201);
 }
 if(p==='/api/admin/verifications'&&method==='GET'){
@@ -635,8 +636,9 @@ if(p==='/api/admin/verification-action'&&method==='POST'){
  need(u.role==='owner','Owner only',403);
  const d=await body(req);
  need(['approve','reject'].includes(d.action),'Invalid verification action',400);
- const changed=await run(db,"UPDATE wm_verification_requests SET status=?,reviewed_by=?,reviewed_at=? WHERE id=? AND status='pending'",d.action==='approve'?'approved':'rejected',u.id,now(),d.id);
- return reply({ok:true,reviewed:changed.meta?.changes||0});
+ // Approving gives the member the blue tick (Verified). The Admin role is never given here; the Owner sets it in Members & badges.
+ const time=now(),results=await db.batch([stmt(db,"UPDATE wm_verification_requests SET status=?,reviewed_by=?,reviewed_at=? WHERE id=? AND status='pending'",d.action==='approve'?'approved':'rejected',u.id,time,d.id),...(d.action==='approve'?[stmt(db,"INSERT INTO wm_verifications(user_id,granted_by,created_at) SELECT user_id,?,? FROM wm_verification_requests WHERE id=? AND status='approved' AND reviewed_by=? AND reviewed_at=? ON CONFLICT(user_id) DO UPDATE SET granted_by=excluded.granted_by,created_at=excluded.created_at",u.id,time,d.id,u.id,time)]:[])]);
+ return reply({ok:true,reviewed:results[0].meta?.changes||0,verified:d.action==='approve'&&(results[1]?.meta?.changes||0)>0});
 }
 if(p==='/api/reports'&&method==='POST'){await throttle(db,'report:'+u.id,5);const d=await body(req);need(['website-issue','glitch','scam','other','inappropriate','harassment','external-contact'].includes(d.reason),'Choose a report reason');const details=text(d.details,1000,'report details');need(d.postId===null||d.postId===undefined||typeof d.postId==='string','Invalid post');if(d.postId)await visiblePost(db,d.postId,u);let evidence=null;if(d.attachmentId){evidence=await one(db,"SELECT id FROM wm_private_uploads WHERE id=? AND user_id=? AND kind='report'",d.attachmentId,u.id);need(evidence,'Invalid report attachment',400)}const id=uuid();await run(db,'INSERT OR IGNORE INTO wm_reports(id,post_id,user_id,reason,details,created_at,attachment_id) VALUES(?,?,?,?,?,?,?)',id,d.postId||null,u.id,d.reason,details,now(),evidence?.id||null);return reply({ok:true},201)}
 if(p==='/api/admin/reports'&&method==='GET'){need(u.role==='owner','Owner only',403);return reply({reports:await rows(db,"SELECT r.*,u.name reporter_name,p.title post_title,p.details post_details,p.status post_status FROM wm_reports r JOIN wm_public_users u ON u.id=r.user_id LEFT JOIN wm_posts p ON p.id=r.post_id ORDER BY (r.status='open') DESC,r.created_at DESC LIMIT 100")})}

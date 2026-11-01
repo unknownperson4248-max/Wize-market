@@ -283,3 +283,10 @@ body.create-menu-open::after{content:'';position:fixed;inset:0;z-index:140;backg
 .profile-group-copy strong{font-size:14px;color:#e8f3ff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .profile-group-copy small{font-size:12px;color:#8ea9c3}
 .profile-group-action{flex:none;min-width:72px;padding:8px 14px}
+
+/* "? Get verified" next to your own name (like the dashed badge on Instagram) */
+.verify-prompt{display:inline-flex;align-items:center;gap:6px;margin-left:8px;padding:3px 10px 3px 3px;border:1px dashed #6fb3ec;border-radius:999px;background:#0f2a44;color:#bfe1ff;font-size:12px;font-weight:700;line-height:1;cursor:pointer;flex:none;vertical-align:middle}
+.verify-prompt-icon{display:grid;place-items:center;width:20px;height:20px;border-radius:50%;border:1.5px dashed #8cc8ff;color:#d8eeff;font-size:12px;font-weight:800}
+.verify-prompt:hover,.verify-prompt:focus-visible{background:#163a5c;border-style:solid}
+.verify-prompt.pending{border-color:#c9a24a;color:#f6dc9a;background:#2c2310}
+.verify-prompt.pending .verify-prompt-icon{border-color:transparent;font-size:13px}

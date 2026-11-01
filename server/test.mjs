@@ -852,10 +852,10 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  // Verification needs the NID photo, a WhatsApp number and the live location; only the Owner sees them.
  const nidUpload=await worker.fetch(new Request('https://test.local/api/private-evidence',{method:'POST',headers:{origin:'https://test.local','content-type':'image/png','x-evidence-kind':'verification',cookie:'wm_session='+tokens.newbie},body:png}),env);assert.equal(nidUpload.status,201);const nidId=(await nidUpload.json()).id;
  assert.equal((await call('/api/verification','POST',{kind:'seller',documentId:nidId},'newbie')).status,400);
- assert.equal((await call('/api/verification','POST',{kind:'seller',whatsapp:'01811111111',documentId:nidId},'newbie')).status,400);
  assert.equal((await call('/api/verification','POST',{kind:'seller',whatsapp:'01811111111',location:{lat:123,lng:90.4,accuracy:20},documentId:nidId},'newbie')).status,400);
- assert.equal((await call('/api/verification','POST',{kind:'seller',whatsapp:'০১৮১১-১১১১১১',location:{lat:23.8103,lng:90.4125,accuracy:18},documentId:nidId},'newbie')).status,201);
- const verificationRow=(await call('/api/admin/verifications','GET',undefined,'owner')).data.requests.find(v=>v.user_id==='newbie');assert.equal(verificationRow.whatsapp,'8801811111111');assert.equal(verificationRow.location_lat,23.8103);assert.equal(verificationRow.location_accuracy,18);assert.ok(verificationRow.location_at>0);
+ // Live location is no longer asked: NID photo + WhatsApp number are enough.
+ assert.equal((await call('/api/verification','POST',{kind:'seller',whatsapp:'০১৮১১-১১১১১১',documentId:nidId},'newbie')).status,201);
+ const verificationRow=(await call('/api/admin/verifications','GET',undefined,'owner')).data.requests.find(v=>v.user_id==='newbie');assert.equal(verificationRow.whatsapp,'8801811111111');assert.equal(verificationRow.location_lat,null);assert.equal(verificationRow.location_at,null);
  const ownView=(await call('/api/verification','GET',undefined,'newbie')).data.requests[0];assert.equal(ownView.location_lat,undefined);assert.equal(ownView.whatsapp,undefined);assert.equal((await call('/api/admin/verifications','GET',undefined,'admin')).status,403);
  // Groups: add one of my published IDs to a group I joined; leaving clears my copy and my membership.
  assert.equal((await call('/api/groups/'+group+'/join','POST',{},'vip')).status,200);assert.equal((await call('/api/groups/'+group+'/join','POST',{},'owner')).status,200);
@@ -912,6 +912,13 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  r=await call('/api/verification','POST',{kind:'seller',whatsapp:'01922222222',location:place,documentId:nid2Id,answers:['',' 2 years ']},'pbuyer');assert.equal(r.status,400);assert.match(r.data.error,/Please answer: Your Facebook profile link/);
  assert.equal((await call('/api/verification','POST',{kind:'seller',whatsapp:'01922222222',location:place,documentId:nid2Id,answers:['https://facebook.com/pbuyer',' 2 years ']},'pbuyer')).status,201);
  const answered=(await call('/api/admin/verifications','GET',undefined,'owner')).data.requests.find(v=>v.user_id==='pbuyer');assert.deepEqual(JSON.parse(answered.answers),[{q:'Your Facebook profile link',a:'https://facebook.com/pbuyer'},{q:'How long have you been selling?',a:'2 years'}]);
+ // Approving gives the blue tick (never the Admin role); a second review of the same application changes nothing; rejecting gives nothing.
+ assert.equal((await call('/api/profile/pbuyer','GET',undefined,'owner')).data.profile.verified,0);
+ assert.equal((await call('/api/admin/verification-action','POST',{id:answered.id,action:'approve'},'admin')).status,403);
+ r=await call('/api/admin/verification-action','POST',{id:answered.id,action:'approve'},'owner');assert.equal(r.status,200);assert.equal(r.data.verified,true);
+ assert.equal((await call('/api/profile/pbuyer','GET',undefined,'owner')).data.profile.verified,1);assert.equal((await call('/api/profile/pbuyer','GET',undefined,'owner')).data.profile.role,'member');
+ r=await call('/api/admin/verification-action','POST',{id:answered.id,action:'reject'},'owner');assert.equal(r.data.reviewed,0);assert.equal(sql.prepare('SELECT status FROM wm_verification_requests WHERE id=?').get(answered.id).status,'approved');
+ r=await call('/api/admin/verification-action','POST',{id:verificationRow.id,action:'reject'},'owner');assert.equal(r.data.verified,false);assert.equal(sql.prepare("SELECT count(*) n FROM wm_verifications WHERE user_id='newbie'").get().n,0);
  // Profiles show the groups an Owner/Admin made (name, logo link, member count, joined flag); members have none.
  const adminGroups=(await call('/api/profile/admin','GET',undefined,'newbie')).data.profile.groups;const shown=adminGroups.find(g=>g.id===group);assert.ok(shown);assert.equal(shown.name,sql.prepare('SELECT name FROM wm_groups WHERE id=?').get(group).name);assert.match(shown.logo,/^\/group-logo\//);assert.equal(shown.members,sql.prepare('SELECT count(*) n FROM wm_group_members WHERE group_id=?').get(group).n);assert.equal(shown.joined,sql.prepare('SELECT count(*) n FROM wm_group_members WHERE group_id=? AND user_id=?').get(group,'newbie').n);
  assert.equal((await call('/api/profile/admin','GET',undefined,'admin')).data.profile.groups.find(g=>g.id===group).joined,1);assert.deepEqual((await call('/api/profile/newbie','GET',undefined,'owner')).data.profile.groups,[]);
