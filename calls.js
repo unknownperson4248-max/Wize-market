@@ -126,3 +126,46 @@ $('chatCallAudio').onclick=()=>void startCall(false);$('chatCallVideo').onclick=
 function onIncomingCall(c){if(c&&me&&!callState&&!incomingCall)showIncoming(c)}
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)void pollIncoming()});
 window.addEventListener('pagehide',()=>{const s=callState;if(s?.id)navigator.sendBeacon?.('/api/calls/'+s.id+'/end',new Blob([JSON.stringify({reason:'hangup'})],{type:'application/json'}))});
+
+// ---- Back button: every screen opened on top (photo, post, comments, profile, deal room, dialogs, chat info) gets one history step,
+// so the phone's back button closes only the top screen, then the chat, then goes to the previous page. One press = one visible step. ----
+const BACK_LAYERS={photoViewer:'closePhotoViewer',photoEditor:'photoEditorCancel',profileCropModal:'cancelCrop',dealStepModal:'closeDealStep',listingAdminModal:'closeListingAdmin',memberActionModal:'closeMemberActions',reportModal:'closeReport',verificationModal:'closeVerification',needDealModal:'closeNeedDeal',reviewModal:'closeReview',dealCancelModal:'closeDealCancel',directFinalModal:'closeDirectFinal',deletePostModal:'cancelDeletePost',adminSetupModal:'closeAdminSetup',accountSecurityModal:'closeAccountSecurity',profileCompletedModal:'closeProfileCompleted',profileEditModal:'closeProfileEditor',commentsModal:'closeComments',listingModal:'closeListing',profileModal:'closeProfile',friendsModal:'closeFriends',groupCreateModal:'closeGroupCreate',profileMenuModal:'closeProfileMenu',dealRoomModal:'closeDealRoom',peerInfoPanel:'closePeerInfo',groupSettingsPanel:'closeGroupSettings',groupPostComposer:'closeGroupPost',dealForm:'closeDealForm',loginModal:'closeLogin',installHelp:()=>closeInstallHelp(),priceFilterPopover:()=>setPriceFilterOpen(false),groupTools:()=>{if(!$('groupTools').hidden)$('idRangeToggle').click()},createPostMenu:()=>closeCreateMenu()};
+const HISTORY_TABS=['home','messages','post','friends','profile','privacy','search','deals'];
+let backStack=[],openQueue=[],hops=[],hopsAt=0;
+const chatIsOpen=()=>document.body.classList.contains('chat-open');
+const layerOpen=id=>{const el=document.getElementById(id);return !!el&&el.isConnected&&!el.closest('[hidden]')};
+// A history step is stale when the screen it stands for is already closed.
+const staleEntry=s=>!!s&&(!!(s.layer&&!layerOpen(s.layer))||!!((s.chat||s.inChat)&&!chatIsOpen()));
+const layerState=id=>({...(history.state?.tab?{tab:history.state.tab,profileId:history.state.profileId}:{}),...(chatIsOpen()?{inChat:true}:{}),layer:id});
+// Our own history moves: 'quiet' = drop a stale step without changing the screen, 'user' = treat like another back press, 'forward' = undo a back press.
+function hop(kind){hops.push(kind);hopsAt=Date.now();if(kind==='forward')history.forward();else history.back()}
+function closeLayer(id){const how=BACK_LAYERS[id];if(typeof how==='function')return how();const button=document.getElementById(how);if(button)button.click();else{const el=document.getElementById(id);if(el)el.hidden=true}}
+function syncHistory(){
+ backStack=backStack.filter(layerOpen);openQueue=openQueue.filter(id=>layerOpen(id)&&!backStack.includes(id));
+ if(hops.length){if(Date.now()-hopsAt<2500)return;hops=[]}// wait until our own back/forward move has landed
+ if(staleEntry(history.state)){if(!openQueue.length)return hop('quiet');const id=openQueue.shift();backStack.push(id);history.replaceState(layerState(id),'')}
+ for(const id of openQueue.splice(0)){backStack.push(id);history.pushState(layerState(id),'')}
+}
+new MutationObserver(records=>{
+ backStack=backStack.filter(layerOpen);
+ for(const r of records){const id=r.target.id;if(id&&id in BACK_LAYERS&&!openQueue.includes(id)&&!backStack.includes(id)&&layerOpen(id))openQueue.push(id)}
+ syncHistory();
+}).observe(document.body,{attributes:true,attributeFilter:['hidden'],subtree:true});
+// Links to a page (#messages, #privacy) switch the page in place.
+document.addEventListener('click',e=>{const a=e.target.closest?.('a[href^="#"]');if(!a||e.defaultPrevented)return;const t=a.getAttribute('href').slice(1);if(HISTORY_TABS.includes(t)){e.preventDefault();navigate(t)}});
+window.addEventListener('popstate',e=>{
+ lastPopAt=Date.now();const s=e.state,kind=hops.length&&Date.now()-hopsAt<2500?hops.shift():(hops=[],'user');
+ if(kind!=='user'){syncHistory();return}
+ if(callState||incomingCall)return hop('forward');// the call screen stays until the call ends
+ backStack=backStack.filter(layerOpen);
+ const at=s?.layer?backStack.indexOf(s.layer):-1;
+ if(backStack.length-1>at){const top=backStack.pop();closeLayer(top);
+  if(typeof BACK_LAYERS[top]==='string'&&layerOpen(top)){backStack.push(top);history.pushState(layerState(top),'');return}// it only went back one view inside (group info, chat info)
+  if(staleEntry(s))hop('quiet');return}
+ if(chatIsOpen()&&!s?.chat&&!s?.inChat){closeConversation();if(staleEntry(s))hop('quiet');return}
+ if(staleEntry(s))return hop('user');
+ const hashTab=location.hash.slice(1),tab=s?.tab||(HISTORY_TABS.includes(hashTab)?hashTab:null);
+ if(!tab)return;
+ if(tab!==active||(s?.profileId||null)!==(profileViewId||null))return navigate(tab,{fromHistory:true,profileId:s?.profileId});
+ hop('user');// this step showed the same page again: go one more step back
+});

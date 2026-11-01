@@ -302,7 +302,7 @@ async function openImageEditor(item){
  const clamp=(v,lo,hi)=>Math.min(hi,Math.max(lo,v)),point=e=>{const r=work.getBoundingClientRect();return {x:(e.clientX-r.left)*work.width/r.width,y:(e.clientY-r.top)*work.height/r.height}};
  const remember=()=>{history.push(copyCanvas(work));if(history.length>12)history.shift();undo.classList.remove('empty')};
  function setWork(canvas){work.replaceWith(canvas);work=canvas;if(mode==='crop')startCrop()}
- function close(){document.removeEventListener('keydown',onKey);removeEventListener('resize',placeCrop);modal.remove();photoEditor=null}
+ function close(){document.removeEventListener('keydown',onKey);removeEventListener('resize',placeCrop);modal.hidden=true;modal.remove();photoEditor=null}
  function onKey(e){if(e.key==='Escape'){e.preventDefault();close()}}
  function placeCrop(){if(!crop)return;const r=work.getBoundingClientRect(),f=frame.getBoundingClientRect(),k=r.width/work.width;Object.assign(box.style,{left:(r.left-f.left+crop.x*k)+'px',top:(r.top-f.top+crop.y*k)+'px',width:crop.w*k+'px',height:crop.h*k+'px'})}
  function startCrop(){const insetX=work.width*.06,insetY=work.height*.06;crop={x:insetX,y:insetY,w:work.width-insetX*2,h:work.height-insetY*2};box.hidden=false;placeCrop()}
@@ -327,8 +327,8 @@ async function openImageEditor(item){
  const undo=tool('↩️','Undo',()=>{const last=history.pop();if(last)setWork(last);undo.classList.toggle('empty',!history.length)});undo.classList.add('empty');
  tools.append(tool('✂️','Crop',()=>setMode('crop'),'crop'),tool('🖌️','Draw',()=>setMode('draw'),'draw'),tool('🫥','Blur',()=>setMode('blur'),'blur'),tool('🔄','Rotate',()=>{remember();const out=editorCanvas(work.height,work.width),ctx=out.getContext('2d');ctx.translate(out.width,0);ctx.rotate(Math.PI/2);ctx.drawImage(work,0,0);setWork(out)}),undo);
  const done=button('✓ Done',async()=>{done.disabled=true;try{let blob=await new Promise(resolve=>work.toBlob(resolve,'image/webp',.88));if(!blob||blob.type!=='image/webp')blob=await new Promise(resolve=>work.toBlob(resolve,'image/jpeg',.9));if(!blob)throw Error('Could not save this photo. Try again.');const index=composerFiles.indexOf(item);if(index<0){close();return}URL.revokeObjectURL(item.url);composerFiles[index]={file:blob,type:blob.type,url:URL.createObjectURL(blob)};renderComposerPreview();close();toast('✅ Photo ready. Tap ➤ to send.')}catch(e){toast(e.message);done.disabled=false}},'btn');
- top.append(button('✕ Cancel',close,'btn ghost'),node('strong','Edit photo'),done);
- frame.append(work,box);stage.append(frame);modal.append(top,stage,options,tools);document.body.append(modal);photoEditor=modal;
+ const cancel=button('✕ Cancel',close,'btn ghost');cancel.id='photoEditorCancel';top.append(cancel,node('strong','Edit photo'),done);
+ frame.append(work,box);stage.append(frame);modal.append(top,stage,options,tools);modal.id='photoEditor';modal.hidden=true;document.body.append(modal);modal.hidden=false;photoEditor=modal;
  document.addEventListener('keydown',onKey);addEventListener('resize',placeCrop);setMode('draw');done.focus();
 }
 
