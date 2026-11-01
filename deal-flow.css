@@ -339,3 +339,15 @@ body.create-menu-open::after{content:'';position:fixed;inset:0;z-index:140;backg
 #guestAuth #guestLogin{min-width:96px}
 /* Google's button sits in an iframe; on a dark page the browser paints a white box behind it unless the iframe uses the light scheme. */
 #googleButton,#googleButton iframe{color-scheme:light}
+
+/* Animated profile ring is back (thin, no crown): a slowly turning ring - blue Verified, purple Admin, gold Owner. */
+.gaming-portrait.frame-owner,.gaming-portrait.frame-admin,.gaming-portrait.frame-verified{position:relative;background:none!important;overflow:visible}
+.gaming-portrait.frame-owner::before,.gaming-portrait.frame-admin::before,.gaming-portrait.frame-verified::before{content:''!important;position:absolute;inset:0;border-radius:50%;z-index:0;animation:wm-spin 5s linear infinite}
+.gaming-portrait.frame-verified::before{background:conic-gradient(#9fdcff,#1877f2,#d6f0ff,#0b57c9,#9fdcff)}
+.gaming-portrait.frame-admin::before{background:conic-gradient(#e2ccff,#8c4cff,#f3e8ff,#5b21b6,#e2ccff)}
+.gaming-portrait.frame-owner::before{background:conic-gradient(#fff1b8,#f2b233,#fff7d6,#c98612,#fff1b8)}
+/* Blue tick: the shine plus a soft glow pulse. */
+.verified-tick{animation:wm-tick-glow 2.6s ease-in-out infinite}
+@keyframes wm-tick-glow{0%,100%{box-shadow:0 0 0 1.5px #071321,0 0 5px #1877f270}50%{box-shadow:0 0 0 1.5px #071321,0 0 12px #3b9dffcc}}
+@media(prefers-reduced-motion:reduce){.gaming-portrait::before,.verified-tick{animation:none!important}}
+@keyframes wm-spin{to{transform:rotate(360deg)}}
