@@ -314,3 +314,20 @@ body.create-menu-open::after{content:'';position:fixed;inset:0;z-index:140;backg
 .admin-choice .admin-info{flex:none;width:34px;height:34px;padding:0;border:1px solid #3b6584;border-radius:50%;background:#0f2a42;font-size:15px;cursor:pointer}
 .admin-choice .avatar{flex:none}
 
+
+/* Deal card: people open their profiles */
+.deal-person-face{padding:0;border:0;background:none;cursor:pointer;border-radius:50%}
+.deal-person-link{padding:0;border:0;background:none;color:#9fd2ff;font:inherit;font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.deal-profile-row{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 2px}
+.deal-profile-button{padding:7px 12px;font-size:12px}
+/* Profile menu with icons (like Facebook) */
+#profileMenuItems .profile-drawer-item{display:flex;align-items:center;gap:14px;padding:12px;font-size:15px;list-style:none}
+#profileMenuItems .profile-drawer-item::-webkit-details-marker{display:none}
+#profileMenuItems .drawer-icon{flex:none;width:24px;height:24px;color:#cfe4f7}
+#profileMenuItems .drawer-icon svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+#profileMenuItems .drawer-label{flex:1}
+#profileMenuItems .drawer-chevron{flex:none;font-size:18px;color:#8ea9c3;transition:transform .15s}
+#profileMenuItems .profile-drawer-group[open] .drawer-chevron{transform:rotate(180deg)}
+#profileMenuItems .profile-drawer-group{border-top:1px solid #ffffff12;border-bottom:1px solid #ffffff12;margin:6px 0}
+#profileMenuItems .profile-drawer-sub{padding:0 0 6px 18px}
+#profileMenuItems .profile-drawer-sub .profile-drawer-item{font-size:14px;padding:10px 12px}

@@ -929,6 +929,14 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  let pk=(await call('/api/deal-admins?postId='+pickerPost,'GET',undefined,'pbuyer')).data;assert.equal(pk.mode,'mediated');assert.equal(pk.iAm,'buyer');assert.equal(pk.owner.id,'owner');assert.deepEqual(pk.relatedAdmins.map(a=>a.id).sort(),expectRelated);assert.ok(expectRelated.includes('admin'));
  const sellerSide=pk.relatedAdmins.find(a=>a.id==='admin');assert.equal(sellerSide.theirs,1);if(!sellerSide.mine)assert.equal(sellerSide.my_groups,null);assert.ok(Number.isInteger(sellerSide.deals_done));
  sql.prepare("DELETE FROM wm_group_members WHERE user_id IN ('pbuyer','vip')").run();pk=(await call('/api/deal-admins?postId='+pickerPost,'GET',undefined,'pbuyer')).data;assert.deepEqual(pk.relatedAdmins,[]);assert.equal(pk.owner.id,'owner');
+ // Maintenance: Owner-only switch; while on, visitors get a sorry page and members get 503 from the API; the Owner and the Admin Panel keep working.
+ assert.equal((await call('/api/admin/maintenance','POST',{on:true},'admin')).status,403);assert.equal((await call('/api/admin/maintenance','POST',{on:'yes'},'owner')).status,400);
+ r=await call('/api/admin/maintenance','POST',{on:true,message:'Back at 10 PM <b>soon</b>'},'owner');assert.equal(r.status,200);assert.equal(r.data.on,true);
+ assert.deepEqual((await call('/api/maintenance')).data,{on:true,message:'Back at 10 PM <b>soon</b>'});
+ r=await call('/api/feed?limit=1','GET',undefined,'vip');assert.equal(r.status,503);assert.equal(r.data.maintenance,true);assert.equal((await call('/api/feed?limit=1')).status,503);
+ assert.equal((await call('/api/feed?limit=1','GET',undefined,'owner')).status,200);assert.equal((await panelRequest('maintenance')).status,200);
+ const closedPage=await worker.fetch(new Request('https://test.local/'),env);assert.equal(closedPage.status,503);const closedHtml=await closedPage.text();assert.match(closedHtml,/Back at 10 PM &lt;b&gt;soon&lt;\/b&gt;/);assert.ok(!closedHtml.includes('<b>soon'));
+ r=await call('/api/admin/maintenance','POST',{on:false},'owner');assert.equal(r.status,200);assert.equal((await call('/api/feed?limit=1','GET',undefined,'vip')).status,200);assert.deepEqual((await call('/api/maintenance')).data,{on:false,message:''});
  delete env.WM_DATA_KEY;assert.equal((await adeal()).secure_handover,false);env.AI=previousAI;
  console.log('PASS: protected deals (payment proof, one-time encrypted handover, delivery, checklist, safety hold, auto-confirm, Owner dispute decisions), private game UIDs with one active listing, post limits, bump/expiry/sold feed rules, safe names, trust card and share previews.');
 }

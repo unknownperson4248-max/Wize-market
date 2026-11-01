@@ -29,3 +29,9 @@ body{background:radial-gradient(ellipse at 0 0,#20483a44,transparent 55%),radial
 .question-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;margin:8px 0}.question-row .input{margin:0}.question-required{display:flex;align-items:center;gap:5px;font-size:12px;white-space:nowrap}
 .link-button{border:0;background:none;padding:0;color:var(--mint);text-decoration:underline;font:inherit;cursor:pointer}
 .verification-answers{margin:10px 0;padding:10px 12px;border-radius:12px;border:1px solid var(--line)}.verification-answers dt{font-weight:700;font-size:13px;margin-top:6px}.verification-answers dt:first-child{margin-top:0}.verification-answers dd{margin:2px 0 0;font-size:13px;overflow-wrap:anywhere}
+
+.control-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}.control-tabs button{border:1px solid var(--line);background:transparent;color:var(--text);border-radius:999px;padding:9px 14px;font-weight:700;cursor:pointer}.control-tabs button[aria-selected=true]{background:var(--mint);border-color:var(--mint);color:#160b22}
+#controlNav button[aria-current=page]{outline:2px solid var(--mint)}
+.maintenance-card .btn{width:100%;margin-top:14px;padding:14px;font-size:15px}.maintenance-card .btn.danger{background:linear-gradient(135deg,#ff4d6d,#c9184a)}
+.maintenance-status{font-weight:800;font-size:15px;padding:12px 14px;border-radius:12px}.maintenance-status.on{background:#0d3b2a;color:#7ff0b8}.maintenance-status.off{background:#4a1020;color:#ffb3c1}
+#peopleKind{margin-bottom:8px}

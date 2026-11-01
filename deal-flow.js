@@ -369,3 +369,27 @@ function verifyPrompt(){
  void api('/verification').then(({requests})=>{if(requests.some(r=>r.status==='pending')){b.classList.add('pending');icon.textContent='⏳';label.textContent='Verification pending';b.title='The Owner is checking your application';b.setAttribute('aria-label','Verification pending')}}).catch(()=>{});
  return b;
 }
+
+// Deal card: buyer and seller photos/names open their profiles.
+function dealPersonFace(id,name,picture){const b=node('button',undefined,'deal-person-face');b.type='button';b.setAttribute('aria-label','Open '+name+'’s profile');b.append(avatar({name,picture}));b.onclick=e=>{e.stopPropagation();if(id)void showProfile(id)};return b}
+function dealPersonLink(id,name){const b=node('button',name,'deal-person-link');b.type='button';b.onclick=e=>{e.stopPropagation();if(id)void showProfile(id)};return b}
+// Profile menu (like Facebook): an icon for every item, Help & support group, two ways to apply.
+Object.assign(socialGlyphs,{
+ help:'<circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 1 1 3.4 2.4c-.6.3-1 .8-1 1.5v.6"/><path d="M12 17h.01"/>',
+ flag:'<path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/>',
+ bug:'<rect x="8" y="7" width="8" height="12" rx="4"/><path d="M12 7V5M10 5l-1-1.5M14 5l1-1.5M4 11h4M16 11h4M4 16h4M16 16h4"/>',
+ file:'<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/>'
+});
+function profileMenuItems(){
+ const admin=['owner','trusted'].includes(me?.role),items=[['Friends','users',()=>navigate('friends')],['Saved posts','bookmark',async()=>{if(active!=='profile'||profileViewId)await showProfile(me.id);await loadProfileTab('saved')}],['My deals','deals',()=>navigate('deals')]];
+ if(!me?.verified&&!admin)items.push(['Get verified (blue tick)','verified',()=>openVerificationRequest('seller')]);
+ if(!admin)items.push(['Become an Admin','shield',()=>openVerificationRequest('trusted')]);
+ items.push(['Account security','lock',openAccountSecurity]);
+ items.push({group:'Help & support',icon:'help',items:[['Report a scammer','flag',()=>openReport(null,'scam')],['Help','help',()=>openReport(null,'help')],['Website issue','bug',()=>openReport(null,'website-issue')],['Other','chat',()=>openReport(null,'other')]]});
+ items.push(['Privacy & Terms','file',()=>navigate('privacy')]);
+ return items;
+}
+function drawerItem(item){
+ if(item.group){const box=node('details',undefined,'profile-drawer-group'),summary=node('summary',undefined,'profile-drawer-item');summary.append(socialIcon(item.icon,'drawer-icon'),node('span',item.group,'drawer-label'),node('span','⌄','drawer-chevron'));box.append(summary);const list=node('div',undefined,'profile-drawer-sub');for(const sub of item.items)list.append(drawerItem(sub));box.append(list);return box}
+ const [label,icon,action]=item,b=button('',async()=>{closeProfileDrawer(false);await action()},'profile-drawer-item');b.append(socialIcon(icon,'drawer-icon'),node('span',label,'drawer-label'));return b;
+}

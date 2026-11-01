@@ -14,7 +14,7 @@ const icons={home:'<path d="m3 10 9-7 9 7v10h-6v-7H9v7H3z"/>',messages:'<path d=
 function node(tag,text,cls){const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e}
 function button(text,action,cls='btn secondary'){const b=node('button',text,cls);b.type='button';b.onclick=async()=>{b.disabled=true;try{await action()}catch(e){toast(e.message)}finally{b.disabled=false}};return b}
 function toast(text){$('toast').textContent=text;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,5500)}
-async function api(path,data,method){const r=await fetch('/api'+path,{method:method||(data?'POST':'GET'),credentials:'same-origin',cache:'no-store',...(data?{headers:{'content-type':'application/json'},body:JSON.stringify(data)}:{})});const result=await r.json();if(!r.ok){if(r.status===401){me=null;showLogin()};throw Error(result.error||'Request failed')}return result}
+async function api(path,data,method){const r=await fetch('/api'+path,{method:method||(data?'POST':'GET'),credentials:'same-origin',cache:'no-store',...(data?{headers:{'content-type':'application/json'},body:JSON.stringify(data)}:{})});const result=await r.json();if(!r.ok){if(r.status===503&&result.maintenance){location.reload();throw Error(result.error)}if(r.status===401){me=null;showLogin()};throw Error(result.error||'Request failed')}return result}
 function requireLogin(){if(me)return true;showLogin();return false}
 function showLogin(){document.body.classList.toggle('logged-out',!me);document.body.classList.remove('auth-pending');$('loginModal').hidden=false;$('closeLogin').focus();void initGoogle()}
 function closeLogin(){$('loginModal').hidden=true;if(!me)afterLoginTab=null}
