@@ -51,7 +51,7 @@ let activeMemberAction=null,memberActionTrigger=null;
 function renderMessageAuthor(message,kind){
  const person={id:message.user_id,name:message.name,picture:message.picture,verified:message.verified},interactive=kind==='group'&&message.user_id!==me.id;
  const author=node(interactive?'button':'div',undefined,'message-author'+(interactive?' group-member-trigger':''));if(interactive){author.type='button';author.setAttribute('aria-label','Member options for '+message.name);author.onclick=()=>openMemberActions(person,author)}
- author.append(avatar(person),node('strong',message.name));if(message.verified)author.append(verifiedMark('member'));return author;
+ author.append(avatar(person),node('strong',message.name),verifiedMark(message.role||'member',undefined,!!message.verified));return author;
 }
 function closeMemberActions(){const modal=$('memberActionModal');if(!modal)return;modal.hidden=true;activeMemberAction=null;if(memberActionTrigger?.isConnected)memberActionTrigger.focus();memberActionTrigger=null}
 async function openMemberActions(person,trigger){

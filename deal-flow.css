@@ -203,8 +203,11 @@ body{background:var(--bg)!important}
 #chatMessages>.bubble.mine:not(.run-end){border-bottom-right-radius:5px}
 #chatMessages>.bubble.mine:not(.run-start){border-top-right-radius:5px}
 #chatMessages>.bubble p{margin:0;font-size:15px;color:inherit!important}
-#chatMessages>.bubble .msg-avatar{position:absolute;left:-36px;bottom:0;width:28px;height:28px;border-radius:50%;overflow:hidden;margin:0;font-size:11px}
-#chatMessages>.bubble .msg-avatar img{width:100%;height:100%;object-fit:cover}
+#chatMessages>.bubble .msg-face{position:absolute;left:-36px;bottom:0;width:28px;height:28px}
+#chatMessages>.bubble .msg-face>.avatar{width:28px;height:28px;border-radius:50%;overflow:hidden;margin:0;font-size:11px}
+#chatMessages>.bubble .msg-face>.avatar img{width:100%;height:100%;object-fit:cover}
+.msg-face-tick{position:absolute;right:-4px;bottom:-3px;width:15px;height:15px;box-sizing:border-box;border-radius:50%;background:#1877f2;border:2px solid var(--bg);display:grid;place-items:center}
+.msg-face-tick svg{width:9px;height:9px;fill:none;stroke:#fff;stroke-width:3.4;stroke-linecap:round;stroke-linejoin:round}
 #chatMessages>.bubble .message-author{margin:0 0 3px;gap:5px;background:none}
 #chatMessages>.bubble .message-author>.avatar{display:none}
 #chatMessages>.bubble .message-author>strong{font-size:12px;color:#9fc2e0}
@@ -251,3 +254,14 @@ body{background:var(--bg)!important}
 .photo-editor-tools button>span{font-size:21px;line-height:1.1}
 .photo-editor-tools button.active{background:#ffffff1f;color:#fff}
 .photo-editor-tools button.empty{opacity:.35}
+
+/* Profile: one background colour for the whole page - header, name/bio, Posts/Saved row and posts (like Facebook). */
+.social-profile,.gaming-profile,.profile-page .profile-hero,.social-profile .gaming-profile-body{background:var(--bg)!important;border-color:transparent!important;box-shadow:none!important}
+body #profileTabs,body .profile-tabs{background:var(--bg)!important;border:0!important;border-top:1px solid #ffffff12!important;border-bottom:1px solid #ffffff12!important;border-radius:0!important;box-shadow:none!important}
+body #profileTabs .profile-tab[aria-selected=true],body .profile-tabs .profile-tab[aria-selected=true]{border-color:transparent!important;box-shadow:none!important}
+/* Chat: photo, name and badge for the other person (private and group); badge next to the name in the private chat header. */
+.chat-subtitle{display:flex;align-items:center;min-height:20px;margin-top:1px}
+.chat-subtitle[hidden]{display:none}
+.chat-subtitle .trust-badges{transform:scale(.85);transform-origin:left center}
+#chatMessages>.bubble .message-author{flex-wrap:wrap;row-gap:3px}
+#chatMessages>.bubble .message-author .trust-badges{flex:none;transform:scale(.88);transform-origin:left center}
