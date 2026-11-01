@@ -103,7 +103,7 @@ async function openGroupPost(){if(chat?.kind!=='group')return;const id=chat.id;n
 function closeGroupPost(){$('groupPostComposer').hidden=true;postFormHome.append($('postForm'));$('postTitle').hidden=false;document.querySelector('label[for="postTitle"]').hidden=false;$('postGroup').hidden=false;}
 $('closeGroupPost').onclick=closeGroupPost;
 
-async function loadSiteIdentity(){const d=await api('/site');$('loginTitle').textContent=d.welcome;}void loadSiteIdentity().catch(()=>{});
+async function loadSiteIdentity(){const d=await api('/site');globalThis.wmSiteWelcome=d.welcome;if(!globalThis.wmSiteContent?.login?.title&&authMode==='signin')$('loginTitle').textContent=d.welcome;}void loadSiteIdentity().catch(()=>{});
 
 async function openSharedProfile(){if(pendingPost){const id=pendingPost;pendingPost=null;await openListing(id)}if(!me){if(pendingProfileId||pendingProfile){afterLoginTab='profile';showLogin()}return}if(pendingProfileId){const id=pendingProfileId;pendingProfileId=null;await showProfile(id);return}if(!pendingProfile)return;const name=pendingProfile;pendingProfile=null;try{const d=await api('/people/'+encodeURIComponent(name));navigate('profile');await showProfile(d.userId)}catch(e){toast(e.message)}}
 $('closeAdminSetup').onclick=()=>{$('adminSetupModal').hidden=true;wantsAdminRecovery=false};

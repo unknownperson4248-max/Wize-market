@@ -227,7 +227,7 @@ function setAuthMode(mode){
  $('authMethodField').hidden=reset;$('authLoginField').hidden=reset;$('authNameField').hidden=!signup;$('authPasswordField').hidden=forgot;$('authConfirmField').hidden=!reset;$('authForgot').hidden=authMode!=='signin';$('authGoogle').hidden=forgot||reset;
  $('authIntro').hidden=!(forgot||reset);$('authIntro').textContent=forgot?'Type the email or number (WhatsApp) of your account and send a request. The Owner will send you a reset link on WhatsApp or email.':reset?'Choose a new password for your account. This link works only once.':'';
  $('authPasswordLabel').textContent=reset?'New password':'Password';$('authSubmit').textContent=signup?'Register':forgot?'Send request':reset?'Save new password':'Login';
- $('authPassword').autocomplete=signup||reset?'new-password':'current-password';$('loginTitle').textContent=signup?'Register':forgot?'Forgot password':reset?'Set a new password':'Login';$('authStatus').textContent='';
+ $('authPassword').autocomplete=signup||reset?'new-password':'current-password';const lt=globalThis.wmSiteContent?.login||{};$('loginTitle').textContent=signup?lt.registerTitle||'Create your account':forgot?'Forgot password':reset?'Set a new password':lt.title||globalThis.wmSiteWelcome||'Welcome to your community.';$('authStatus').textContent='';
 }
 function syncAuthMethod(){const phone=document.querySelector('input[name=authMethod]:checked')?.value==='phone',input=$('authLogin');$('authLoginLabel').textContent=phone?'Phone number (WhatsApp)':'Email';input.type=phone?'tel':'email';input.inputMode=phone?'tel':'email';input.placeholder=phone?'01XXXXXXXXX':'you@example.com'}
 function openAuth(mode){setAuthMode(mode);showLogin()}
@@ -344,6 +344,7 @@ function applySiteContent(){
  const copy=$('footerCopy');if(copy){copy.textContent=c.footerText;copy.hidden=!c.footerText}
  const powered=$('footerPowered');if(powered){powered.replaceChildren();powered.hidden=!c.poweredBy;if(c.poweredBy){if(c.poweredByUrl){const a=node('a',c.poweredBy);a.href=c.poweredByUrl;a.target='_blank';a.rel='noopener noreferrer';powered.append(a)}else powered.textContent=c.poweredBy}}
  renderSiteNotice();
+ if(c.login?.brand&&$('loginBrand'))$('loginBrand').textContent=c.login.brand;if(typeof setAuthMode==='function'&&$('loginModal').hidden)setAuthMode(authMode);
  const v=c.verification||{},set=(id,value)=>{const el=$(id);if(el&&value)el.textContent=value};
  set('verificationIntro',v.intro);set('verificationWhatsappLabel',v.whatsappLabel);set('verificationNidLabel',v.nidLabel);set('verificationConsentText',v.consent);
  if(active==='post'&&typeof syncPostIntent==='function'&&!editingPost)syncPostIntent();

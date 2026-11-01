@@ -176,7 +176,8 @@ const TEMPLATE_KINDS=[['sell','🏷️ Sell Post'],['normal','💬 Normal Post']
 let verificationQuestionDraft=[];
 function contentField(root,id,name,value,max,area,rows=2){const l=node('label',name);l.htmlFor=id;const input=node(area?'textarea':'input',undefined,'input');input.id=id;input.maxLength=max;input.value=value||'';if(area)input.rows=rows;root.append(l,input)}
 async function loadContentForm(){
- const {content}=await fetch('/api/site-content',{cache:'no-store'}).then(r=>r.json());
+ const [{content},site,app]=await Promise.all([fetch('/api/site-content',{cache:'no-store'}).then(r=>r.json()),fetch('/api/site',{cache:'no-store'}).then(r=>r.json()),api('pwa').catch(()=>({}))]);
+ $('contentLoginBrand').value=content.login?.brand||(app.name||site.name||'').toUpperCase();$('contentLoginTitle').value=content.login?.title||site.welcome||'';$('contentRegisterTitle').value=content.login?.registerTitle||'Create your account';
  $('contentFooterText').value=content.footerText;$('contentPoweredBy').value=content.poweredBy;$('contentPoweredByUrl').value=content.poweredByUrl;$('contentNoticeOn').checked=!!content.noticeOn;$('contentNoticeText').value=content.noticeText;$('contentNoticeLink').value=content.noticeLink;
  const root=$('templateFields');root.replaceChildren();
  for(const [kind,label] of TEMPLATE_KINDS){const t=content.templates[kind]||{},box=node('fieldset',undefined,'template-box');box.append(node('legend',label));contentField(box,'tpl-'+kind+'-heading','Form heading',t.heading,80);contentField(box,'tpl-'+kind+'-titleHint','Title example (grey text in the title box)',t.titleHint,100);contentField(box,'tpl-'+kind+'-details','Details template (already written in the form)',t.details,2000,true,5);contentField(box,'tpl-'+kind+'-tip','Tip under the heading',t.tip,300,true);root.append(box)}
@@ -196,7 +197,7 @@ $('openRulesFromContent').onclick=()=>void view('settings').then(()=>$('controlR
 $('controlContentForm').onsubmit=async e=>{e.preventDefault();const submit=e.submitter;submit.disabled=true;try{
  const templates={};for(const [kind] of TEMPLATE_KINDS){templates[kind]={};for(const key of ['heading','titleHint','details','tip'])templates[kind][key]=$('tpl-'+kind+'-'+key).value}
  const verification={questions:verificationQuestionDraft.filter(q=>q.label.trim()).map(q=>({label:q.label.trim(),required:!!q.required}))};for(const key of ['intro','whatsappLabel','nidLabel','consent'])verification[key]=$('ver-'+key).value;
- await api('site-content',{footerText:$('contentFooterText').value,poweredBy:$('contentPoweredBy').value,poweredByUrl:$('contentPoweredByUrl').value,noticeOn:$('contentNoticeOn').checked,noticeText:$('contentNoticeText').value,noticeLink:$('contentNoticeLink').value,templates,verification});
+ await api('site-content',{login:{brand:$('contentLoginBrand').value,title:$('contentLoginTitle').value,registerTitle:$('contentRegisterTitle').value},footerText:$('contentFooterText').value,poweredBy:$('contentPoweredBy').value,poweredByUrl:$('contentPoweredByUrl').value,noticeOn:$('contentNoticeOn').checked,noticeText:$('contentNoticeText').value,noticeLink:$('contentNoticeLink').value,templates,verification});
  await loadContentForm();toast('✅ Texts & templates published.')}catch(error){toast(error.message)}finally{submit.disabled=false}};
 
 

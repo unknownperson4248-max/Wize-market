@@ -677,7 +677,7 @@ async function openGroupPost(){if(chat?.kind!=='group')return;const id=chat.id;n
 function closeGroupPost(){$('groupPostComposer').hidden=true;postFormHome.append($('postForm'));$('postTitle').hidden=false;document.querySelector('label[for="postTitle"]').hidden=false;$('postGroup').hidden=false;}
 $('closeGroupPost').onclick=closeGroupPost;
 
-async function loadSiteIdentity(){const d=await api('/site');$('loginTitle').textContent=d.welcome;}void loadSiteIdentity().catch(()=>{});
+async function loadSiteIdentity(){const d=await api('/site');globalThis.wmSiteWelcome=d.welcome;if(!globalThis.wmSiteContent?.login?.title&&authMode==='signin')$('loginTitle').textContent=d.welcome;}void loadSiteIdentity().catch(()=>{});
 
 async function openSharedProfile(){if(pendingPost){const id=pendingPost;pendingPost=null;await openListing(id)}if(!me){if(pendingProfileId||pendingProfile){afterLoginTab='profile';showLogin()}return}if(pendingProfileId){const id=pendingProfileId;pendingProfileId=null;await showProfile(id);return}if(!pendingProfile)return;const name=pendingProfile;pendingProfile=null;try{const d=await api('/people/'+encodeURIComponent(name));navigate('profile');await showProfile(d.userId)}catch(e){toast(e.message)}}
 $('closeAdminSetup').onclick=()=>{$('adminSetupModal').hidden=true;wantsAdminRecovery=false};
@@ -1415,7 +1415,7 @@ async function renderPublicDeals(root,offset=0){
 }
 async function loadFeatures(){}
 
-async function loadPwaBranding(){try{const config=await api('/pwa');document.title=config.name;document.querySelectorAll('[data-app-name],.app-wordmark,#loginBrand').forEach(element=>element.textContent=config.name);document.querySelectorAll('[data-app-description]').forEach(element=>element.textContent=config.description);let description=document.querySelector('meta[name="description"]');if(!description){description=document.createElement('meta');description.name='description';document.head.append(description)}description.content=config.description;$('appInstallBanner').setAttribute('aria-label','Install '+config.name);$('appInstallBanner').querySelector('strong').textContent=config.name;$('appInstallBanner').querySelector('img').src=config.icons[0].src;document.querySelector('link[rel="apple-touch-icon"]').href=config.icons[0].src;$('installHelpTitle').textContent='Install '+config.name;await loadAppearance()}catch{}}
+async function loadPwaBranding(){try{const config=await api('/pwa');document.title=config.name;document.querySelectorAll('[data-app-name],.app-wordmark,#loginBrand').forEach(element=>element.textContent=config.name);if(globalThis.wmSiteContent?.login?.brand)$('loginBrand').textContent=globalThis.wmSiteContent.login.brand;document.querySelectorAll('[data-app-description]').forEach(element=>element.textContent=config.description);let description=document.querySelector('meta[name="description"]');if(!description){description=document.createElement('meta');description.name='description';document.head.append(description)}description.content=config.description;$('appInstallBanner').setAttribute('aria-label','Install '+config.name);$('appInstallBanner').querySelector('strong').textContent=config.name;$('appInstallBanner').querySelector('img').src=config.icons[0].src;document.querySelector('link[rel="apple-touch-icon"]').href=config.icons[0].src;$('installHelpTitle').textContent='Install '+config.name;await loadAppearance()}catch{}}
 void loadPwaBranding();
 
 // Protected deal steps, secure handover, deal proofs, listing tools, badges, trust card and chat safety notes.
@@ -1647,7 +1647,7 @@ function setAuthMode(mode){
  $('authMethodField').hidden=reset;$('authLoginField').hidden=reset;$('authNameField').hidden=!signup;$('authPasswordField').hidden=forgot;$('authConfirmField').hidden=!reset;$('authForgot').hidden=authMode!=='signin';$('authGoogle').hidden=forgot||reset;
  $('authIntro').hidden=!(forgot||reset);$('authIntro').textContent=forgot?'Type the email or number (WhatsApp) of your account and send a request. The Owner will send you a reset link on WhatsApp or email.':reset?'Choose a new password for your account. This link works only once.':'';
  $('authPasswordLabel').textContent=reset?'New password':'Password';$('authSubmit').textContent=signup?'Register':forgot?'Send request':reset?'Save new password':'Login';
- $('authPassword').autocomplete=signup||reset?'new-password':'current-password';$('loginTitle').textContent=signup?'Register':forgot?'Forgot password':reset?'Set a new password':'Login';$('authStatus').textContent='';
+ $('authPassword').autocomplete=signup||reset?'new-password':'current-password';const lt=globalThis.wmSiteContent?.login||{};$('loginTitle').textContent=signup?lt.registerTitle||'Create your account':forgot?'Forgot password':reset?'Set a new password':lt.title||globalThis.wmSiteWelcome||'Welcome to your community.';$('authStatus').textContent='';
 }
 function syncAuthMethod(){const phone=document.querySelector('input[name=authMethod]:checked')?.value==='phone',input=$('authLogin');$('authLoginLabel').textContent=phone?'Phone number (WhatsApp)':'Email';input.type=phone?'tel':'email';input.inputMode=phone?'tel':'email';input.placeholder=phone?'01XXXXXXXXX':'you@example.com'}
 function openAuth(mode){setAuthMode(mode);showLogin()}
@@ -1764,6 +1764,7 @@ function applySiteContent(){
  const copy=$('footerCopy');if(copy){copy.textContent=c.footerText;copy.hidden=!c.footerText}
  const powered=$('footerPowered');if(powered){powered.replaceChildren();powered.hidden=!c.poweredBy;if(c.poweredBy){if(c.poweredByUrl){const a=node('a',c.poweredBy);a.href=c.poweredByUrl;a.target='_blank';a.rel='noopener noreferrer';powered.append(a)}else powered.textContent=c.poweredBy}}
  renderSiteNotice();
+ if(c.login?.brand&&$('loginBrand'))$('loginBrand').textContent=c.login.brand;if(typeof setAuthMode==='function'&&$('loginModal').hidden)setAuthMode(authMode);
  const v=c.verification||{},set=(id,value)=>{const el=$(id);if(el&&value)el.textContent=value};
  set('verificationIntro',v.intro);set('verificationWhatsappLabel',v.whatsappLabel);set('verificationNidLabel',v.nidLabel);set('verificationConsentText',v.consent);
  if(active==='post'&&typeof syncPostIntent==='function'&&!editingPost)syncPostIntent();

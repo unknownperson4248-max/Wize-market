@@ -179,6 +179,7 @@ function maintenancePage(message){const h=v=>String(v).replace(/[&<>"']/g,c=>({'
 const DEFAULT_CONTENT={
  footerText:'© 2026 Buy Sell This Site. All rights reserved.',poweredBy:'Powered by @Rahat Wize',poweredByUrl:'https://rahatwize.com/',
  noticeOn:false,noticeText:'',noticeLink:'',
+ login:{brand:'',title:'',registerTitle:''},
  templates:{
   sell:{heading:'Your next great listing.',titleHint:'Example: FF Level 75 Evo ID',details:'',tip:''},
   need:{heading:'What are you looking for?',titleHint:'Example: Need FF ID with Evo guns',details:'',tip:''},
@@ -187,7 +188,7 @@ const DEFAULT_CONTENT={
  verification:{intro:'Send your NID photo and WhatsApp number. The Owner checks them and gives you the blue tick ✓. Verified members can post more IDs.',whatsappLabel:'WhatsApp number',nidLabel:'NID image (private, required)',consent:'I agree to share my NID photo and WhatsApp number with the Owner for verification.',questions:[]}
 };
 async function siteContent(db){const row=await one(db,"SELECT value FROM wm_settings WHERE key='site_content'");let saved={};try{saved=row?JSON.parse(row.value)||{}:{}}catch{}
- return {...DEFAULT_CONTENT,...saved,templates:Object.fromEntries(Object.entries(DEFAULT_CONTENT.templates).map(([k,v])=>[k,{...v,...(saved.templates?.[k]||{})}])),verification:{...DEFAULT_CONTENT.verification,...(saved.verification||{}),questions:Array.isArray(saved.verification?.questions)?saved.verification.questions:[]}}}
+ return {...DEFAULT_CONTENT,...saved,login:{...DEFAULT_CONTENT.login,...(saved.login||{})},templates:Object.fromEntries(Object.entries(DEFAULT_CONTENT.templates).map(([k,v])=>[k,{...v,...(saved.templates?.[k]||{})}])),verification:{...DEFAULT_CONTENT.verification,...(saved.verification||{}),questions:Array.isArray(saved.verification?.questions)?saved.verification.questions:[]}}}
 function cleanContent(d){
  need(d&&typeof d==='object','Invalid settings');
  const str=(v,max,label,required=false)=>{v=v??'';need(typeof v==='string'&&v.length<=max,label+': up to '+max+' characters');const t=v.trim();need(!required||t.length>0,'Enter '+label);return t};
@@ -195,7 +196,8 @@ function cleanContent(d){
  const templates={};for(const k of ['sell','need','normal']){const t=d.templates?.[k]||{};templates[k]={heading:str(t.heading,80,k+' heading'),titleHint:str(t.titleHint,100,k+' title example'),details:str(t.details,2000,k+' details template'),tip:str(t.tip,300,k+' tip')}}
  const v=d.verification||{};need(v.questions===undefined||Array.isArray(v.questions)&&v.questions.length<=6,'Add up to 6 verification questions');
  const questions=(v.questions||[]).map((q,i)=>({label:str(q?.label,150,'question '+(i+1),true),required:q?.required===true}));
- return {footerText:str(d.footerText,200,'footer text'),poweredBy:str(d.poweredBy,80,'powered by text'),poweredByUrl:link(d.poweredByUrl,'powered by link'),noticeOn:d.noticeOn===true,noticeText:str(d.noticeText,300,'notice text'),noticeLink:link(d.noticeLink,'notice link'),templates,
+ const l=d.login||{};
+ return {login:{brand:str(l.brand,40,'login brand'),title:str(l.title,100,'login welcome title'),registerTitle:str(l.registerTitle,100,'register title')},footerText:str(d.footerText,200,'footer text'),poweredBy:str(d.poweredBy,80,'powered by text'),poweredByUrl:link(d.poweredByUrl,'powered by link'),noticeOn:d.noticeOn===true,noticeText:str(d.noticeText,300,'notice text'),noticeLink:link(d.noticeLink,'notice link'),templates,
   verification:{intro:str(v.intro,600,'verification intro'),whatsappLabel:str(v.whatsappLabel,100,'WhatsApp label'),nidLabel:str(v.nidLabel,100,'NID label'),consent:str(v.consent,300,'consent text'),questions}};
 }
 function listingActiveAt(p){return Math.max(p.created_at||0,p.bumped_at||0,p.renewed_at||0)}
