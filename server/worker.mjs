@@ -574,12 +574,15 @@ if(p==='/api/verification'&&method==='POST'){
  await throttle(db,'verification:'+u.id,4);
  const d=await body(req);
  need(['seller','trusted'].includes(d.kind),'Choose seller or trusted verification');
- const contact=text(d.contact,500,'contact details');
+ const contact=d.contact===undefined||d.contact===''?'':text(d.contact,500,'contact details');
+ // WhatsApp number and the live location shared while applying are required; only the Owner sees them.
+ const whatsapp=loginId('phone',d.whatsapp),place=d.location;
+ need(place&&typeof place==='object'&&Number.isFinite(place.lat)&&Math.abs(place.lat)<=90&&Number.isFinite(place.lng)&&Math.abs(place.lng)<=180&&Number.isFinite(place.accuracy)&&place.accuracy>=0&&place.accuracy<=100000,'Share your live location to apply',400);
  const evidence=await one(db,"SELECT id FROM wm_private_uploads WHERE id=? AND user_id=? AND kind='verification'",d.documentId,u.id);
  need(evidence,'Upload your NID photo first',400);
  const pending=await one(db,"SELECT id FROM wm_verification_requests WHERE user_id=? AND kind=? AND status='pending'",u.id,d.kind);
  need(!pending,'You already have a pending request for this type',409);
- await run(db,'INSERT INTO wm_verification_requests(id,user_id,kind,contact,document_id,status,created_at) VALUES(?,?,?,?,?,?,?)',uuid(),u.id,d.kind,contact,evidence.id,'pending',now());
+ await run(db,'INSERT INTO wm_verification_requests(id,user_id,kind,contact,document_id,status,created_at,whatsapp,location_lat,location_lng,location_accuracy,location_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',uuid(),u.id,d.kind,contact,evidence.id,'pending',now(),whatsapp,Math.round(place.lat*1e6)/1e6,Math.round(place.lng*1e6)/1e6,Math.round(place.accuracy),now());
  return reply({ok:true},201);
 }
 if(p==='/api/admin/verifications'&&method==='GET'){
