@@ -6,7 +6,7 @@ Five tabs: Home, Friends, Post (+), Messages, Profile. Deals live inside Message
 
 Before deploying this revision to a database on migration 020:
 
-1. Set the `WM_DATA_KEY` secret once (a long random value). It encrypts game UIDs and handover details and keys the private UID matching. Do not delete or change it later: old encrypted data would become unreadable and duplicate-UID checks would stop matching older posts.
+1. Set the `WM_DATA_KEY` secret once (a long random value, at least 32 characters) in Cloudflare → Workers → this worker → Settings → Variables and Secrets. It encrypts game UIDs and Secure handover details. Without it the site still works, but Secure handover shows "being set up" and new posts store only the UID match hash (the Deal Room cannot show their UID). Do not delete or change it later, or older encrypted data becomes unreadable. Duplicate-UID matching uses a separate hash and does not depend on this secret.
 2. Apply `server/migrations/021_protected_deals_listing_rules.sql` once. It only adds columns, tables, indexes and one trigger. Existing users, posts, messages, deals and ID counters are untouched, and deals that already exist keep `flow = 0` and finish with their original rules.
 3. Deploy. Old code keeps working on the migrated database, so a code rollback (`wrangler rollback <version-id>`) does not need a database rollback.
 

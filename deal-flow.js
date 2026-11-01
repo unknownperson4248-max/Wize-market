@@ -72,6 +72,7 @@ function openDealStep(d,action){
 // Secure handover: encrypted on the server, readable once by the buyer, never by Admin or Owner.
 function renderHandoverBox(d){
  const h=d.handover||{},buyer=me?.id===d.buyer_id,seller=me?.id===d.seller_id,box=node('details',undefined,'handover-box');
+ if(d.secure_handover===false){const summary=node('summary');summary.append(socialIcon('lock'),node('span','Secure handover'),node('small','Coming soon'));box.append(summary,node('p','Secure handover is being set up by the Owner. Until then, share login details only in this Deal Room and only after the Admin confirms payment. Change every password right after.','hint'));return box}
  box.open=!!(buyer&&(h.waiting||!h.buyer_ready_at&&!d.delivered_at)||seller&&h.buyer_ready_at&&!h.submitted_at);
  const summary=node('summary');summary.append(socialIcon('lock'),node('span','Secure handover'),node('small',h.waiting?'Waiting to open':h.revealed_at?'Opened':h.buyer_ready_at?'Buyer ready':'Not started'));box.append(summary);
  const status=node('ul',undefined,'handover-status'),line=(ok,text)=>status.append(node('li',text,ok?'ok':''));

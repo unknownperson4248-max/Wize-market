@@ -701,7 +701,7 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  const deal=async(who='pbuyer')=>(await call('/api/deals/'+pd,'GET',undefined,who)).data.deal;
  const act=async(who,action,extra={})=>call('/api/deals/'+pd+'/action','POST',{action,version:(await deal()).version,...extra},who);
  assert.equal((await act('pseller','confirm')).status,200);assert.equal((await act('admin','accept')).status,200);
- let current=await deal();assert.equal(current.status,'active');assert.equal(current.game_uid,'123456789');assert.equal(current.handover.waiting,false);assert.deepEqual(current.checklist_items.length,5);
+ let current=await deal();assert.equal(current.status,'active');assert.equal(current.secure_handover,true);assert.equal(current.game_uid,'123456789');assert.equal(current.handover.waiting,false);assert.deepEqual(current.checklist_items.length,5);
  assert.equal((await call('/api/deals/'+pd,'GET',undefined,'outsider')).status,404);assert.equal((await call('/api/deals/'+pd,'GET',undefined,'owner')).status,404);
  assert.equal((await act('pseller','mark_delivered')).status,409);assert.equal((await act('pbuyer','confirm_payment',{trx:'X1'})).status,403);
  assert.equal((await act('pbuyer','complete')).status,409);
@@ -769,7 +769,7 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  const preview=await previewPage(env,new Request('https://test.local/post/'+pListing),'/post/'+pListing,'<html><head><title>Wize</title></head></html>');
  assert.match(preview,/<meta property="og:title" content="FF &lt;script&gt; &quot;ID&quot; · ৳5,000">/);assert.match(preview,/<title>FF &lt;script&gt; &quot;ID&quot; · Wize<\/title>/);assert.equal(preview.includes('<script>'),false);
  assert.equal(await previewPage(env,new Request('https://test.local/post/'+crypto.randomUUID()),'/post/'+crypto.randomUUID(),'<head>'),'<head>');
- delete env.WM_DATA_KEY;env.AI=previousAI;
+ delete env.WM_DATA_KEY;assert.equal((await adeal()).secure_handover,false);env.AI=previousAI;
  console.log('PASS: protected deals (payment proof, one-time encrypted handover, delivery, checklist, safety hold, auto-confirm, Owner dispute decisions), private game UIDs with one active listing, post limits, bump/expiry/sold feed rules, safe names, trust card and share previews.');
 }
 // Migration 021 keeps every existing deal and post, and existing deals stay on their original flow.
