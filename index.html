@@ -1368,7 +1368,8 @@ async function startDealFromChat(peer){
 }
 
 // Deal popup: new requests, each deal step and deal messages, plus a count on the Deals tab.
-let dealAlertSeen=(()=>{try{return Number(sessionStorage.getItem('wm_deal_alert_seen'))||0}catch{return 0}})(),dealAlertBusy=false,dealPopupTimer;
+let dealAlertSeen=(()=>{try{return Number(sessionStorage.getItem('wm_deal_alert_seen'))||0}catch{return 0}})(),dealAlertBusy=false,dealPopupTimer,lastDealAlerts=[];
+async function markDealAlertsRead(alerts){const ids=alerts.map(a=>a.id);if(ids.length)try{await api('/notifications/read',{ids})}catch{}}
 function paintDealAlertCount(count){
  for(const target of [$('dealChatsTab'),document.querySelector('#mobileNav [data-tab="messages"]'),document.querySelector('#desktopNav [data-tab="messages"]')]){if(!target)continue;let dot=target.querySelector('.deal-alert-count');if(!count){dot?.remove();continue}if(!dot){dot=node('span',undefined,'deal-alert-count');target.append(dot)}dot.textContent=count>9?'9+':String(count);dot.title=count+' deal update'+(count===1?'':'s')}
 }
@@ -1377,13 +1378,15 @@ function showDealPopup(alert,more){
  if(activeDealRoom?.id===alert.deal_id)return;hideDealPopup();const card=node('div',undefined,'deal-popup');card.id='dealPopup';card.setAttribute('role','status');
  const copy=node('div',undefined,'deal-popup-copy');copy.append(node('strong','🔔 '+alert.title),node('span',(alert.deal_code||'Deal')+' · '+(alert.account||'')+(alert.actor_name?' · '+alert.actor_name:'')+(more>1?' · +'+(more-1)+' more':'')));
  const open=button('Open',async()=>{hideDealPopup();const ids=(await api('/deal-alerts')).alerts.filter(a=>a.deal_id===alert.deal_id).map(a=>a.id);if(ids.length)await api('/notifications/read',{ids});paintDealAlertCount(0);void pollDealAlerts();if(['active','awaiting_final','disputed'].includes(alert.status))await openDealRoom(alert.deal_id);else navigate('deals')},'btn');
- const close=button('×',async()=>{hideDealPopup()},'btn ghost deal-popup-close');close.setAttribute('aria-label','Dismiss');
+ const close=button('×',async()=>{hideDealPopup();await markDealAlertsRead(lastDealAlerts.filter(a=>a.deal_id===alert.deal_id));void pollDealAlerts()},'btn ghost deal-popup-close');close.setAttribute('aria-label','Dismiss');
  card.append(copy,open,close);document.body.append(card);dealPopupTimer=setTimeout(hideDealPopup,12000);
 }
 async function pollDealAlerts(){
  if(!me||document.hidden||dealAlertBusy)return;dealAlertBusy=true;
  try{
-  const {alerts}=await api('/deal-alerts');let pending=alerts;
+  const {alerts}=await api('/deal-alerts');let pending=alerts;lastDealAlerts=alerts;
+  // Looking at the Deals list counts as seeing every deal update.
+  if(active==='messages'&&messengerMode==='deals'&&alerts.length){await markDealAlertsRead(alerts);paintDealAlertCount(0);dealAlertSeen=Math.max(dealAlertSeen,...alerts.map(a=>a.id));return}
   // Updates for the deal room that is already open are read on the spot.
   const here=activeDealRoom?alerts.filter(a=>a.deal_id===activeDealRoom.id):[];if(here.length){await api('/notifications/read',{ids:here.map(a=>a.id)});pending=alerts.filter(a=>a.deal_id!==activeDealRoom.id)}
   paintDealAlertCount(pending.length);const fresh=pending.filter(a=>a.id>dealAlertSeen);
