@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {readFileSync} from 'node:fs';
-import worker,{api,verifyGoogle,listingPrice,hasExternalContact,brandedPage,previewPage,normalizeGameUid,nameProblem,nameSkeleton,cleanAccountName} from './worker.mjs';
+import worker,{api,verifyGoogle,listingPrice,hasExternalContact,brandedPage,previewPage,normalizeGameUid,nameProblem,nameSkeleton,cleanAccountName,signInName} from './worker.mjs';
 const sql=new DatabaseSync(':memory:');sql.exec('PRAGMA foreign_keys=ON; CREATE TABLE users(id TEXT PRIMARY KEY,google_sub TEXT UNIQUE,email TEXT,name TEXT,picture TEXT,created_at INTEGER,updated_at INTEGER);CREATE TABLE sessions(token_hash TEXT PRIMARY KEY,user_id TEXT REFERENCES users(id),expires_at INTEGER,created_at INTEGER);');sql.exec(readFileSync(new URL('./schema.sql',import.meta.url),'utf8'));
 const prepare=q=>({values:[],bind(...v){this.values=v;return this},async first(){return sql.prepare(q).get(...this.values)||null},async all(){return {results:sql.prepare(q).all(...this.values)}},async run(){const r=sql.prepare(q).run(...this.values);return {meta:{changes:Number(r.changes)}}}});const db={prepare,async batch(stmts){sql.exec('BEGIN');try{const r=[];for(const s of stmts)r.push(await s.run());sql.exec('COMMIT');return r}catch(e){sql.exec('ROLLBACK');throw e}}};const objects=new Map();const env={DB:db,MEDIA:{put:async(k,v)=>objects.set(k,v),get:async k=>objects.has(k)?{body:objects.get(k),size:objects.get(k).length}:null}};
 const hash=async x=>Buffer.from(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(x))).toString('hex');const tokens={};for(const id of ['owner','admin','buyer','seller','outsider']){sql.prepare('INSERT INTO users VALUES(?,?,?,?,?,?,?)').run(id,id,id+'@example.com',id,'',Date.now(),Date.now());const token=Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('hex');tokens[id]=token;sql.prepare('INSERT INTO sessions VALUES(?,?,?,?)').run(await hash(token),id,Date.now()+1000000,Date.now())}sql.exec("INSERT INTO wm_roles VALUES('owner','owner'),('admin','trusted')");const legacyRules={protectedDeals:false,holdHours:24,autoConfirmHours:72,requireGameUid:false,relistCooldownHours:0,dailyPostsUnverified:1000,activePostsUnverified:1000,dailyPostsVerified:1000,activePostsVerified:5000,dailyNeedPosts:1000,bumpHours:24,expireDays:0,hideSold:false,nameRules:false,chatWarnings:true};sql.prepare("INSERT INTO wm_settings(key,value) VALUES('market_rules',?)").run(JSON.stringify(legacyRules));const logoId=crypto.randomUUID();sql.prepare('INSERT INTO wm_uploads VALUES(?,?,?,?,?)').run(logoId,'admin','image/png',16,Date.now());objects.set(logoId,new Uint8Array([137,80,78,71,13,10,26,10,0,0,0,0,1,2,3,4]));
@@ -664,7 +664,7 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  let r=await call('/api/posts','POST',listing,'pseller');assert.equal(r.status,400);assert.match(r.data.error,/game UID/);
  assert.equal((await call('/api/posts/precheck','POST',{...listing,postIntent:'sell',gameUid:'১২৩ ৪৫৬ ৭৮৯'},'pseller')).status,200);
  r=await call('/api/posts','POST',{...listing,gameUid:'123-456-789'},'pseller');assert.equal(r.status,201);const pListing=r.data.id;
- const stored=sql.prepare('SELECT game_uid_hash,game_uid_enc,game_uid_hint FROM wm_posts WHERE id=?').get(pListing);assert.match(stored.game_uid_hash,/^[a-f0-9]{64}$/);assert.ok(stored.game_uid_enc.startsWith('v1.')&&!stored.game_uid_enc.includes('123456789'));assert.equal(stored.game_uid_hint,'789');
+ const stored=sql.prepare('SELECT uid_hash game_uid_hash,uid_enc game_uid_enc,uid_hint game_uid_hint FROM wm_post_uids WHERE post_id=?').get(pListing);assert.deepEqual({...sql.prepare('SELECT game_uid_hash,game_uid_enc,game_uid_hint FROM wm_posts WHERE id=?').get(pListing)},{game_uid_hash:null,game_uid_enc:null,game_uid_hint:''});assert.match(stored.game_uid_hash,/^[a-f0-9]{64}$/);assert.ok(stored.game_uid_enc.startsWith('v1.')&&!stored.game_uid_enc.includes('123456789'));assert.equal(stored.game_uid_hint,'789');
  const publicCopy=(await call('/api/listing/'+pListing,'GET',undefined,'buyer')).data.post;assert.equal(publicCopy.game_uid_hash,undefined);assert.equal(publicCopy.game_uid_enc,undefined);assert.equal(publicCopy.game_uid_hint,undefined);assert.equal(publicCopy.has_game_uid,true);
  const guestCopy=(await call('/api/feed')).data.posts.find(p=>p.id===pListing);assert.ok(guestCopy);assert.equal(guestCopy.game_uid_hint,undefined);assert.equal(guestCopy.game_uid_hash,undefined);
  assert.equal((await call('/api/my-posts','GET',undefined,'pseller')).data.posts.find(p=>p.id===pListing).game_uid_hint,'789');
@@ -681,8 +681,8 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  r=await call('/api/posts/'+vipListing+'/bump','POST',{},'vip');assert.equal(r.status,429);
  assert.equal((await call('/api/posts/'+vipListing+'/bump','POST',{},'newbie')).status,404);
  sql.prepare('UPDATE wm_posts SET created_at=created_at-25*3600000 WHERE id=?').run(vipListing);const vipVersion=sql.prepare('SELECT version FROM wm_posts WHERE id=?').get(vipListing).version;
- sql.prepare('UPDATE wm_posts SET game_uid_hash=NULL WHERE id=?').run(vipListing);r=await call('/api/posts/'+vipListing+'/bump','POST',{},'vip');assert.equal(r.status,409);assert.match(r.data.error,/Add the game UID/);
- sql.prepare('UPDATE wm_posts SET game_uid_hash=? WHERE id=?').run('restored-'+vipListing,vipListing);
+ const vipUid={...sql.prepare('SELECT * FROM wm_post_uids WHERE post_id=?').get(vipListing)};sql.prepare('DELETE FROM wm_post_uids WHERE post_id=?').run(vipListing);r=await call('/api/posts/'+vipListing+'/bump','POST',{},'vip');assert.equal(r.status,409);assert.match(r.data.error,/Add the game UID/);
+ sql.prepare('INSERT INTO wm_post_uids(post_id,uid_hash,uid_enc,uid_hint,created_at) VALUES(?,?,?,?,?)').run(vipUid.post_id,vipUid.uid_hash,vipUid.uid_enc,vipUid.uid_hint,vipUid.created_at);
  assert.equal((await call('/api/posts/'+vipListing+'/bump','POST',{},'vip')).status,200);assert.equal(sql.prepare('SELECT version FROM wm_posts WHERE id=?').get(vipListing).version,vipVersion);
  assert.equal((await call('/api/feed?limit=30')).data.posts[0].id,vipListing);
  // Expired listings leave the feed but stay on the owner's profile until renewed.
@@ -690,7 +690,7 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  assert.equal((await call('/api/feed?limit=30')).data.posts.some(p=>p.id===vipListing),false);assert.ok((await call('/api/my-posts','GET',undefined,'vip')).data.posts.some(p=>p.id===vipListing));
  assert.equal((await call('/api/posts/'+vipListing+'/bump','POST',{},'vip')).status,200);assert.equal((await call('/api/feed?limit=30')).data.posts[0].id,vipListing);
  // Sold listings leave the feed and the UID cannot be relisted during the cooldown.
- const vipPost=(await call('/api/posts/'+vipListing,'GET',undefined,'vip')).data.post;sql.prepare("UPDATE wm_posts SET game_uid_hash='efootball-uid-hash' WHERE id=?").run(vipListing);
+ const vipPost=(await call('/api/posts/'+vipListing,'GET',undefined,'vip')).data.post;sql.prepare("UPDATE wm_post_uids SET uid_hash='efootball-uid-hash' WHERE post_id=?").run(vipListing);
  assert.equal((await call('/api/posts/'+vipListing+'/availability','POST',{availability:'sold',version:vipPost.version},'vip')).status,200);
  assert.equal((await call('/api/feed?limit=30')).data.posts.some(p=>p.id===vipListing),false);assert.ok(sql.prepare("SELECT until_at FROM wm_uid_cooldowns WHERE uid_hash='efootball-uid-hash'").get().until_at>Date.now());
  const deletable=(await call('/api/posts','POST',{...listing,title:'To delete',gameCategory:'custom',customGameName:'Clash Arena',gameUid:'CA-7788'},'vip'));assert.equal(deletable.status,201);
@@ -727,7 +727,11 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  assert.equal((await handover('pbuyer',{action:'reveal'})).status,409);assert.equal(sql.prepare('SELECT payload FROM wm_deal_handover WHERE deal_id=?').get(pd).payload,null);assert.ok((await handover('pseller')).data.handover.revealed_at);
  assert.equal((await act('pseller','mark_delivered')).status,200);
  assert.equal((await act('pbuyer','buyer_confirm',{checklist:['login_checked']})).status,400);
- assert.equal((await act('pbuyer','buyer_confirm',{checklist:current.checklist_items})).status,200);
+ const checklistRes=await proofReq('pbuyer','checklist');assert.equal(checklistRes.status,201);const checklistProof=(await checklistRes.json()).id;
+ assert.equal((await act('pbuyer','buyer_confirm',{checklist:current.checklist_items,proofId:checklistProof})).status,200);
+ const checklistUrl='https://test.local/api/deals/'+pd+'/proofs/'+checklistProof;
+ assert.equal((await worker.fetch(new Request(checklistUrl,{headers:{cookie:'wm_session='+tokens.pseller}}),env)).status,404);assert.equal((await deal('pseller')).proofs.some(p=>p.kind==='checklist'),false);
+ for(const who of ['pbuyer','admin','owner'])assert.equal((await worker.fetch(new Request(checklistUrl,{headers:{cookie:'wm_session='+tokens[who]}}),env)).status,200,who);assert.ok((await deal('admin')).proofs.some(p=>p.kind==='checklist'));
  current=await deal();assert.equal(current.status,'awaiting_final');assert.ok(current.hold_until>Date.now());
  r=await act('admin','finalize');assert.equal(r.status,409);assert.match(r.data.error,/Safety hold/);
  sql.prepare('UPDATE wm_deals SET delivered_at=delivered_at-25*3600000 WHERE id=?').run(pd);
@@ -742,7 +746,7 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  r=await call('/api/posts','POST',{...listing,title:'Admin own protected ID',gameUid:'777000111'},'admin');assert.equal(r.status,201);const adminListing=r.data.id;
  r=await call('/api/deals','POST',{postId:adminListing},'newbie');assert.equal(r.status,201);const ad=r.data.id;assert.equal(r.data.deal.mode,'direct');
  const adeal=async()=>(await call('/api/deals/'+ad,'GET',undefined,'newbie')).data.deal;const aact=async(who,action,extra={})=>call('/api/deals/'+ad+'/action','POST',{action,version:(await adeal()).version,...extra},who);
- assert.equal((await aact('admin','accept')).status,200);assert.equal((await aact('newbie','mark_paid')).status,200);assert.equal((await aact('admin','confirm_payment',{trx:'NG55'})).status,200);assert.equal((await aact('admin','mark_delivered')).status,200);
+ assert.equal((await aact('admin','accept')).status,200);assert.equal((await aact('newbie','mark_paid')).status,200);r=await aact('admin','cancel');assert.equal(r.status,403);assert.match(r.data.error,/only the Owner can cancel/);assert.equal((await aact('admin','confirm_payment',{trx:'NG55'})).status,200);assert.equal((await aact('admin','mark_delivered')).status,200);
  sql.prepare('UPDATE wm_deals SET delivered_at=delivered_at-25*3600000 WHERE id=?').run(ad);
  r=await aact('admin','finalize',{doubleConfirm:true,reason:'Buyer is silent'});assert.equal(r.status,409);assert.match(r.data.error,/auto-confirms/);
  r=await aact('admin','dispute',{reason:'Buyer says the account was recovered'});assert.equal(r.status,200);
@@ -769,6 +773,28 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  const preview=await previewPage(env,new Request('https://test.local/post/'+pListing),'/post/'+pListing,'<html><head><title>Wize</title></head></html>');
  assert.match(preview,/<meta property="og:title" content="FF &lt;script&gt; &quot;ID&quot; · ৳5,000">/);assert.match(preview,/<title>FF &lt;script&gt; &quot;ID&quot; · Wize<\/title>/);assert.equal(preview.includes('<script>'),false);
  assert.equal(await previewPage(env,new Request('https://test.local/post/'+crypto.randomUUID()),'/post/'+crypto.randomUUID(),'<head>'),'<head>');
+ // An edit cannot turn a post into a game ID listing without a UID.
+ r=await call('/api/posts','POST',{title:'Chat about bundles',details:'General talk',price:null,kind:'Community post',media:[],gameCategory:'community'},'vip');assert.equal(r.status,201);const chatPost=r.data.id;
+ r=await call('/api/posts/'+chatPost+'/edit','POST',{title:'Now selling',details:'Game ID',price:5000,kind:'Game ID',media:[],gameCategory:'free-fire',version:0},'vip');assert.equal(r.status,400);assert.match(r.data.error,/game UID/);
+ // Renewing an expired post or re-opening a sold one cannot create a second live listing for the same UID.
+ r=await call('/api/posts','POST',{...listing,title:'Old expired ID',gameUid:'31313131'},'vip');assert.equal(r.status,201);const expiredPost=r.data.id;sql.prepare('UPDATE wm_posts SET created_at=created_at-31*86400000 WHERE id=?').run(expiredPost);
+ assert.equal((await call('/api/posts','POST',{...listing,title:'Same UID new owner',gameUid:'31313131'},'pbuyer')).status,201);
+ r=await call('/api/posts/'+expiredPost+'/bump','POST',{},'vip');assert.equal(r.status,409);assert.match(r.data.error,/another active post/);
+ r=await call('/api/posts','POST',{...listing,title:'Sold then reopened',gameUid:'42424242'},'vip');assert.equal(r.status,201);const reopened=r.data.id;
+ assert.equal((await call('/api/posts/'+reopened+'/availability','POST',{availability:'sold',version:0},'vip')).status,200);sql.prepare('DELETE FROM wm_uid_cooldowns WHERE uid_hash=(SELECT uid_hash FROM wm_post_uids WHERE post_id=?)').run(reopened);
+ assert.equal((await call('/api/posts','POST',{...listing,title:'Relisted by owner',gameUid:'42424242'},'owner')).status,201);
+ r=await call('/api/posts/'+reopened+'/availability','POST',{availability:'available',version:1},'vip');assert.equal(r.status,409);assert.match(r.data.error,/another active post/);
+ // A cancel that loses a version race leaves the handover and the buyer's cancellation request untouched.
+ r=await call('/api/posts','POST',{...listing,title:'Race test ID',gameUid:'64646464'},'vip');assert.equal(r.status,201);const racePost=r.data.id;
+ r=await call('/api/deals','POST',{postId:racePost,adminId:'admin'},'pbuyer');const rd=r.data.id;const rdeal=async()=>(await call('/api/deals/'+rd,'GET',undefined,'pbuyer')).data.deal;const ract=async(who,action,extra={})=>call('/api/deals/'+rd+'/action','POST',{action,version:(await rdeal()).version,...extra},who);
+ assert.equal((await ract('vip','confirm')).status,200);assert.equal((await ract('admin','accept')).status,200);assert.equal((await ract('admin','confirm_payment',{trx:'RACE1'})).status,200);
+ assert.equal((await call('/api/deals/'+rd+'/handover','POST',{action:'ready'},'pbuyer')).status,200);assert.equal((await call('/api/deals/'+rd+'/handover','POST',{action:'submit',method:'Google',login:'race@example.com',password:'p'},'vip')).status,200);
+ assert.equal((await ract('pbuyer','request_cancel',{reason:'Changed my mind'})).status,200);
+ const realBatch=db.batch;db.batch=async stmts=>{db.batch=realBatch;sql.prepare('UPDATE wm_deals SET version=version+1 WHERE id=?').run(rd);return realBatch(stmts)};
+ assert.equal((await ract('admin','cancel')).status,409);db.batch=realBatch;
+ assert.ok(sql.prepare('SELECT payload FROM wm_deal_handover WHERE deal_id=?').get(rd).payload);assert.equal(sql.prepare('SELECT resolved_at FROM wm_deal_cancel_requests WHERE deal_id=?').get(rd).resolved_at,null);assert.equal((await rdeal()).status,'active');
+ // Google sign-in names: emoji removed, badge words replaced unless it is the Owner.
+ assert.equal(await signInName(db,{name:'Wize Official ✅ Admin',sub:'pbuyer'}),'Member');assert.equal(await signInName(db,{name:'Rahat 🔥',sub:'pbuyer'}),'Rahat');assert.equal(await signInName(db,{name:'Rahat Wize',sub:'owner'}),'Rahat Wize');
  delete env.WM_DATA_KEY;assert.equal((await adeal()).secure_handover,false);env.AI=previousAI;
  console.log('PASS: protected deals (payment proof, one-time encrypted handover, delivery, checklist, safety hold, auto-confirm, Owner dispute decisions), private game UIDs with one active listing, post limits, bump/expiry/sold feed rules, safe names, trust card and share previews.');
 }
@@ -783,6 +809,10 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  const oldDeal=migrated.prepare('SELECT * FROM wm_deals').get();assert.equal(oldDeal.flow,0);assert.equal(oldDeal.status,'active');assert.equal(oldDeal.buyer_done,1);assert.equal(oldDeal.price,4000);
  const oldPost=migrated.prepare('SELECT * FROM wm_posts').get();assert.equal(oldPost.title,'Old ID');assert.equal(oldPost.game_uid_hash,null);assert.equal(oldPost.game_uid_hint,'');
  assert.equal(migrated.prepare('SELECT number FROM wm_deal_ids').get().number,1);
- migrated.exec("UPDATE wm_deals SET status='completed',completed_at=10 WHERE id='d'");assert.equal(migrated.prepare('SELECT count(*) n FROM wm_uid_cooldowns').get().n,0);
- migrated.close();console.log('PASS: migration 021 adds protected-deal and listing-rule columns without changing existing deals, posts or counters.');
+ migrated.exec("UPDATE wm_posts SET game_uid_hash='h1',game_uid_enc='v1.x',game_uid_hint='789' WHERE id='p'");
+ const m022=readFileSync(new URL('./migrations/022_private_post_uids.sql',import.meta.url),'utf8');migrated.exec(m022);migrated.exec(m022);
+ assert.deepEqual({...migrated.prepare('SELECT post_id,uid_hash,uid_enc,uid_hint FROM wm_post_uids').get()},{post_id:'p',uid_hash:'h1',uid_enc:'v1.x',uid_hint:'789'});
+ assert.deepEqual({...migrated.prepare('SELECT game_uid_hash,game_uid_enc,game_uid_hint,title FROM wm_posts').get()},{game_uid_hash:null,game_uid_enc:null,game_uid_hint:'',title:'Old ID'});
+ migrated.exec("UPDATE wm_deals SET status='completed',completed_at=10 WHERE id='d'");assert.equal(migrated.prepare("SELECT uid_hash FROM wm_uid_cooldowns").get().uid_hash,'h1');
+ migrated.close();console.log('PASS: migrations 021 and 022 add protected-deal and listing-rule data without changing existing deals, posts or counters, and keep game UIDs out of wm_posts.');
 }

@@ -23,7 +23,8 @@ function appendDealActions(root,d){
  if(d.status==='proposed'&&party&&!(buyer?d.buyer_ok:d.seller_ok))add('Agree to deal terms','confirm','btn');
  if(['awaiting_admin','proposed'].includes(d.status)&&isAdmin&&d.buyer_ok&&(d.mode==='direct'||d.seller_ok))add('Accept deal','accept','btn');
  if(pending&&isAdmin)add('Reject request','reject');if(pending&&party&&d.mode!=='direct')root.append(button('Choose another Admin / Owner',()=>openListingAdminChoice({deal:d}),'btn secondary'));
- if(open&&isAdmin)add('Cancel deal','cancel');
+ const ownerOnlyCancel=d.flow===1&&d.admin_id===d.seller_id&&me.role!=='owner'&&(d.paid_at||d.funded_at||d.status==='disputed');
+ if(open&&isAdmin&&!ownerOnlyCancel)add('Cancel deal','cancel');
  if(open&&party&&!isAdmin)root.append(button('Request cancellation',()=>openCancelRequest(d),'btn ghost'));
  if(open&&isAdmin&&d.cancel_pending)add('Decline cancellation request','reject_cancel');
  if(d.flow===1)appendProtectedSteps(root,d,{buyer,seller,isAdmin,participant});

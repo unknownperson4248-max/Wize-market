@@ -234,11 +234,13 @@ CREATE TABLE IF NOT EXISTS wm_uid_cooldowns(uid_hash TEXT PRIMARY KEY,until_at I
 CREATE TABLE IF NOT EXISTS wm_deal_handover(deal_id TEXT PRIMARY KEY REFERENCES wm_deals(id),buyer_ready_at INTEGER,submitted_at INTEGER,submit_count INTEGER NOT NULL DEFAULT 0,payload TEXT,revealed_at INTEGER,cleared_at INTEGER);
 CREATE TABLE IF NOT EXISTS wm_deal_proofs(id TEXT PRIMARY KEY,deal_id TEXT NOT NULL REFERENCES wm_deals(id),user_id TEXT NOT NULL REFERENCES users(id),kind TEXT NOT NULL CHECK(kind IN ('payment','checklist','delivery')),object_key TEXT NOT NULL UNIQUE,type TEXT NOT NULL,size INTEGER NOT NULL,created_at INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS wm_deal_proofs_deal ON wm_deal_proofs(deal_id,created_at);
+CREATE TABLE IF NOT EXISTS wm_post_uids(post_id TEXT PRIMARY KEY REFERENCES wm_posts(id),uid_hash TEXT NOT NULL,uid_enc TEXT,uid_hint TEXT NOT NULL DEFAULT '',created_at INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS wm_post_uids_hash ON wm_post_uids(uid_hash);
 CREATE TRIGGER IF NOT EXISTS wm_deal_uid_cooldown AFTER UPDATE OF status ON wm_deals
 WHEN NEW.status='completed' AND OLD.status!='completed'
 BEGIN
  INSERT INTO wm_uid_cooldowns(uid_hash,until_at,reason)
- SELECT p.game_uid_hash,COALESCE(NEW.completed_at,0)+COALESCE(json_extract((SELECT value FROM wm_settings WHERE key='market_rules'),'$.relistCooldownHours'),24)*3600000,'sold'
- FROM wm_posts p WHERE p.id=COALESCE(NEW.post_id,(SELECT post_id FROM wm_threads WHERE id=NEW.thread_id)) AND p.game_uid_hash IS NOT NULL AND p.post_intent='sell'
+ SELECT x.uid_hash,COALESCE(NEW.completed_at,0)+COALESCE(json_extract((SELECT value FROM wm_settings WHERE key='market_rules'),'$.relistCooldownHours'),24)*3600000,'sold'
+ FROM wm_post_uids x JOIN wm_posts p ON p.id=x.post_id WHERE x.post_id=COALESCE(NEW.post_id,(SELECT post_id FROM wm_threads WHERE id=NEW.thread_id)) AND p.post_intent='sell'
  ON CONFLICT(uid_hash) DO UPDATE SET until_at=MAX(wm_uid_cooldowns.until_at,excluded.until_at),reason=excluded.reason;
 END;
