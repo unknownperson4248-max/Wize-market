@@ -331,3 +331,9 @@ body.create-menu-open::after{content:'';position:fixed;inset:0;z-index:140;backg
 #profileMenuItems .profile-drawer-group{border-top:1px solid #ffffff12;border-bottom:1px solid #ffffff12;margin:6px 0}
 #profileMenuItems .profile-drawer-sub{padding:0 0 6px 18px}
 #profileMenuItems .profile-drawer-sub .profile-drawer-item{font-size:14px;padding:10px 12px}
+
+/* Login page: Google first, then email / number */
+#loginModal #authGoogle{display:flex;flex-direction:column;align-items:center;gap:6px;margin:14px 0 4px}
+#loginModal #authGoogle[hidden]{display:none}
+#loginModal .auth-divider{width:100%}
+#guestAuth #guestLogin{min-width:96px}

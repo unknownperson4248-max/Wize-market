@@ -219,34 +219,34 @@ async function pollDealAlerts(){
 }
 setInterval(()=>void pollDealAlerts(),12000);setTimeout(()=>void pollDealAlerts(),2500);document.addEventListener('visibilitychange',()=>{if(!document.hidden)void pollDealAlerts()});
 
-// WhatsApp number / email + password: Sign in, Sign up, Forgot password (request to the Owner) and the one-time reset link.
+// Email / phone number + password: Login, Register, Forgot password (request to the Owner) and the one-time reset link.
 let authMode='signin',pendingResetToken=null;
 function setAuthMode(mode){
  authMode=['signup','forgot','reset'].includes(mode)?mode:'signin';const signup=authMode==='signup',forgot=authMode==='forgot',reset=authMode==='reset';
  $('authSignInTab').setAttribute('aria-selected',String(!signup));$('authSignUpTab').setAttribute('aria-selected',String(signup));document.querySelector('.auth-tabs').hidden=reset;
  $('authMethodField').hidden=reset;$('authLoginField').hidden=reset;$('authNameField').hidden=!signup;$('authPasswordField').hidden=forgot;$('authConfirmField').hidden=!reset;$('authForgot').hidden=authMode!=='signin';$('authGoogle').hidden=forgot||reset;
- $('authIntro').hidden=!(forgot||reset);$('authIntro').textContent=forgot?'Type the WhatsApp number or email of your account and send a request. The Owner will send you a reset link on WhatsApp or email.':reset?'Choose a new password for your account. This link works only once.':'';
- $('authPasswordLabel').textContent=reset?'New password':'Password';$('authSubmit').textContent=signup?'Create account':forgot?'Send request':reset?'Save new password':'Sign in';
- $('authPassword').autocomplete=signup||reset?'new-password':'current-password';$('loginTitle').textContent=signup?'Create your account':forgot?'Forgot password':reset?'Set a new password':'Welcome back';$('authStatus').textContent='';
+ $('authIntro').hidden=!(forgot||reset);$('authIntro').textContent=forgot?'Type the email or number (WhatsApp) of your account and send a request. The Owner will send you a reset link on WhatsApp or email.':reset?'Choose a new password for your account. This link works only once.':'';
+ $('authPasswordLabel').textContent=reset?'New password':'Password';$('authSubmit').textContent=signup?'Register':forgot?'Send request':reset?'Save new password':'Login';
+ $('authPassword').autocomplete=signup||reset?'new-password':'current-password';$('loginTitle').textContent=signup?'Register':forgot?'Forgot password':reset?'Set a new password':'Login';$('authStatus').textContent='';
 }
-function syncAuthMethod(){const phone=document.querySelector('input[name=authMethod]:checked')?.value!=='email',input=$('authLogin');$('authLoginLabel').textContent=phone?'WhatsApp number':'Email';input.type=phone?'tel':'email';input.inputMode=phone?'tel':'email';input.placeholder=phone?'01XXXXXXXXX':'you@example.com'}
+function syncAuthMethod(){const phone=document.querySelector('input[name=authMethod]:checked')?.value==='phone',input=$('authLogin');$('authLoginLabel').textContent=phone?'Phone number (WhatsApp)':'Email';input.type=phone?'tel':'email';input.inputMode=phone?'tel':'email';input.placeholder=phone?'01XXXXXXXXX':'you@example.com'}
 function openAuth(mode){setAuthMode(mode);showLogin()}
 $('authSignInTab').onclick=()=>setAuthMode('signin');$('authSignUpTab').onclick=()=>setAuthMode('signup');$('authForgot').onclick=()=>setAuthMode('forgot');
 for(const radio of document.querySelectorAll('input[name=authMethod]'))radio.onchange=syncAuthMethod;
-$('guestSignIn').onclick=()=>openAuth('signin');$('guestSignUp').onclick=()=>openAuth('signup');
+$('guestLogin').onclick=()=>openAuth('signin');
 async function authPost(path,data){const response=await fetch('/api/auth/'+path,{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'content-type':'application/json'},body:JSON.stringify(data)}),result=await response.json().catch(()=>({}));if(!response.ok)throw Error(result.error||'Something went wrong. Try again.');return result}
 async function afterAuth(message){$('authPassword').value='';$('authConfirm').value='';await refreshMe();closeLogin();if(afterLoginTab){const next=afterLoginTab;afterLoginTab=null;navigate(next)}await loadPage();await acceptGroupInvite();await openSharedProfile();await handleAdminEntry();toast(message)}
 $('authForm').onsubmit=async e=>{
  e.preventDefault();const submit=$('authSubmit'),status=$('authStatus');submit.disabled=true;
  try{
-  const method=document.querySelector('input[name=authMethod]:checked')?.value==='email'?'email':'phone',login=$('authLogin').value.trim(),password=$('authPassword').value;
-  if(authMode!=='reset'&&!login)throw Error(method==='phone'?'Enter your WhatsApp number.':'Enter your email.');
+  const method=document.querySelector('input[name=authMethod]:checked')?.value==='phone'?'phone':'email',login=$('authLogin').value.trim(),password=$('authPassword').value;
+  if(authMode!=='reset'&&!login)throw Error(method==='phone'?'Enter your phone number.':'Enter your email.');
   if(authMode==='forgot'){status.textContent='Sending…';await authPost('forgot',{method,login});status.textContent='✅ Request sent. The Owner will send a reset link to your '+(method==='phone'?'WhatsApp':'email')+' soon.';return}
   if(password.length<8)throw Error('Password must have at least 8 characters.');
-  if(authMode==='reset'){if(password!==$('authConfirm').value)throw Error('The two passwords are not the same.');status.textContent='Saving…';await authPost('reset',{token:pendingResetToken,password});pendingResetToken=null;status.textContent='';await afterAuth('✅ Password changed. You are signed in.');setAuthMode('signin');return}
-  status.textContent=authMode==='signup'?'Creating your account…':'Signing in…';
+  if(authMode==='reset'){if(password!==$('authConfirm').value)throw Error('The two passwords are not the same.');status.textContent='Saving…';await authPost('reset',{token:pendingResetToken,password});pendingResetToken=null;status.textContent='';await afterAuth('✅ Password changed. You are logged in.');setAuthMode('signin');return}
+  status.textContent=authMode==='signup'?'Creating your account…':'Logging in…';
   if(authMode==='signup'){const name=$('authName').value.trim();if(!name)throw Error('Enter your name.');await authPost('signup',{method,login,password,name})}else await authPost('signin',{login,password});
-  status.textContent='';await afterAuth(authMode==='signup'?'🎉 Account created. Welcome!':'✅ Signed in.');
+  status.textContent='';await afterAuth(authMode==='signup'?'🎉 Registered. Welcome!':'✅ Logged in.');
  }catch(error){status.textContent=error.message}finally{submit.disabled=false}
 };
 syncAuthMethod();

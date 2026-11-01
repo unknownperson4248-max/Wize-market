@@ -41,7 +41,7 @@ function appendDealActions(root,d){
 }
 async function loadDeals(){
  $('dealList').dataset.request=String((Number($('dealList').dataset.request)||0)+1);
- if(!me){empty($('dealList'),'Your deal history.','Sign in to view your deals.');return}
+ if(!me){empty($('dealList'),'Your deal history.','Login to view your deals.');return}
  if(!['owner','trusted'].includes(me.role))manageDeals=false;if(dealStatus==='completed'||dealStatus==='cancelled')dealStatus='previous';renderDealFilters();$('dealSearch').hidden=dealStatus==='website';$('dealScopeNote').hidden=true;$('dealCompletedSummary').hidden=true;if(dealStatus==='website'){++dealListRequest;await renderPublicDeals($('dealList'));return}
  const request=++dealListRequest,params=new URLSearchParams({status:dealStatus==='previous'?'previous':'current',q:$('dealSearch').value});
  const data=await api((manageDeals?'/deal-management':'/deals')+'?'+params);if(request!==dealListRequest)return;deals=data.deals.filter(d=>dealStatus==='previous'?['completed','cancelled'].includes(d.status):!['completed','cancelled'].includes(d.status));renderCompletedSummary(data.summary||{total:0,admins:[]});
