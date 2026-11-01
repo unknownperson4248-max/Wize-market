@@ -273,20 +273,17 @@ async function openMyIdsForGroup(){
  },'Close',null);
 }
 
-// Profile links under the bio (Owner and trusted Admins only).
-function linkIcon(url){let host='';try{host=new URL(url).hostname.replace(/^www\./,'')}catch{}return /(^|\.)(facebook\.com|fb\.com|fb\.me|m\.me)$/.test(host)?'📘':/(^|\.)(youtube\.com|youtu\.be)$/.test(host)?'▶️':/(^|\.)(wa\.me|whatsapp\.com)$/.test(host)?'🟢':/(^|\.)(t\.me|telegram\.me|telegram\.org)$/.test(host)?'✈️':/(^|\.)tiktok\.com$/.test(host)?'🎵':/(^|\.)instagram\.com$/.test(host)?'📸':/(^|\.)(discord\.gg|discord\.com)$/.test(host)?'🎮':'🔗'}
-function profileLinksList(links,own){const box=node('section',undefined,'profile-links'),head=node('div',undefined,'profile-links-head');head.append(node('strong','Links'));if(own){const edit=button('✏️',()=>openProfileEditor(),'profile-links-edit');edit.setAttribute('aria-label','Edit links');head.append(edit)}box.append(head);for(const l of links){const a=node('a',undefined,'profile-link');a.href=l.url;a.target='_blank';a.rel='noopener noreferrer nofollow ugc';a.append(node('span',linkIcon(l.url),'profile-link-icon'),node('span',l.label,'profile-link-label'));box.append(a)}return box}
-function profileLinksEditor(){
- const box=node('div',undefined,'profile-links-editor'),list=node('div',undefined,'profile-link-rows');let loaded=false;
- const add=button('＋ Add link',()=>{if(list.children.length<5)list.append(row({}));add.hidden=list.children.length>=5},'btn ghost');
- function row(l){const r=node('div',undefined,'profile-link-row'),label=node('input',undefined,'input'),url=node('input',undefined,'input');label.placeholder='Name (e.g. Facebook page)';label.maxLength=40;label.value=l.label||'';label.setAttribute('aria-label','Link name');url.type='url';url.inputMode='url';url.placeholder='https://…';url.maxLength=300;url.value=l.url||'';url.setAttribute('aria-label','Link address');r.append(label,url,button('✕',()=>{r.remove();add.hidden=false},'btn ghost profile-link-remove'));return r}
- box.append(node('label','🔗 Links'),node('p','Only Owner and Admins can add links. Add up to 5, like your Facebook page, YouTube or WhatsApp group.','hint'),list,add);
- api('/profile/'+encodeURIComponent(me.id)).then(({profile})=>{list.replaceChildren(...(profile.links||[]).map(row));add.hidden=list.children.length>=5;loaded=true}).catch(()=>{});
- return {element:box,value:()=>loaded?[...list.children].map(r=>{const [label,url]=r.querySelectorAll('input');return {label:label.value.trim(),url:url.value.trim()}}).filter(l=>l.url):undefined};
+// Profile: the groups this member made (Owner / Admins), with member count and Open or Join.
+function profileGroupsList(groups){
+ const box=node('section',undefined,'profile-groups'),head=node('div',undefined,'profile-groups-head');head.append(node('strong','👥 Groups'),node('small',groups.length+(groups.length===1?' group':' groups')));box.append(head);
+ for(const g of groups){const row=node('div',undefined,'profile-group'),logo=avatar({name:g.name,picture:g.logo}),copy=node('div',undefined,'profile-group-copy');logo.classList.add('profile-group-logo');copy.append(node('strong',g.name),node('small',g.members+(g.members===1?' member':' members')));
+  const open=async()=>{navigate('messages');await loadMessages();await openChat('group',g.id)};
+  row.append(logo,copy,g.joined?button('Open',open,'btn secondary profile-group-action'):button('Join',async()=>{if(!requireLogin())return;await api('/groups/'+g.id+'/join',{});toast('✅ You joined '+g.name+'.');await open()},'btn profile-group-action'));box.append(row)}
+ return box;
 }
 
-// Messenger-style chat: a small centred time line when there is a long gap between messages.
-function chatTimeDivider(time){const d=new Date(time),today=new Date(),sameDay=d.toDateString()===today.toDateString(),yesterday=new Date(today.getTime()-86400000).toDateString()===d.toDateString(),clock=d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});return node('div',sameDay?clock:yesterday?'Yesterday '+clock:d.toLocaleDateString([],{day:'numeric',month:'short',...(d.getFullYear()!==today.getFullYear()?{year:'numeric'}:{})})+' at '+clock,'chat-time-divider')}
+// Chat: a date line at the start of each day - "Today · 1 Nov", "Yesterday · 31 Oct", or the date.
+function chatDayDivider(time){const d=new Date(time),today=new Date(),yesterday=new Date(today.getFullYear(),today.getMonth(),today.getDate()-1),date=d.toLocaleDateString('en-GB',{day:'numeric',month:'short',...(d.getFullYear()!==today.getFullYear()?{year:'numeric'}:{})});return node('div',d.toDateString()===today.toDateString()?'Today · '+date:d.toDateString()===yesterday.toDateString()?'Yesterday · '+date:d.toLocaleDateString('en-GB',{weekday:'short'})+', '+date,'chat-time-divider')}
 
 // Photo editor for chat pictures: crop, draw, blur (hide numbers or private details), rotate and undo.
 let photoEditor=null;
@@ -334,10 +331,6 @@ async function openImageEditor(item){
  document.addEventListener('keydown',onKey);addEventListener('resize',placeCrop);setMode('draw');done.focus();
 }
 
-// Chat: every run of messages shows who sent it - name and badge above, photo beside the last bubble (mine too).
-function openChatPerson(m,kind,trigger){if(m.user_id===me?.id)return showProfile(me.id);if(kind==='group')return openMemberActions({id:m.user_id,name:m.name,picture:m.picture,verified:m.verified},trigger);if(kind==='private'&&typeof openPeerInfo==='function')return openPeerInfo();return showProfile(m.user_id)}
-function chatSenderLine(m,kind,mine){const line=node('div',undefined,'msg-sender'+(mine?' mine':'')),name=node('button',mine?m.name||me?.name||'You':m.name,'msg-sender-name');name.type='button';name.setAttribute('aria-label',(mine?'Your profile':'Open '+m.name));name.onclick=()=>openChatPerson(m,kind,name);line.append(name,verifiedMark(m.role||'member',undefined,!!m.verified));return line}
-function chatFace(m,kind,mine){const face=node('button',undefined,'msg-face');face.type='button';face.setAttribute('aria-label',mine?'Your profile':'Open '+m.name);face.onclick=()=>openChatPerson(m,kind,face);face.append(avatar({id:m.user_id,name:m.name,picture:m.picture,role:m.role,verified:m.verified}));if(m.verified||m.role==='owner'){const tick=node('span',undefined,'msg-face-tick');tick.innerHTML='<svg viewBox="0 0 24 24"><path d="m6.5 12.5 3.6 3.6L17.5 8.5"/></svg>';face.append(tick)}return face}
 
 // ---- Owner-editable texts and templates (Admin Panel → 📝 Texts & templates) ----
 globalThis.wmSiteContent=null;

@@ -193,42 +193,24 @@ body{background:var(--bg)!important}
 .profile-link-remove{padding:8px 10px}
 @media(max-width:560px){.profile-link-row{grid-template-columns:minmax(0,1fr) auto}.profile-link-row input[type=url]{grid-column:1;grid-row:2}}
 
-/* Messenger-style chat bubbles: mine on the right in blue, others on the left in grey with a small photo. */
-.chat-open #chatMessages{gap:0;padding:12px 12px 16px}
-#chatMessages>.bubble{position:relative;align-self:flex-start;max-width:min(72%,520px);margin:1px 0 1px 44px;padding:8px 12px;border:0!important;border-radius:18px;background:#24384b!important;color:#eef6ff!important;box-shadow:none;line-height:1.4}
-#chatMessages>.bubble.mine{align-self:flex-end;margin:1px 44px 1px 40px;background:#0a7cff!important;color:#fff!important}
-#chatMessages>.bubble.run-start{margin-top:10px}
-#chatMessages>.bubble:not(.mine):not(.run-end){border-bottom-left-radius:5px}
-#chatMessages>.bubble:not(.mine):not(.run-start){border-top-left-radius:5px}
-#chatMessages>.bubble.mine:not(.run-end){border-bottom-right-radius:5px}
-#chatMessages>.bubble.mine:not(.run-start){border-top-right-radius:5px}
-#chatMessages>.bubble p{margin:0;font-size:15px;color:inherit!important}
-#chatMessages>.bubble .msg-face{position:absolute;left:-42px;bottom:0;width:32px;height:32px;padding:0;border:0;background:none;cursor:pointer}
-#chatMessages>.bubble.mine .msg-face{left:auto;right:-42px}
-#chatMessages>.bubble .msg-face>.avatar{width:32px;height:32px;border-radius:50%;overflow:hidden;margin:0;font-size:12px}
-#chatMessages>.bubble .msg-face>.avatar img{width:100%;height:100%;object-fit:cover}
-.msg-face-tick{position:absolute;right:-4px;bottom:-3px;width:15px;height:15px;box-sizing:border-box;border-radius:50%;background:#1877f2;border:2px solid var(--bg);display:grid;place-items:center}
-.msg-face-tick svg{width:9px;height:9px;fill:none;stroke:#fff;stroke-width:3.4;stroke-linecap:round;stroke-linejoin:round}
-#chatMessages>.bubble .message-author{margin:0 0 3px;gap:5px;background:none}
-#chatMessages>.bubble .message-author>.avatar{display:none}
-#chatMessages>.bubble .message-author>strong{font-size:12px;color:#9fc2e0}
-#chatMessages>.bubble .message-time{display:none;margin-top:3px;font-size:10px;text-align:right;color:#ffffffb3!important}
-#chatMessages>.bubble:not(.mine) .message-time{color:#9fb6cc!important}
-#chatMessages>.bubble.run-end .message-time{display:block}
-#chatMessages>.bubble:has(.social-menu){padding-right:12px}
-#chatMessages>.bubble>.social-menu{top:calc(50% - 15px);right:-36px}
-#chatMessages>.bubble.mine>.social-menu{right:auto;left:-36px}
-#chatMessages>.bubble>.social-menu[open]{z-index:30}
-#chatMessages>.bubble>.social-menu>summary{width:30px;height:30px;border-radius:50%;background:#ffffff12;color:#b9cde0;opacity:1}
-#chatMessages>.bubble.mine>.social-menu .social-menu-items{left:0;right:auto}
-#chatMessages>.bubble:not(.mine)>.social-menu .social-menu-items{right:0;left:auto}
-#chatMessages>.bubble:not(.mine):has(.social-menu){margin-right:40px}
-#chatMessages>.bubble.media-bubble{padding:3px!important;background:transparent!important}
-#chatMessages>.bubble.media-bubble .chat-media{margin:0;border-radius:16px;max-height:320px}
-#chatMessages>.bubble.media-bubble .message-time{padding:0 8px 3px;color:#9fb6cc!important}
-#chatMessages>.bubble.media-bubble .message-author{padding:4px 8px 0}
+/* Chat messages: photo, name and badge on top, the message under them, in a light box (mine on the right).
+   Every message shows its time; a date line starts each day (Today / Yesterday / date). */
+.chat-open #chatMessages{gap:8px;padding:12px 12px 16px}
+#chatMessages>.bubble{position:relative;align-self:flex-start;max-width:min(88%,560px);margin:0;padding:8px 12px 6px;border:1px solid #ffffff10!important;border-radius:16px;background:#ffffff08!important;color:#e8f3ff!important;box-shadow:none;line-height:1.45}
+#chatMessages>.bubble.mine{align-self:flex-end;background:#2f86e01c!important;border-color:#4a9be633!important}
+#chatMessages>.bubble .message-author{display:flex;align-items:center;flex-wrap:wrap;gap:4px 7px;margin:0 0 3px;padding:0;border:0;background:none;color:#d6e8f8;text-align:left}
+#chatMessages>.bubble .message-author>.avatar{display:grid;place-items:center;width:28px;height:28px;margin:0;font-size:11px}
+#chatMessages>.bubble .message-author>strong{font-size:13px;font-weight:700;color:#d6e8f8}
+#chatMessages>.bubble .message-author .trust-badges{margin-left:0}
+#chatMessages>.bubble>p,#chatMessages>.bubble>.chat-media,#chatMessages>.bubble>.chat-post-card,#chatMessages>.bubble>audio{margin-left:35px!important}
+#chatMessages>.bubble>p{margin:0;font-size:15px;color:inherit!important}
+#chatMessages>.bubble>.chat-media{display:block;margin-top:4px;max-width:calc(100% - 35px);border-radius:12px}
+#chatMessages>.bubble>.chat-post-card{box-sizing:border-box;width:calc(100% - 35px);max-width:calc(100% - 35px);margin-top:4px;margin-bottom:6px}
+#chatMessages>.bubble .message-time{display:block;margin-top:2px;font-size:10px;text-align:right;color:#8ea9c3!important}
+#chatMessages>.bubble:has(.social-menu){padding-right:34px}
+#chatMessages>.bubble>.social-menu{top:5px;right:3px}
 #chatMessages>.bubble.message-removed{background:transparent!important;border:1px dashed #3d5873!important;color:#8ea6bf!important}
-.chat-time-divider{align-self:center;margin:16px 0 6px;font-size:11px;font-weight:600;letter-spacing:.3px;text-transform:uppercase;color:#8ea6bf}
+.chat-time-divider{align-self:center;margin:12px 0 4px;padding:3px 12px;border-radius:999px;background:#ffffff0a;font-size:11px;font-weight:700;letter-spacing:.2px;color:#9db4ca}
 
 /* Photo editor (chat pictures) */
 .composer-file .edit-composer-file{position:absolute;left:4px;bottom:4px;border:0;border-radius:10px;background:#000000b3;color:#fff;font-size:10px;padding:3px 6px}
@@ -264,21 +246,7 @@ body #profileTabs .profile-tab[aria-selected=true],body .profile-tabs .profile-t
 .chat-subtitle{display:flex;align-items:center;min-height:20px;margin-top:1px}
 .chat-subtitle[hidden]{display:none}
 .chat-subtitle .trust-badges{transform:scale(.85);transform-origin:left center}
-#chatMessages>.bubble .message-author{flex-wrap:wrap;row-gap:3px}
-#chatMessages>.bubble .message-author .trust-badges{flex:none;transform:scale(.88);transform-origin:left center}
 
-/* Sender line above each run: name + badge (others on the left, mine on the right). */
-.msg-sender{display:flex;align-items:center;gap:5px;max-width:82%;min-width:0;margin:12px 0 3px 46px}
-.msg-sender.mine{align-self:flex-end;margin:12px 46px 3px 0}
-.msg-sender-name{min-width:0;padding:0;border:0;background:none;color:#a9c8e4;font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
-.msg-sender.mine .msg-sender-name{color:#8fb9e0}
-.msg-sender .trust-badges{flex:none;margin-left:2px;gap:3px}
-.msg-sender .trust-pill{font-size:9px;padding:1px 5px 1px 3px}
-.msg-sender .trust-pill .social-icon,.msg-sender .trust-pill .social-icon svg{width:11px;height:11px}
-.msg-sender .verified-tick{width:15px;height:15px}
-.msg-sender .verified-tick svg{width:10px;height:10px}
-.msg-sender+.bubble.run-start{margin-top:0}
-.chat-time-divider+.msg-sender{margin-top:4px}
 
 /* Post type chooser: Sell · Normal · Need (Normal sits a little higher in the middle). */
 .create-fan{width:300px;height:128px}
@@ -302,3 +270,16 @@ body #profileTabs .profile-tab[aria-selected=true],body .profile-tabs .profile-t
 /* Dim the page behind the post type chooser so the three options are easy to read. */
 body.create-menu-open::after{content:'';position:fixed;inset:0;z-index:140;background:#020a14b3;pointer-events:none;animation:fade-in .15s ease-out both}
 @keyframes fade-in{from{opacity:0}to{opacity:1}}
+
+/* Profile: groups the member made */
+.profile-groups{display:flex;flex-direction:column;gap:8px;width:100%;box-sizing:border-box;margin:6px 0 0;padding:12px 16px 0;border-top:1px solid #ffffff12;text-align:left;align-self:stretch}
+.profile-groups-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.profile-groups-head strong{font-size:16px;color:#eef6ff}
+.profile-groups-head small{font-size:12px;color:#8ea9c3}
+.profile-group{display:flex;align-items:center;gap:12px;min-width:0;padding:10px 12px;border-radius:14px;background:#ffffff08;border:1px solid #ffffff10}
+.profile-group-logo{flex:none;width:46px!important;height:46px!important;border-radius:12px!important;overflow:hidden;margin:0}
+.profile-group-logo img{width:100%;height:100%;object-fit:cover}
+.profile-group-copy{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.profile-group-copy strong{font-size:14px;color:#e8f3ff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.profile-group-copy small{font-size:12px;color:#8ea9c3}
+.profile-group-action{flex:none;min-width:72px;padding:8px 14px}
