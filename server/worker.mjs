@@ -178,7 +178,7 @@ const DEFAULT_CONTENT={
  templates:{
   sell:{heading:'Your next great listing.',titleHint:'Example: FF Level 75 Evo ID',details:'',tip:''},
   need:{heading:'What are you looking for?',titleHint:'Example: Need FF ID with Evo guns',details:'',tip:''},
-  normal:{heading:'Share something with the community',titleHint:'Example: ⚠️ Scammer alert',details:'',tip:'Scammer alerts, fun or community posts. No price or game needed.'}
+  normal:{heading:'Share something with the community',titleHint:'What do you want to share?',details:'',tip:'Share anything with the community. No price or game needed.'}
  },
  verification:{intro:'Send your NID photo and WhatsApp number. The Owner checks them and gives you the blue tick ✓. Verified members can post more IDs.',whatsappLabel:'WhatsApp number',nidLabel:'NID image (private, required)',consent:'I agree to share my NID photo and WhatsApp number with the Owner for verification.',questions:[]}
 };
@@ -624,7 +624,7 @@ if(p==='/api/verification'&&method==='POST'){
  const {verification:form}=await siteContent(db),given=Array.isArray(d.answers)?d.answers:[];
  const answers=form.questions.map((q,i)=>{const a=typeof given[i]==='string'?given[i].trim():'';need(a.length<=500,'Answers can be up to 500 characters');need(!q.required||a,'Please answer: '+q.label);return {q:q.label,a}});
  const pending=await one(db,"SELECT id FROM wm_verification_requests WHERE user_id=? AND kind=? AND status='pending'",u.id,d.kind);
- need(!pending,'You already have a pending request for this type',409);
+ need(!pending,'⏳ Already sent. Please wait for the Owner to check it.',409);
  await run(db,'INSERT INTO wm_verification_requests(id,user_id,kind,contact,document_id,status,created_at,whatsapp,location_lat,location_lng,location_accuracy,location_at,answers) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',uuid(),u.id,d.kind,contact,evidence.id,'pending',now(),whatsapp,place?Math.round(place.lat*1e6)/1e6:null,place?Math.round(place.lng*1e6)/1e6:null,place?Math.round(place.accuracy):null,place?now():null,JSON.stringify(answers));
  return reply({ok:true},201);
 }

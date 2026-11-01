@@ -5,8 +5,6 @@ button.trust-pill{cursor:pointer;min-height:0;height:auto;width:auto;box-shadow:
 .trust-pill .social-icon svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2}
 .trust-pill.verified{color:#78f0b4;background:#0d2f24;border-color:#2bd38a66}
 .trust-pill.admin{color:#ffd56b;background:#33270b;border-color:#f2c14e80}
-.avatar.ring-verified{outline:2px solid #2bd38a;outline-offset:1px}
-.avatar.ring-admin{outline:2px solid #f2c14e;outline-offset:1px}
 
 .deal-room #dealRoomSummary{max-height:52dvh;overflow:auto;overscroll-behavior:contain}
 .deal-progress{margin-top:8px;padding:10px;border:1px solid var(--line);border-radius:12px;background:#0a1b2c;display:grid;gap:8px}
@@ -290,3 +288,21 @@ body.create-menu-open::after{content:'';position:fixed;inset:0;z-index:140;backg
 .verify-prompt:hover,.verify-prompt:focus-visible{background:#163a5c;border-style:solid}
 .verify-prompt.pending{border-color:#c9a24a;color:#f6dc9a;background:#2c2310}
 .verify-prompt.pending .verify-prompt-icon{border-color:transparent;font-size:13px}
+
+/* One ring around a photo: gold Owner, purple Admin, blue Verified (no extra gradient or border rings). */
+.avatar.ring-owner{outline:2px solid #f5b342!important;outline-offset:2px!important;box-shadow:none!important}
+.avatar.ring-admin{outline:2px solid #9b6bff!important;outline-offset:2px!important;box-shadow:none!important}
+.avatar.ring-verified{outline:2px solid #3b9dff!important;outline-offset:2px!important;box-shadow:none!important}
+.social-author>.post-avatar-button,.post-avatar-button{padding:0!important;background:none!important;box-shadow:none!important;border:0!important}
+.post-avatar-button .avatar{border:0!important;box-shadow:none!important;margin:2px}
+/* Messages (toasts) at the top of the screen, short and easy to notice. */
+#toast{top:max(12px,env(safe-area-inset-top))!important;bottom:auto!important;padding:9px 16px;border-radius:999px;font-size:13px;font-weight:600;line-height:1.35;text-align:center;max-width:min(92vw,420px);width:max-content;box-shadow:0 10px 28px #000a;z-index:300!important;animation:toast-drop .18s ease-out}
+@keyframes toast-drop{from{opacity:0;transform:translate(-50%,-10px)}to{opacity:1;transform:translate(-50%,0)}}
+/* ✏️ Edit profile next to Share on the cover */
+.profile-cover-edit{position:absolute;right:52px;top:10px;z-index:6;display:grid;place-items:center;width:35px;height:35px;padding:0;border:1px solid #697cac77;border-radius:11px;background:#09152bdb;color:#e7f2ff;cursor:pointer}
+.profile-cover-edit .social-icon{width:18px;height:18px}
+#myPosts>.profile-groups .profile-groups-head{display:none}
+/* Groups tab on the profile */
+#myPosts>.profile-groups{border-top:0;padding:4px 0 0;margin:0}
+/* The profile page used to stick out 13px on each side on phones (it could slide sideways and cut the edges). */
+@media(max-width:720px){.profile-page #page-profile{margin-left:0!important;margin-right:0!important}}

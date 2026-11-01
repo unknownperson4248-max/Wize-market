@@ -124,7 +124,7 @@ const RULE_FIELDS=[
  ['dailyPostsUnverified','number','🆕 New Sell Posts per day · unverified member','Verify chara member 24 ghonta-e koyta notun Sell Post dite parbe.'],
  ['activePostsUnverified','number','📦 Sell Posts at the same time · unverified member'],
  ['dailyNeedPosts','number','🔎 New Need Posts per day · unverified member'],
- ['dailyNormalPosts','number','💬 Normal Posts per day · each member','Scammer alert, fun ba community post (kono category ba price lage na). Admin ar Owner er limit nai.'],
+ ['dailyNormalPosts','number','💬 Normal Posts per day · each member','Community ba fun post (kono category ba price lage na). Admin ar Owner er limit nai.'],
  ['dailyPostsVerified','number','✔️ New posts per day · verified member'],
  ['activePostsVerified','number','✔️ Sell Posts at the same time · verified member','Admin ar Owner er kono limit nai.'],
  ['section','🚀 Boost & feed'],
