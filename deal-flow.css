@@ -337,3 +337,5 @@ body.create-menu-open::after{content:'';position:fixed;inset:0;z-index:140;backg
 #loginModal #authGoogle[hidden]{display:none}
 #loginModal .auth-divider{width:100%}
 #guestAuth #guestLogin{min-width:96px}
+/* Google's button sits in an iframe; on a dark page the browser paints a white box behind it unless the iframe uses the light scheme. */
+#googleButton,#googleButton iframe{color-scheme:light}
