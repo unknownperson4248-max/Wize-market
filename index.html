@@ -497,6 +497,10 @@ body.create-menu-open::after{content:'';position:fixed;inset:0;z-index:140;backg
 #listingAdminChoices .admin-choice[hidden],#listingAdminChoices .admin-choice-section[hidden],.admin-search-empty[hidden]{display:none}
 .admin-choice .admin-info{flex:none;width:34px;height:34px;padding:0;border:1px solid #3b6584;border-radius:50%;background:#0f2a42;font-size:15px;cursor:pointer}
 .admin-choice .avatar{flex:none}
+
+.admin-discover-toggle{width:100%;margin:12px 0 4px}
+.admin-discover{margin-top:8px}
+.admin-discover[hidden]{display:none}
 </style></head><body class="auth-pending"><aside id="appInstallBanner" class="app-install-banner" hidden aria-label="Install WIZE MARKET"><img src="/app-logo.png" width="38" height="38" alt=""><div><strong>WIZE MARKET app</strong><small>Install on your phone</small></div><button id="installApp" class="btn">Install</button><button id="dismissInstall" type="button" aria-label="Dismiss install suggestion">×</button></aside>
 <div class="shell"><aside class="side"><p class="side-caption">YOUR MARKETPLACE</p><nav class="nav" id="desktopNav" aria-label="Main navigation"></nav><button id="dealManagement" class="btn secondary" hidden>Deal Management</button><p class="side-note" data-app-description>Play. Connect. Trade.</p></aside><main>
 <section class="page" id="page-home"><div class="page-heading feed-heading"><div><h1>My feed</h1></div><div class="guest-auth" id="guestAuth"><button type="button" class="btn secondary" id="guestSignIn">Sign in</button><button type="button" class="btn" id="guestSignUp">Sign up</button></div><button type="button" class="feed-header-search" id="openMarketSearch" aria-label="Search accounts and posts"><span id="feedSearchIcon" aria-hidden="true"></span><span>Search…</span></button><input id="marketSearch" type="hidden" value=""><div id="feedOptions"></div></div><div class="feed-compact-bar" role="group" aria-label="Search and filter feed"><label class="compact-select compact-games"><span id="feedGameIcon" aria-hidden="true"></span><select id="feedCategory" aria-label="Game category"></select></label><div class="compact-price-control"><button type="button" id="priceFilterToggle" aria-label="Select price range" aria-expanded="false" aria-controls="priceFilterPopover"><span id="feedPriceIcon" aria-hidden="true"></span><span id="feedFilterSummary">Price</span><span class="compact-chevron" aria-hidden="true"></span></button><div id="priceFilterPopover" class="price-filter-popover" hidden><form id="feedFilterForm"><div class="price-popover-heading"><strong>Price range</strong><button type="button" id="closePriceFilter" aria-label="Close price filter">×</button></div><div class="price-inputs"><div><label for="feedMinPrice">Minimum (৳)</label><input id="feedMinPrice" class="input" maxlength="40" placeholder="e.g. 5k"></div><div><label for="feedMaxPrice">Maximum (৳)</label><input id="feedMaxPrice" class="input" maxlength="40" placeholder="e.g. 100k"></div></div><div id="quickPriceRanges" class="quick-price-ranges" role="group" aria-label="Quick price ranges"></div><div class="price-filter-actions"><button class="btn ghost" type="button" id="resetFeedFilters">Clear price</button><button class="btn" type="submit">Apply</button></div></form></div></div><label class="compact-select compact-sort"><span id="feedSortIcon" aria-hidden="true"></span><select id="feedSort" aria-label="Sort posts"><option value="latest">Latest</option><option value="price-low">Price ↑</option><option value="price-high">Price ↓</option></select></label></div><p class="feed-status" id="feedStatus" role="status"></p><div id="searchProfiles"></div><div id="homeFeed"><div class="card">Loading posts…</div></div><button type="button" id="loadMorePosts" class="btn secondary" hidden>Load more posts</button></section>
@@ -1303,16 +1307,23 @@ async function openListingAdminChoice({postId,deal}={}){
  const section=text=>node('h4',text,'admin-choice-section');let options=0;
  if(data.mode==='direct'){root.append(choice(data.sellerAdmin,'This ID belongs to this Admin'));options=1;$('listingAdminHelp').textContent='This ID belongs to an Admin. They will accept your deal and look after it.'}
  else{
-  const shown=new Set(),groupAdmins=[],add=(list,title,note)=>{const items=(list||[]).filter(a=>a&&!shown.has(a.id));if(!items.length)return 0;root.append(section(title));for(const a of items){shown.add(a.id);root.append(choice(a,typeof note==='function'?note(a):note));options++}return items.length};
-  for(const a of [...(data.recommended||[]),...(data.myGroupAdmins||[])])if(!groupAdmins.some(g=>g.id===a.id))groupAdmins.push(a);
-  const search=node('input',undefined,'input admin-search');search.type='search';search.placeholder='🔎 Search Admin by name';search.setAttribute('aria-label','Search Admins');
-  search.oninput=()=>{const q=search.value.trim().toLowerCase();let found=0;for(const row of root.querySelectorAll('.admin-choice')){const show=!q||row.dataset.name.includes(q);row.hidden=!show;if(show)found++}for(const h of root.querySelectorAll('.admin-choice-section'))h.hidden=!!q;root.querySelector('.admin-search-empty')?.toggleAttribute('hidden',found>0)};
-  root.append(search,Object.assign(node('p','No Admin found with that name.','hint admin-search-empty'),{hidden:true}));
-  const mine=add(data.usedBefore,'⭐ Your Admins',a=>'Used in '+a.times+' of your deal'+(a.times===1?'':'s'));
-  const fromGroups=add(groupAdmins.filter(a=>a.id!==data.owner?.id),'👥 Admins from your groups',a=>a.groups?.map(g=>g.name).join(' · ')||'Admin of a group you joined');
-  add(data.owner?[data.owner]:[],'🛡️ Owner','Website owner · safe if you are new');
-  add([...(data.fallback||[]),...(data.allAdmins||[])],'🧑‍💼 All Admins · most deals first','Admin');
-  $('listingAdminHelp').textContent=mine?'Your Admin from earlier deals is selected. You can choose any other Admin.':fromGroups?'Pick an Admin you know. New here? Choose the Owner.':'Choose any Admin. New here? The Owner is safe.';
+  // Default: only related Admins (groups the buyer or the seller joined), then the website account. "Discover" shows every other Admin.
+  const shown=new Set(),add=(list,title,note,box=root)=>{const items=(list||[]).filter(a=>a&&!shown.has(a.id));if(!items.length)return 0;box.append(section(title));for(const a of items){shown.add(a.id);box.append(choice(a,typeof note==='function'?note(a):note));options++}return items.length};
+  const other=data.iAm==='seller'?'the buyer':'the seller',usedBefore=new Set((data.usedBefore||[]).map(a=>a.id));
+  const relatedNote=a=>a.mine&&a.theirs?'Admin of groups you and '+other+' joined'+(a.my_groups?' · '+a.my_groups:''):a.mine?'Admin of your group'+(a.my_groups?' · '+a.my_groups:''):'Admin of '+other+'’s group';
+  const related=add((data.relatedAdmins||[]).filter(a=>a.id!==data.owner?.id),'👥 Admins from your groups',relatedNote);
+  add(data.owner?[data.owner]:[],'🛡️ Website','Official website account · safe if you are new');
+  const rest=[...(data.fallback||[]),...(data.allAdmins||[])].filter((a,i,list)=>a&&!shown.has(a.id)&&list.findIndex(b=>b.id===a.id)===i);
+  if(rest.length){
+   const discover=node('div',undefined,'admin-discover');discover.hidden=true;
+   const search=node('input',undefined,'input admin-search');search.type='search';search.placeholder='🔎 Search Admin by name';search.setAttribute('aria-label','Search Admins');
+   const emptyNote=node('p','No Admin found with that name.','hint admin-search-empty');emptyNote.hidden=true;
+   search.oninput=()=>{const q=search.value.trim().toLowerCase();let found=0;for(const row of discover.querySelectorAll('.admin-choice')){const show=!q||row.dataset.name.includes(q);row.hidden=!show;if(show)found++}emptyNote.hidden=found>0};
+   discover.append(search,emptyNote);add(rest,'🧑‍💼 All Admins · most deals first',a=>usedBefore.has(a.id)?'Used in your earlier deal':'Admin',discover);
+   const open=node('button','🔎 Discover more Admins ('+rest.length+')','btn secondary admin-discover-toggle');open.type='button';open.onclick=()=>{discover.hidden=false;open.hidden=true;search.focus()};
+   root.append(open,discover);if(!related&&!data.owner){discover.hidden=false;open.hidden=true}
+  }
+  $('listingAdminHelp').textContent=related?'These Admins are from your groups or '+other+'’s groups. Not sure? Choose the website account.':'You and '+other+' have no group Admin, so the website account will handle this deal. You can also discover other Admins.';
  }
  if(first){first.checked=true;listingAdminDraft.selected=first.value}
  $('listingOwnerChoice').hidden=true;$('submitListingAdmin').disabled=!options;if(!options)$('listingAdminHelp').textContent='No Admin is free right now. Please try again later.';$('listingAdminModal').hidden=false;

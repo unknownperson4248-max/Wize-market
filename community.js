@@ -81,16 +81,23 @@ async function openListingAdminChoice({postId,deal}={}){
  const section=text=>node('h4',text,'admin-choice-section');let options=0;
  if(data.mode==='direct'){root.append(choice(data.sellerAdmin,'This ID belongs to this Admin'));options=1;$('listingAdminHelp').textContent='This ID belongs to an Admin. They will accept your deal and look after it.'}
  else{
-  const shown=new Set(),groupAdmins=[],add=(list,title,note)=>{const items=(list||[]).filter(a=>a&&!shown.has(a.id));if(!items.length)return 0;root.append(section(title));for(const a of items){shown.add(a.id);root.append(choice(a,typeof note==='function'?note(a):note));options++}return items.length};
-  for(const a of [...(data.recommended||[]),...(data.myGroupAdmins||[])])if(!groupAdmins.some(g=>g.id===a.id))groupAdmins.push(a);
-  const search=node('input',undefined,'input admin-search');search.type='search';search.placeholder='🔎 Search Admin by name';search.setAttribute('aria-label','Search Admins');
-  search.oninput=()=>{const q=search.value.trim().toLowerCase();let found=0;for(const row of root.querySelectorAll('.admin-choice')){const show=!q||row.dataset.name.includes(q);row.hidden=!show;if(show)found++}for(const h of root.querySelectorAll('.admin-choice-section'))h.hidden=!!q;root.querySelector('.admin-search-empty')?.toggleAttribute('hidden',found>0)};
-  root.append(search,Object.assign(node('p','No Admin found with that name.','hint admin-search-empty'),{hidden:true}));
-  const mine=add(data.usedBefore,'⭐ Your Admins',a=>'Used in '+a.times+' of your deal'+(a.times===1?'':'s'));
-  const fromGroups=add(groupAdmins.filter(a=>a.id!==data.owner?.id),'👥 Admins from your groups',a=>a.groups?.map(g=>g.name).join(' · ')||'Admin of a group you joined');
-  add(data.owner?[data.owner]:[],'🛡️ Owner','Website owner · safe if you are new');
-  add([...(data.fallback||[]),...(data.allAdmins||[])],'🧑‍💼 All Admins · most deals first','Admin');
-  $('listingAdminHelp').textContent=mine?'Your Admin from earlier deals is selected. You can choose any other Admin.':fromGroups?'Pick an Admin you know. New here? Choose the Owner.':'Choose any Admin. New here? The Owner is safe.';
+  // Default: only related Admins (groups the buyer or the seller joined), then the website account. "Discover" shows every other Admin.
+  const shown=new Set(),add=(list,title,note,box=root)=>{const items=(list||[]).filter(a=>a&&!shown.has(a.id));if(!items.length)return 0;box.append(section(title));for(const a of items){shown.add(a.id);box.append(choice(a,typeof note==='function'?note(a):note));options++}return items.length};
+  const other=data.iAm==='seller'?'the buyer':'the seller',usedBefore=new Set((data.usedBefore||[]).map(a=>a.id));
+  const relatedNote=a=>a.mine&&a.theirs?'Admin of groups you and '+other+' joined'+(a.my_groups?' · '+a.my_groups:''):a.mine?'Admin of your group'+(a.my_groups?' · '+a.my_groups:''):'Admin of '+other+'’s group';
+  const related=add((data.relatedAdmins||[]).filter(a=>a.id!==data.owner?.id),'👥 Admins from your groups',relatedNote);
+  add(data.owner?[data.owner]:[],'🛡️ Website','Official website account · safe if you are new');
+  const rest=[...(data.fallback||[]),...(data.allAdmins||[])].filter((a,i,list)=>a&&!shown.has(a.id)&&list.findIndex(b=>b.id===a.id)===i);
+  if(rest.length){
+   const discover=node('div',undefined,'admin-discover');discover.hidden=true;
+   const search=node('input',undefined,'input admin-search');search.type='search';search.placeholder='🔎 Search Admin by name';search.setAttribute('aria-label','Search Admins');
+   const emptyNote=node('p','No Admin found with that name.','hint admin-search-empty');emptyNote.hidden=true;
+   search.oninput=()=>{const q=search.value.trim().toLowerCase();let found=0;for(const row of discover.querySelectorAll('.admin-choice')){const show=!q||row.dataset.name.includes(q);row.hidden=!show;if(show)found++}emptyNote.hidden=found>0};
+   discover.append(search,emptyNote);add(rest,'🧑‍💼 All Admins · most deals first',a=>usedBefore.has(a.id)?'Used in your earlier deal':'Admin',discover);
+   const open=node('button','🔎 Discover more Admins ('+rest.length+')','btn secondary admin-discover-toggle');open.type='button';open.onclick=()=>{discover.hidden=false;open.hidden=true;discover.scrollIntoView({block:'start',behavior:'smooth'})};
+   root.append(open,discover);if(!related&&!data.owner){discover.hidden=false;open.hidden=true}
+  }
+  $('listingAdminHelp').textContent=related?'These Admins are from your groups or '+other+'’s groups. Not sure? Choose the website account.':'You and '+other+' have no group Admin, so the website account will handle this deal. You can also discover other Admins.';
  }
  if(first){first.checked=true;listingAdminDraft.selected=first.value}
  $('listingOwnerChoice').hidden=true;$('submitListingAdmin').disabled=!options;if(!options)$('listingAdminHelp').textContent='No Admin is free right now. Please try again later.';$('listingAdminModal').hidden=false;

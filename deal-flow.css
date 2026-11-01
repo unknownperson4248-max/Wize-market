@@ -313,3 +313,7 @@ body.create-menu-open::after{content:'';position:fixed;inset:0;z-index:140;backg
 #listingAdminChoices .admin-choice[hidden],#listingAdminChoices .admin-choice-section[hidden],.admin-search-empty[hidden]{display:none}
 .admin-choice .admin-info{flex:none;width:34px;height:34px;padding:0;border:1px solid #3b6584;border-radius:50%;background:#0f2a42;font-size:15px;cursor:pointer}
 .admin-choice .avatar{flex:none}
+
+.admin-discover-toggle{width:100%;margin:12px 0 4px}
+.admin-discover{margin-top:8px}
+.admin-discover[hidden]{display:none}
