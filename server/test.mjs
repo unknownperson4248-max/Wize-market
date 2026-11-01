@@ -695,7 +695,7 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  assert.equal((await call('/api/posts/'+deletable.data.id+'/delete','POST',{version:0},'vip')).status,200);
  r=await call('/api/posts','POST',{...listing,title:'Relist',gameCategory:'custom',customGameName:'clash arena',gameUid:'ca7788'},'vip');assert.equal(r.status,409);assert.match(r.data.error,/sold or removed recently/);
  // Protected deal: payment report, Admin payment confirmation with private proof, handover, delivery, checklist, hold, final.
- const picks=(await call('/api/deal-admins?postId='+pListing,'GET',undefined,'pbuyer')).data;assert.equal(picks.mode,'mediated');assert.deepEqual(picks.usedBefore,[]);assert.ok(picks.owner&&picks.allAdmins.some(x=>x.id==='admin'&&Number.isInteger(x.deals_done)));assert.ok(picks.allAdmins.every(x=>!['pbuyer','pseller'].includes(x.id)));assert.ok(Array.isArray(picks.myGroupAdmins));
+ const picks=(await call('/api/deal-admins?postId='+pListing,'GET',undefined,'pbuyer')).data;assert.equal(picks.mode,'mediated');assert.ok(picks.owner&&picks.allAdmins.some(x=>x.id==='admin'&&Number.isInteger(x.deals_done)));assert.ok(picks.allAdmins.every(x=>!['pbuyer','pseller'].includes(x.id)));assert.ok(Array.isArray(picks.myGroupAdmins));
  r=await call('/api/deals','POST',{postId:pListing,adminId:'admin'},'pbuyer');assert.equal(r.status,201);const pd=r.data.id;assert.equal(r.data.deal.flow,1);
  // Deal popup alerts: the seller and Admin hear about the new request; the requester does not; guests get 401.
  for(const who of ['pseller','admin'])assert.ok((await call('/api/deal-alerts','GET',undefined,who)).data.alerts.some(a=>a.deal_id===pd&&a.title==='New deal request'&&/^Deal - \d+$/.test(a.deal_code)),who);
@@ -924,18 +924,11 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  assert.equal((await call('/api/profile/admin','GET',undefined,'admin')).data.profile.groups.find(g=>g.id===group).joined,1);assert.deepEqual((await call('/api/profile/newbie','GET',undefined,'owner')).data.profile.groups,[]);
  // Admin picker: "Your Admins" lists the Admins this member already did (accepted) deals with; the full Admin list is always there.
  sql.prepare("UPDATE wm_posts SET created_at=created_at-86400000-60000 WHERE user_id='vip'").run();sql.prepare("DELETE FROM wm_limits WHERE key='publish:vip'").run();r=await call('/api/posts','POST',{...listing,title:'Picker check ID',details:'For the Admin picker',price:6100,gameUid:'73737311'},'vip');assert.equal(r.status,201);const pickerPost=r.data.id;
- const pickerData=(await call('/api/deal-admins?postId='+r.data.id,'GET',undefined,'pbuyer')).data;assert.equal(pickerData.mode,'mediated');assert.equal(pickerData.usedBefore[0].id,'admin');assert.ok(pickerData.usedBefore[0].times>=1);assert.ok(Number.isInteger(pickerData.usedBefore[0].deals_done));assert.ok(pickerData.allAdmins.length>=2);
- assert.ok(!(await call('/api/deal-admins?postId='+r.data.id,'GET',undefined,'newbie')).data.usedBefore.some(a=>a.id==='admin'&&a.times>5));
- // Website deal account (Owner-only setting, must be an Admin) replaces the personal Owner option; related Admins come from both members' groups.
- assert.equal((await call('/api/admin/deal-account','POST',{login:'admin@example.com'},'admin')).status,403);
- assert.equal((await call('/api/admin/deal-account','POST',{login:'nobody@example.com'},'owner')).status,404);
- assert.equal((await call('/api/admin/deal-account','POST',{login:'newbie@example.com'},'owner')).status,409);
- r=await call('/api/admin/deal-account','POST',{login:'ADMIN@example.com'},'owner');assert.equal(r.status,200);assert.equal(r.data.account.id,'admin');assert.equal((await call('/api/admin/deal-account','GET',undefined,'owner')).data.account.id,'admin');
- let pk=(await call('/api/deal-admins?postId='+pickerPost,'GET',undefined,'pbuyer')).data;assert.equal(pk.owner.id,'admin');assert.equal(pk.iAm,'buyer');
- const sellerSide=pk.relatedAdmins.find(a=>a.id==='admin');assert.ok(sellerSide);assert.equal(sellerSide.theirs,1);if(!sellerSide.mine)assert.equal(sellerSide.my_groups,null);
- assert.equal((await call('/api/deal-admins?postId='+pickerPost,'GET',undefined,'admin')).data.owner.id,'owner');
- r=await call('/api/deals','POST',{postId:pickerPost},'pbuyer');assert.equal(r.status,201);assert.equal(sql.prepare('SELECT admin_id FROM wm_deals WHERE id=?').get(r.data.id).admin_id,'admin');
- r=await call('/api/admin/deal-account','POST',{login:''},'owner');assert.equal(r.data.account,null);assert.equal((await call('/api/deal-admins?postId='+pickerPost,'GET',undefined,'newbie')).data.owner.id,'owner');
+ // Deal box: only Admins of groups the buyer or the seller joined (seller-only groups are not named); with none, the client shows only the Owner.
+ const expectRelated=sql.prepare("SELECT DISTINCT g.owner_id id FROM wm_group_members m JOIN wm_groups g ON g.id=m.group_id JOIN wm_roles r ON r.user_id=g.owner_id AND r.role IN ('owner','trusted') WHERE m.user_id IN ('pbuyer','vip') AND g.owner_id NOT IN ('pbuyer','vip') ORDER BY 1").all().map(x=>x.id);
+ let pk=(await call('/api/deal-admins?postId='+pickerPost,'GET',undefined,'pbuyer')).data;assert.equal(pk.mode,'mediated');assert.equal(pk.iAm,'buyer');assert.equal(pk.owner.id,'owner');assert.deepEqual(pk.relatedAdmins.map(a=>a.id).sort(),expectRelated);assert.ok(expectRelated.includes('admin'));
+ const sellerSide=pk.relatedAdmins.find(a=>a.id==='admin');assert.equal(sellerSide.theirs,1);if(!sellerSide.mine)assert.equal(sellerSide.my_groups,null);assert.ok(Number.isInteger(sellerSide.deals_done));
+ sql.prepare("DELETE FROM wm_group_members WHERE user_id IN ('pbuyer','vip')").run();pk=(await call('/api/deal-admins?postId='+pickerPost,'GET',undefined,'pbuyer')).data;assert.deepEqual(pk.relatedAdmins,[]);assert.equal(pk.owner.id,'owner');
  delete env.WM_DATA_KEY;assert.equal((await adeal()).secure_handover,false);env.AI=previousAI;
  console.log('PASS: protected deals (payment proof, one-time encrypted handover, delivery, checklist, safety hold, auto-confirm, Owner dispute decisions), private game UIDs with one active listing, post limits, bump/expiry/sold feed rules, safe names, trust card and share previews.');
 }

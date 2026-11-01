@@ -81,23 +81,13 @@ async function openListingAdminChoice({postId,deal}={}){
  const section=text=>node('h4',text,'admin-choice-section');let options=0;
  if(data.mode==='direct'){root.append(choice(data.sellerAdmin,'This ID belongs to this Admin'));options=1;$('listingAdminHelp').textContent='This ID belongs to an Admin. They will accept your deal and look after it.'}
  else{
-  // Default: only related Admins (groups the buyer or the seller joined), then the website account. "Discover" shows every other Admin.
-  const shown=new Set(),add=(list,title,note,box=root)=>{const items=(list||[]).filter(a=>a&&!shown.has(a.id));if(!items.length)return 0;box.append(section(title));for(const a of items){shown.add(a.id);box.append(choice(a,typeof note==='function'?note(a):note));options++}return items.length};
-  const other=data.iAm==='seller'?'the buyer':'the seller',usedBefore=new Set((data.usedBefore||[]).map(a=>a.id));
+  // Deal box: only Admins of the groups the buyer or the seller joined. If there are none, only the website Owner.
+  const shown=new Set(),add=(list,title,note)=>{const items=(list||[]).filter(a=>a&&!shown.has(a.id));if(!items.length)return 0;root.append(section(title));for(const a of items){shown.add(a.id);root.append(choice(a,typeof note==='function'?note(a):note));options++}return items.length};
+  const other=data.iAm==='seller'?'the buyer':'the seller';
   const relatedNote=a=>a.mine&&a.theirs?'Admin of groups you and '+other+' joined'+(a.my_groups?' · '+a.my_groups:''):a.mine?'Admin of your group'+(a.my_groups?' · '+a.my_groups:''):'Admin of '+other+'’s group';
-  const related=add((data.relatedAdmins||[]).filter(a=>a.id!==data.owner?.id),'👥 Admins from your groups',relatedNote);
-  add(data.owner?[data.owner]:[],'🛡️ Website','Official website account · safe if you are new');
-  const rest=[...(data.fallback||[]),...(data.allAdmins||[])].filter((a,i,list)=>a&&!shown.has(a.id)&&list.findIndex(b=>b.id===a.id)===i);
-  if(rest.length){
-   const discover=node('div',undefined,'admin-discover');discover.hidden=true;
-   const search=node('input',undefined,'input admin-search');search.type='search';search.placeholder='🔎 Search Admin by name';search.setAttribute('aria-label','Search Admins');
-   const emptyNote=node('p','No Admin found with that name.','hint admin-search-empty');emptyNote.hidden=true;
-   search.oninput=()=>{const q=search.value.trim().toLowerCase();let found=0;for(const row of discover.querySelectorAll('.admin-choice')){const show=!q||row.dataset.name.includes(q);row.hidden=!show;if(show)found++}emptyNote.hidden=found>0};
-   discover.append(search,emptyNote);add(rest,'🧑‍💼 All Admins · most deals first',a=>usedBefore.has(a.id)?'Used in your earlier deal':'Admin',discover);
-   const open=node('button','🔎 Discover more Admins ('+rest.length+')','btn secondary admin-discover-toggle');open.type='button';open.onclick=()=>{discover.hidden=false;open.hidden=true;discover.scrollIntoView({block:'start',behavior:'smooth'})};
-   root.append(open,discover);if(!related&&!data.owner){discover.hidden=false;open.hidden=true}
-  }
-  $('listingAdminHelp').textContent=related?'These Admins are from your groups or '+other+'’s groups. Not sure? Choose the website account.':'You and '+other+' have no group Admin, so the website account will handle this deal. You can also discover other Admins.';
+  const related=add(data.relatedAdmins,'👥 Admins from your groups',relatedNote);
+  if(!related)add(data.owner?[data.owner]:data.fallback,'🛡️ Website owner',data.owner?'Website owner · handles the deal':'Admin');
+  $('listingAdminHelp').textContent=related?'Only Admins of groups you or '+other+' joined are shown. Join more groups from Messenger → Discover to see more Admins.':'You and '+other+' are not in a group with an Admin, so the website owner will handle this deal.';
  }
  if(first){first.checked=true;listingAdminDraft.selected=first.value}
  $('listingOwnerChoice').hidden=true;$('submitListingAdmin').disabled=!options;if(!options)$('listingAdminHelp').textContent='No Admin is free right now. Please try again later.';$('listingAdminModal').hidden=false;
