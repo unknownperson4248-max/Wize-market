@@ -351,3 +351,7 @@ body.create-menu-open::after{content:'';position:fixed;inset:0;z-index:140;backg
 @keyframes wm-tick-glow{0%,100%{box-shadow:0 0 0 1.5px #071321,0 0 5px #1877f270}50%{box-shadow:0 0 0 1.5px #071321,0 0 12px #3b9dffcc}}
 @media(prefers-reduced-motion:reduce){.gaming-portrait::before,.verified-tick{animation:none!important}}
 @keyframes wm-spin{to{transform:rotate(360deg)}}
+
+.admin-discover-toggle{width:100%;margin:12px 0 4px}
+.admin-discover{margin-top:6px}
+.admin-discover[hidden],.admin-discover-toggle[hidden]{display:none}
