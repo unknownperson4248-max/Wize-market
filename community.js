@@ -73,15 +73,23 @@ $('chatSendButton').innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path
 let listingAdminDraft=null,listingAdminRequest=0;
 async function openListingAdminChoice({postId,deal}={}){
  const request=++listingAdminRequest;const data=await api('/deal-admins?'+(deal?'dealId='+encodeURIComponent(deal.id):'postId='+encodeURIComponent(postId)));if(request!==listingAdminRequest)return;
- listingAdminDraft={postId:postId||data.postId,deal:deal||null,selected:null,data};const root=$('listingAdminChoices');root.replaceChildren();$('listingAdminTitle').textContent=deal?'Choose another Admin':'Choose a trusted Admin';$('listingAdminContext').textContent=data.title||'Marketplace deal';$('submitListingAdmin').textContent=deal?'Propose Admin change':'Send deal request';
- const options=data.mode==='direct'?[data.sellerAdmin]:[...data.recommended,...(data.fallback||[]),...(data.owner&&!data.recommended.some(a=>a.id===data.owner.id)?[data.owner]:[])];
- $('listingAdminHelp').textContent=data.mode==='direct'?'This listing belongs to a trusted Admin. They must accept your deal request.':data.recommended.length?'Group Admins from groups both buyer and seller have joined are shown first.':'No independent shared-group Admin found. Choose the website owner to help with the deal.';
- for(const [index,person]of options.entries()){
-  const label=node('label',undefined,'admin-choice'),input=node('input');input.type='radio';input.name='listing-admin';input.value=person.id;input.required=true;input.checked=index===0;if(input.checked)listingAdminDraft.selected=person.id;input.onchange=()=>{listingAdminDraft.selected=person.id};
-  const copy=node('div');copy.append(node('strong',person.name),node('small',person.role==='owner'?'Website owner':data.mode==='direct'?'Seller / Admin':person.groups?.map(g=>g.name).join(' · ')||'Trusted Admin'));label.append(input,avatar(person),copy);if(person.verified||['owner','trusted'].includes(person.role))label.append(verifiedMark(person.role,person.id,!!person.verified));root.append(label);
+ listingAdminDraft={postId:postId||data.postId,deal:deal||null,selected:null,data};const root=$('listingAdminChoices');root.replaceChildren();$('listingAdminTitle').textContent=deal?'Change Admin':'Choose an Admin for this deal';$('listingAdminContext').textContent=data.title||'Marketplace deal';$('submitListingAdmin').textContent=deal?'Send Admin change':'Send deal request';
+ const doneCount=new Map((data.allAdmins||[]).map(a=>[a.id,a.deals_done]));let first=null;
+ const choice=(person,note)=>{const label=node('label',undefined,'admin-choice'),input=node('input');input.type='radio';input.name='listing-admin';input.value=person.id;input.onchange=()=>{listingAdminDraft.selected=person.id};if(!first)first=input;
+  const copy=node('div'),name=node('div',undefined,'admin-choice-name');name.append(node('strong',person.name),verifiedMark(person.role,person.id,!!person.verified));const done=person.deals_done??doneCount.get(person.id);copy.append(name,node('small',note+(Number.isInteger(done)?' · ✅ '+done+' deal'+(done===1?'':'s')+' done':'')));label.append(input,avatar(person),copy);return label};
+ const section=text=>node('h4',text,'admin-choice-section');let options=0;
+ if(data.mode==='direct'){root.append(choice(data.sellerAdmin,'This ID belongs to this Admin'));options=1;$('listingAdminHelp').textContent='This ID belongs to an Admin. They will accept your deal and look after it.'}
+ else{
+  const shown=new Set(),groupAdmins=[];for(const a of [...(data.recommended||[]),...(data.myGroupAdmins||[])])if(a.id!==data.owner?.id&&!shown.has(a.id)){shown.add(a.id);groupAdmins.push(a)}
+  if(groupAdmins.length){root.append(section('👥 Admins from your groups'));for(const a of groupAdmins){root.append(choice(a,a.groups?.map(g=>g.name).join(' · ')||'Admin of a group you joined'));options++}}
+  if(data.owner){root.append(section('⭐ Owner · best if you are new'));root.append(choice(data.owner,'Website owner · safe if you do not know any Admin'));options++;shown.add(data.owner.id)}
+  for(const a of data.fallback||[])if(!shown.has(a.id)){shown.add(a.id);root.append(choice(a,'Admin'));options++}
+  const others=(data.allAdmins||[]).filter(a=>!shown.has(a.id));
+  if(others.length){root.append(section('🔎 Find another Admin'));const search=node('input',undefined,'input admin-search');search.type='search';search.placeholder='Type an Admin’s name';search.setAttribute('aria-label','Search Admins');const results=node('div',undefined,'admin-search-results');search.oninput=()=>{const keep=listingAdminDraft?.selected;results.replaceChildren();const q=search.value.trim().toLowerCase();if(!q)return;const found=others.filter(a=>a.name.toLowerCase().includes(q)).slice(0,6);if(!found.length)results.append(node('p','No Admin found with that name.','hint'));for(const a of found){const row=choice(a,'Admin');const input=row.querySelector('input');if(input.value===keep)input.checked=true;results.append(row)}};root.append(search,results)}
+  $('listingAdminHelp').textContent=groupAdmins.length?'Pick an Admin you know. New here? Choose the Owner.':'You do not share a group with an Admin yet, so the Owner is selected. You can search for another Admin.';
  }
- $('listingOwnerChoice').hidden=data.mode==='direct'||!data.owner;$('listingOwnerChoice').onclick=()=>{const input=[...root.querySelectorAll('input')].find(i=>i.value===data.owner.id);if(input){input.checked=true;listingAdminDraft.selected=input.value}};
- $('submitListingAdmin').disabled=!options.length;if(!options.length)$('listingAdminHelp').textContent='No independent trusted Admin is available right now.';$('listingAdminModal').hidden=false;
+ if(first){first.checked=true;listingAdminDraft.selected=first.value}
+ $('listingOwnerChoice').hidden=true;$('submitListingAdmin').disabled=!options;if(!options)$('listingAdminHelp').textContent='No Admin is free right now. Please try again later.';$('listingAdminModal').hidden=false;
 }
 function closeListingAdminChoice(){listingAdminRequest++;listingAdminDraft=null;$('listingAdminModal').hidden=true}
 $('closeListingAdmin').onclick=closeListingAdminChoice;$('listingAdminModal').onclick=e=>{if(e.target===$('listingAdminModal'))closeListingAdminChoice()};

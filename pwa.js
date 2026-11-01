@@ -32,7 +32,11 @@ $('dismissInstall').onclick=()=>{$('appInstallBanner').hidden=true;markInstallSe
 $('closeInstallHelp').onclick=closeInstallHelp;
 $('installHelp').onclick=e=>{if(e.target===$('installHelp'))closeInstallHelp()};
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeInstallHelp()});
-$('appInstallBanner').hidden=true;displayInstallOffer();
+$('appInstallBanner').hidden=true;
+// Opening the installed app once remembers it for this browser too, so the banner never comes back.
+if(installedApp()){try{localStorage.setItem('wm_app_installed','1')}catch{}}
+// Android/Chrome only offers installation when the app is not installed yet: wait for that signal. iPhone has no signal, so show it once.
+if(/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1))displayInstallOffer();
 if(navigator.getInstalledRelatedApps)void navigator.getInstalledRelatedApps().then(apps=>{if(apps.length){try{localStorage.setItem('wm_app_installed','1')}catch{}$('appInstallBanner').hidden=true}}).catch(()=>{});
 
 if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('/sw.js',{scope:'/',updateViaCache:'none'}).catch(()=>{});

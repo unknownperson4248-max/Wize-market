@@ -42,6 +42,19 @@ const feedSelect=postSelect.replace('SELECT p.*','SELECT p.*,f.feed_at,f.shared_
 async function postInput(db,d,u,group){const postIntent=d.postIntent??'sell';need(['sell','need'].includes(postIntent),'Invalid post type');const optionalText=(value,max,label)=>value===undefined||value===''?'':text(value,max,label);const title=text(d.title,100,'title'),details=postIntent==='need'?optionalText(d.details,2000,'details'):text(d.details,2000,'description'),description=postIntent==='need'?optionalText(d.description,5000,'description'):'',price=listingPrice(d.price,true),gameCategory=d.gameCategory||(d.kind==='Game ID'?'free-fire':'community'),priceFormat=d.priceFormat||(typeof d.price==='string'&&/k\s*$/i.test(d.price)?'compact':'full');need(GAME_CATEGORIES.includes(gameCategory),'Choose a game category');const customGameName=gameCategory==='custom'?text(d.customGameName,60,'custom game name'):'';need(!customGameName||!hasExternalContact(customGameName),'Use a game name without contact details');need(['full','compact'].includes(priceFormat),'Invalid price format');need(['Game ID','Digital item','Community post'].includes(d.kind),'Invalid listing type');if(postIntent==='sell'&&d.kind==='Game ID')need(price!==null&&price>0,'Game ID price is required');let rangeId=null;if(group){await groupAccess(db,group,u);if(price!==null){const range=await one(db,'SELECT id FROM wm_group_ranges WHERE group_id=? AND min_price<=? AND (max_price IS NULL OR max_price>=?) ORDER BY CASE WHEN max_price IS NULL THEN 1 ELSE 0 END,(max_price-min_price),min_price DESC LIMIT 1',group,price,price);need(range,'No matching price range. Ask the group admin to add one.');rangeId=range.id}}need(Array.isArray(d.media)&&d.media.length<=51,'Up to 50 photos and 1 video');need(d.media.every(a=>typeof a?.id==='string'),'Invalid media');const ids=d.media.map(a=>a.id);need(new Set(ids).size===ids.length,'Remove duplicate photos');const found=ids.length?await rows(db,'SELECT id,type FROM wm_uploads WHERE user_id=? AND id IN ('+ids.map(()=>'?').join(',')+')',u.id,...ids):[];need(found.length===ids.length,'Upload not found');need(found.every(a=>a.type.startsWith('image/')||a.type.startsWith('video/')),'Posts support photos and video');const byId=new Map(found.map(a=>[a.id,a]));const attachments=ids.map(id=>({...byId.get(id),url:'/media/'+id}));const images=attachments.filter(a=>a.type.startsWith('image/')).length,videos=attachments.length-images;need(images<=50&&videos<=1,'Up to 50 photos and 1 video');if(d.mediaMode==='photos')need(images>=1,'Add at least one photo');if(d.mediaMode==='video')need(videos===1,'Add a video');return {title,details,description,postIntent,price,rangeId,attachments,gameCategory,priceFormat,customGameName}}
 function suspensionWrite(db,u,id,verdict){const until=now()+10800000;return {until,statement:stmt(db,'INSERT INTO wm_suspensions(user_id,until_at,reason,post_id) VALUES(?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET until_at=MAX(until_at,excluded.until_at),reason=excluded.reason,post_id=excluded.post_id,appealed=0',u.id,until,verdict.reason,id)}}
 
+// Normalised login: lower-case email, or a Bangladesh mobile number stored as 8801XXXXXXXXX (Bangla digits allowed).
+export function loginId(method,value){
+ need(typeof value==='string'&&value.trim().length>0&&value.length<=200,'Enter your '+(method==='phone'?'phone number':'email'));
+ if(method==='email'){const v=value.trim().toLowerCase();need(/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/.test(v),'Enter a valid email');return v}
+ const digits=value.normalize('NFKC').replace(/[০-৯]/g,c=>String(c.charCodeAt(0)-2534)).replace(/[\s().-]/g,'');const m=digits.match(/^(?:\+?88)?(01[3-9]\d{8})$/);need(m,'Enter a Bangladesh mobile number like 01XXXXXXXXX');return '88'+m[1];
+}
+async function sessionResponse(db,userId,status=200){
+ const time=now(),token=Array.from(crypto.getRandomValues(new Uint8Array(32)),x=>x.toString(16).padStart(2,'0')).join('');
+ await db.batch([stmt(db,'INSERT INTO sessions(token_hash,user_id,expires_at,created_at) VALUES(?,?,?,?)',await digest(token),userId,time+604800000,time),stmt(db,'DELETE FROM sessions WHERE expires_at<?',time)]);
+ const u=await one(db,"SELECT u.id,COALESCE(NULLIF(d.display_name,''),u.name) name,u.email,COALESCE(NULLIF(u.picture,''),'/assets/default-avatar.svg') picture,(SELECT verified FROM wm_public_users vu WHERE vu.id=u.id) verified,(SELECT trusted_seller FROM wm_public_users vu WHERE vu.id=u.id) trusted_seller,COALESCE(r.role,'member') role FROM users u LEFT JOIN wm_profile_details d ON d.user_id=u.id LEFT JOIN wm_roles r ON r.user_id=u.id WHERE u.id=?",userId);
+ const headers=new Headers({'content-type':'application/json','cache-control':'no-store'});headers.append('set-cookie','wm_session='+token+'; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=604800');
+ return new Response(JSON.stringify({user:{...publicUser(u),email:u.email}}),{status,headers});
+}
 async function passwordHash(password,salt){const key=await crypto.subtle.importKey('raw',encoder.encode(password),'PBKDF2',false,['deriveBits']);return Array.from(new Uint8Array(await crypto.subtle.deriveBits({name:'PBKDF2',salt:encoder.encode(salt),iterations:100000,hash:'SHA-256'},key,256)),x=>x.toString(16).padStart(2,'0')).join('')}
 function equalHash(a,b){if(typeof a!=='string'||typeof b!=='string'||a.length!==b.length)return false;let diff=0;for(let i=0;i<a.length;i++)diff|=a.charCodeAt(i)^b.charCodeAt(i);return diff===0}
 async function adminConfig(db){const r=await one(db,"SELECT value FROM wm_settings WHERE key='admin_credentials'");return r?JSON.parse(r.value):null}
@@ -149,7 +162,7 @@ async function dealAction(db,d,u,input){
 }
 
 // ---- Marketplace rules (owner-editable numbers and switches) ----
-const DEFAULT_RULES={protectedDeals:true,holdHours:24,autoConfirmHours:72,requireGameUid:false,relistCooldownHours:24,dailyPostsUnverified:1,activePostsUnverified:3,dailyPostsVerified:10,activePostsVerified:30,dailyNeedPosts:3,bumpHours:24,expireDays:30,hideSold:true,nameRules:true,chatWarnings:true};
+const DEFAULT_RULES={protectedDeals:true,holdHours:0,autoConfirmHours:72,requireGameUid:false,relistCooldownHours:24,dailyPostsUnverified:1,activePostsUnverified:3,dailyPostsVerified:10,activePostsVerified:30,dailyNeedPosts:3,bumpHours:24,expireDays:30,hideSold:true,nameRules:true,chatWarnings:true};
 const RULE_LIMITS={holdHours:[0,720],autoConfirmHours:[1,720],relistCooldownHours:[0,720],dailyPostsUnverified:[0,1000],activePostsUnverified:[0,1000],dailyPostsVerified:[0,1000],activePostsVerified:[0,5000],dailyNeedPosts:[0,1000],bumpHours:[1,720],expireDays:[0,365]};
 const RULE_SWITCHES=['protectedDeals','requireGameUid','hideSold','nameRules','chatWarnings'];
 async function marketRules(db){const row=await one(db,"SELECT value FROM wm_settings WHERE key='market_rules'");let saved={};try{saved=row?JSON.parse(row.value):{}}catch{}const out={...DEFAULT_RULES};for(const k of Object.keys(RULE_LIMITS))if(Number.isInteger(saved[k])&&saved[k]>=RULE_LIMITS[k][0]&&saved[k]<=RULE_LIMITS[k][1])out[k]=saved[k];for(const k of RULE_SWITCHES)if(typeof saved[k]==='boolean')out[k]=saved[k];out.requireGameUid=false;return out}
@@ -222,7 +235,7 @@ export function cleanAccountName(value){const cleaned=String(value||'').normaliz
 // ---- Protected deal flow (flow=1) ----
 const CHECKLIST_ITEMS=['login_checked','email_changed','password_changed','links_removed','recovery_changed'];
 const DEAL_SYSTEM_EVENTS=['requested','accept','activate','payment_sent','payment_received','delivered','buyer_confirmed','seller_paid','auto_confirmed','dispute','resolve_dispute','resolve_redeliver','finalize','cancel','reject','handover_ready','handover_submitted','handover_revealed','cancel_requested','cancel_request_rejected','admin_changed'];
-function dealTimes(d,rules){const delivered=d.delivered_at||0;return {holdUntil:delivered?delivered+rules.holdHours*HOUR:null,autoConfirmAt:delivered?delivered+rules.autoConfirmHours*HOUR:null}}
+function dealTimes(d,rules){const start=d.delivered_at||d.funded_at||0;return {holdUntil:d.buyer_done_at?d.buyer_done_at+rules.holdHours*HOUR:start?start+rules.holdHours*HOUR:null,autoConfirmAt:start?start+rules.autoConfirmHours*HOUR:null}}
 async function dealProofOwned(db,d,u,id,kind){if(id===undefined||id===null||id==='')return null;need(typeof id==='string'&&/^[a-f0-9-]{36}$/.test(id),'Invalid proof screenshot');need(await one(db,'SELECT 1 FROM wm_deal_proofs WHERE id=? AND deal_id=? AND user_id=? AND kind=?',id,d.id,u.id,kind),'Upload the screenshot again',400);return id}
 async function protectedDealAction(db,d,u,input,ctx){
  const {buyer,seller,isAdmin,owner}=ctx,time=now(),rules=await marketRules(db),{holdUntil,autoConfirmAt}=dealTimes(d,rules);
@@ -243,13 +256,13 @@ async function protectedDealAction(db,d,u,input,ctx){
   need(seller,'Only the seller marks the account delivered',403);need(d.status==='active'&&d.funded_at,'Wait until the Admin confirms payment before handing over the account',409);need(!d.delivered_at,'Already marked delivered',409);
   update='delivered_at=?,seller_done=1';args=[time];event='delivered';
  }else if(input.action==='buyer_confirm'){
-  need(buyer,'Only the buyer confirms the account',403);need(d.status==='active'&&d.delivered_at,'The seller has not marked the account delivered yet',409);need(!d.buyer_done,'You already confirmed',409);
+  need(buyer,'Only the buyer confirms the account',403);need(d.status==='active'&&d.funded_at,'Wait until the Admin confirms the money',409);need(!d.buyer_done,'You already confirmed',409);
   need(input.received===true||Array.isArray(input.checklist)&&CHECKLIST_ITEMS.every(k=>input.checklist.includes(k)),'Confirm that you received the ID and changed its login details',400);
   const proof=await dealProofOwned(db,d,u,input.proofId,'checklist'),direct=d.admin_id===d.seller_id;
   update="buyer_done=1,buyer_done_at=?,checklist=?,checklist_proof_id=?,"+(direct?"status='completed',admin_done=1,completed_at=?":"status='awaiting_final'");args=direct?[time,JSON.stringify(CHECKLIST_ITEMS),proof,time]:[time,JSON.stringify(CHECKLIST_ITEMS),proof];event='buyer_confirmed';
   if(direct)after.push(clearHandover('completed'));
  }else if(input.action==='seller_paid'){
-  need(seller&&d.admin_id!==d.seller_id,'Only the seller confirms receiving the money',403);need(live&&d.delivered_at,'The ID must be handed over first',409);need(!d.cancel_pending,'A cancellation request is pending. Wait for the Admin.',409);
+  need(seller&&d.admin_id!==d.seller_id,'Only the seller confirms receiving the money',403);need(live&&d.funded_at,'The Admin has not received the money yet',409);need(!d.cancel_pending,'A cancellation request is pending. Wait for the Admin.',409);
   const auto=!d.buyer_done;if(auto)need(time>=autoConfirmAt,'Waiting for the buyer to confirm the ID. Without a dispute it auto-confirms at '+new Date(autoConfirmAt).toISOString().replace('T',' ').slice(0,16)+' UTC',409);
   update="status='completed',admin_done=1,completed_at=?"+(auto?',buyer_done=1':'');args=[time];
   if(auto)before.push(stmt(db,"INSERT INTO wm_deal_events(deal_id,user_id,action,created_at) SELECT ?,?,'auto_confirmed',? WHERE EXISTS(SELECT 1 FROM wm_deals WHERE id=? AND version=?)",d.id,d.buyer_id,time,d.id,d.version));
@@ -266,7 +279,7 @@ async function protectedDealAction(db,d,u,input,ctx){
  }else if(input.action==='finalize'){
   need(isAdmin,'Only the assigned trusted Admin can finally complete a deal',403);need(live,'Only an active deal can complete',409);
   need(!d.cancel_pending,'Decide the pending cancellation request before completing this deal',409);
-  need(d.funded_at,'Confirm the payment first',409);need(d.delivered_at,'The seller must mark the account delivered first',409);
+  need(d.funded_at,'Confirm the money first',409);
   need(time>=holdUntil,'Safety hold: final confirmation opens at '+new Date(holdUntil).toISOString().replace('T',' ').slice(0,16)+' UTC',409);
   const auto=!d.buyer_done;if(auto)need(time>=autoConfirmAt,'Waiting for the buyer to check the account. Without a dispute it auto-confirms at '+new Date(autoConfirmAt).toISOString().replace('T',' ').slice(0,16)+' UTC',409);
   const payout=input.payout===undefined||input.payout===''?'':text(input.payout,200,'payout reference');
@@ -395,6 +408,27 @@ async function appearanceConfig(db){const row=await one(db,"SELECT value FROM wm
 async function validateVoiceMessage(db,value,u){const match=typeof value==='string'&&value.match(/^media:(audio\/(?:webm|mp4|ogg)):(\/media\/([a-f0-9-]{36}))$/);if(match)need(await one(db,'SELECT id FROM wm_uploads WHERE id=? AND user_id=? AND type=?',match[3],u.id,match[1]),'Voice upload not found',404)}
 export async function api(req,env){const db=env.DB,url=new URL(req.url),method=req.method;let p=url.pathname;const control=p.startsWith('/api/control/');if(control){p=p.replace('/api/control/','/api/admin/');if(/^\/api\/admin\/(groups|upload)(?:\/|$)/.test(p))p=p.replace('/api/admin/','/api/');}need(db,'Storage is unavailable',503);if(!['GET','HEAD'].includes(method))need(req.headers.get('origin')===url.origin,'Invalid request origin',403);
 if(p==='/api/auth/nonce'&&method==='GET'){const nonce=uuid()+uuid();return reply({nonce},200,{'set-cookie':'wm_nonce='+nonce+'; HttpOnly; Secure; SameSite=Strict; Path=/api/auth; Max-Age=600'})}
+// Email / phone + password accounts (Google sign-in stays available).
+if(p==='/api/auth/signup'&&method==='POST'){
+ await throttle(db,'signup:'+(req.headers.get('cf-connecting-ip')||'unknown'),5);const d=await body(req);need(['email','phone'].includes(d.method),'Choose phone or email');
+ const login=loginId(d.method,d.login);need(typeof d.password==='string'&&d.password.length>=8&&d.password.length<=128,'Use a password with at least 8 characters');
+ const name=text(d.name,60,'name');if((await marketRules(db)).nameRules){const problem=nameProblem(name);need(!problem,problem)}
+ need(!await one(db,'SELECT 1 FROM wm_credentials WHERE login=?',login),'This '+(d.method==='phone'?'phone number':'email')+' already has an account. Please sign in.',409);
+ const id=uuid(),time=now(),salt=Array.from(crypto.getRandomValues(new Uint8Array(16)),x=>x.toString(16).padStart(2,'0')).join('');
+ try{await db.batch([stmt(db,'INSERT INTO users(id,google_sub,email,name,picture,created_at,updated_at) VALUES(?,?,?,?,?,?,?)',id,'password:'+id,login,name,'/assets/default-avatar.svg',time,time),stmt(db,'INSERT INTO wm_credentials(user_id,login,kind,password_hash,salt,created_at,updated_at) VALUES(?,?,?,?,?,?,?)',id,login,d.method,await passwordHash(d.password,salt),salt,time,time)])}catch(error){if(/UNIQUE/i.test(error.message))throw new HttpError('This account already exists. Please sign in.',409);throw error}
+ return await sessionResponse(db,id,201);
+}
+if(p==='/api/auth/signin'&&method==='POST'){
+ await throttle(db,'signin:'+(req.headers.get('cf-connecting-ip')||'unknown'),10);const d=await body(req),wrong='Wrong phone / email or password';
+ let login;try{login=loginId(typeof d.login==='string'&&d.login.includes('@')?'email':'phone',d.login)}catch{throw new HttpError(wrong,401)}
+ need(typeof d.password==='string'&&d.password.length>0&&d.password.length<=128,wrong,401);await throttle(db,'signin-login:'+login,5);
+ const cred=await one(db,'SELECT user_id,password_hash,salt,failed,locked_until FROM wm_credentials WHERE login=?',login),time=now();
+ if(!cred){await passwordHash(d.password,'wm-no-account');throw new HttpError(wrong,401)}
+ need(!cred.locked_until||cred.locked_until<=time,'Too many wrong tries. Try again after '+Math.max(1,Math.ceil(((cred.locked_until||time)-time)/60000))+' minutes.',429);
+ if(!equalHash(await passwordHash(d.password,cred.salt),cred.password_hash)){const failed=cred.failed+1;await run(db,'UPDATE wm_credentials SET failed=?,locked_until=?,updated_at=? WHERE user_id=?',failed>=8?0:failed,failed>=8?time+15*60000:null,time,cred.user_id);throw new HttpError(wrong,401)}
+ await run(db,'UPDATE wm_credentials SET failed=0,locked_until=NULL,updated_at=? WHERE user_id=?',time,cred.user_id);
+ return await sessionResponse(db,cred.user_id,200);
+}
 if(p==='/api/auth/google'&&method==='POST'){await throttle(db,'auth:'+(req.headers.get('cf-connecting-ip')||'unknown'),15);const d=await body(req),v=await verifyGoogle(d.credential,cookie(req,'wm_nonce'));const time=now();const name=await signInName(db,v),email=String(v.email||'').slice(0,254),picture='/assets/default-avatar.svg';need(email,'Google email missing',401);await run(db,'INSERT INTO users(id,google_sub,email,name,picture,created_at,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(google_sub) DO UPDATE SET email=excluded.email,name=excluded.name,picture=users.picture,updated_at=excluded.updated_at',uuid(),v.sub,email,name,picture,time,time);const u=await one(db,"SELECT u.*,(SELECT verified FROM wm_public_users vu WHERE vu.id=u.id) verified,(SELECT trusted_seller FROM wm_public_users vu WHERE vu.id=u.id) trusted_seller,COALESCE(r.role,'member') role FROM users u LEFT JOIN wm_roles r ON r.user_id=u.id WHERE google_sub=?",v.sub);const token=Array.from(crypto.getRandomValues(new Uint8Array(32)),x=>x.toString(16).padStart(2,'0')).join('');await db.batch([stmt(db,'INSERT INTO sessions(token_hash,user_id,expires_at,created_at) VALUES(?,?,?,?)',await digest(token),u.id,time+604800000,time),stmt(db,'DELETE FROM sessions WHERE expires_at<?',time),stmt(db,'DELETE FROM wm_limits WHERE expires_at<?',time-86400000)]);const headers=new Headers({'content-type':'application/json','cache-control':'no-store'});headers.append('set-cookie','wm_session='+token+'; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=604800');headers.append('set-cookie','wm_nonce=; HttpOnly; Secure; SameSite=Strict; Path=/api/auth; Max-Age=0');return new Response(JSON.stringify({user:{...publicUser(u),email:u.email}}),{headers})}
 if(p==='/api/logout'&&method==='POST'){const t=cookie(req,'wm_session');if(t)await run(db,'DELETE FROM sessions WHERE token_hash=?',await digest(t));return reply({ok:true},200,{'set-cookie':'wm_session=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0'})}
 const marketUser=await user(req,db),u=control?await adminUser(req,db):marketUser;
@@ -611,7 +645,13 @@ if(p==='/api/deal-admins'&&method==='GET'){
  if(threadId){const thread=await threadAccess(db,threadId,u);need(thread.post_id===post.id||await one(db,'SELECT 1 FROM wm_thread_posts WHERE thread_id=? AND post_id=?',thread.id,post.id),'Post does not belong to this conversation',404);peerId=thread.buyer_id===u.id?thread.seller_id:thread.buyer_id;need([u.id,peerId].includes(post.user_id),'Post does not belong to this conversation',404)}
  if(post.post_intent==='need'){need(post.user_id!==u.id,'Only the seller can propose a Need Post deal',403);buyerId=post.user_id;sellerId=u.id}else{sellerId=post.user_id;buyerId=u.id===sellerId?peerId:u.id;need(buyerId,'Choose a buyer conversation first')}
  await allowContact(db,buyerId,sellerId);}
- return reply({postId:post.id,title:post.title,...await dealAdminRecommendations(db,buyerId,sellerId)});
+ const picks=await dealAdminRecommendations(db,buyerId,sellerId);
+ if(picks.mode==='mediated'){
+  const done="(SELECT count(*) FROM wm_deals dd WHERE dd.admin_id=u.id AND dd.status='completed') deals_done";
+  picks.myGroupAdmins=await rows(db,"SELECT DISTINCT u.id,u.name,u.picture,u.verified,r.role,"+done+" FROM wm_group_members m JOIN wm_groups g ON g.id=m.group_id JOIN wm_roles r ON r.user_id=g.owner_id AND r.role IN ('owner','trusted') JOIN wm_public_users u ON u.id=r.user_id WHERE m.user_id=? AND u.id NOT IN (?,?) LIMIT 30",u.id,buyerId,sellerId);
+  picks.allAdmins=await rows(db,"SELECT u.id,u.name,u.picture,u.verified,r.role,"+done+" FROM wm_public_users u JOIN wm_roles r ON r.user_id=u.id WHERE r.role IN ('owner','trusted') AND u.id NOT IN (?,?) ORDER BY deals_done DESC,u.name LIMIT 200",buyerId,sellerId);
+ }
+ return reply({postId:post.id,title:post.title,...picks});
 }
 if(p==='/api/friends/count'&&method==='GET')return reply({count:(await one(db,"SELECT count(*) n FROM wm_friend_requests WHERE to_id=? AND status='pending'",u.id)).n});
 if(p==='/api/friends/suggestions'&&method==='GET'){return reply({people:await withFriends(db,await rows(db,profileSelect+" WHERE u.id!=? AND NOT EXISTS(SELECT 1 FROM wm_user_blocks bl WHERE (bl.user_id=? AND bl.target_id=u.id) OR (bl.user_id=u.id AND bl.target_id=?)) AND NOT EXISTS(SELECT 1 FROM wm_friend_requests fr WHERE fr.pair_key=CASE WHEN u.id<? THEN u.id||':'||? ELSE ?||':'||u.id END AND fr.status IN ('accepted','pending')) ORDER BY u.name LIMIT 50",u.id,u.id,u.id,u.id,u.id,u.id),u)})}
