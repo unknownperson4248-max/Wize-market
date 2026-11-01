@@ -1,0 +1,9 @@
+-- Chat message reports, Owner-chosen chat restrictions and voice/video calls in personal chats.
+-- Additive only: new tables; no existing data changes.
+CREATE TABLE IF NOT EXISTS wm_message_reports(id TEXT PRIMARY KEY,reporter_id TEXT NOT NULL REFERENCES users(id),target_id TEXT NOT NULL REFERENCES users(id),kind TEXT NOT NULL CHECK(kind IN ('private','group')),chat_id TEXT NOT NULL,message_id INTEGER NOT NULL,message_text TEXT NOT NULL DEFAULT '',message_at INTEGER,context TEXT NOT NULL DEFAULT '[]',reason TEXT NOT NULL,details TEXT NOT NULL DEFAULT '',status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','actioned','dismissed')),action TEXT NOT NULL DEFAULT '',created_at INTEGER NOT NULL,resolved_by TEXT REFERENCES users(id),resolved_at INTEGER,UNIQUE(reporter_id,kind,message_id));
+CREATE INDEX IF NOT EXISTS wm_message_reports_status ON wm_message_reports(status,created_at);
+CREATE INDEX IF NOT EXISTS wm_message_reports_target ON wm_message_reports(target_id);
+CREATE TABLE IF NOT EXISTS wm_chat_restrictions(user_id TEXT PRIMARY KEY REFERENCES users(id),until_at INTEGER NOT NULL,reason TEXT NOT NULL DEFAULT '',created_by TEXT REFERENCES users(id),created_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS wm_calls(id TEXT PRIMARY KEY,thread_id TEXT NOT NULL REFERENCES wm_threads(id),caller_id TEXT NOT NULL REFERENCES users(id),callee_id TEXT NOT NULL REFERENCES users(id),video INTEGER NOT NULL DEFAULT 0,status TEXT NOT NULL DEFAULT 'ringing' CHECK(status IN ('ringing','active','ended','declined','missed','failed')),offer TEXT NOT NULL DEFAULT '',answer TEXT,created_at INTEGER NOT NULL,answered_at INTEGER,ended_at INTEGER,ended_by TEXT,caller_seen INTEGER NOT NULL DEFAULT 0,callee_seen INTEGER NOT NULL DEFAULT 0);
+CREATE INDEX IF NOT EXISTS wm_calls_callee ON wm_calls(callee_id,status,created_at);
+CREATE INDEX IF NOT EXISTS wm_calls_caller ON wm_calls(caller_id,status,created_at);

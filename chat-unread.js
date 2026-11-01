@@ -26,7 +26,7 @@ function syncUnreadSession(){
 async function refreshChatUnread(){
  if(!me||document.hidden)return;if(unreadBusy)return
  const userId=me.id,epoch=unreadEpoch;unreadBusy=true;
- try{const data=await api('/chat-unread');if(me?.id!==userId||unreadEpoch!==epoch){unreadAgain=true;return}chatUnreadCounts=new Map(data.chats.map(item=>[unreadKey(item.kind,item.id),item]));paintChatUnread()}
+ try{const data=await api('/chat-unread');if(me?.id!==userId||unreadEpoch!==epoch){unreadAgain=true;return}chatUnreadCounts=new Map(data.chats.map(item=>[unreadKey(item.kind,item.id),item]));paintChatUnread();if(typeof onIncomingCall==='function')onIncomingCall(data.incoming_call)}
  finally{unreadBusy=false;if(unreadAgain){unreadAgain=false;void refreshChatUnread().catch(()=>{})}}
 }
 async function readChatThrough(kind,id,messageId){

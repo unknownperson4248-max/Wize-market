@@ -67,3 +67,17 @@ body{background:radial-gradient(ellipse at 0 0,#20483a44,transparent 55%),radial
 #postTabs[hidden]{display:none}
 .admin-post-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
 .admin-post-code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:14px;color:var(--mint)}
+
+/* Chat reports */
+.chat-report.open{border-color:#ff8fa3}
+.chat-report-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:6px}
+.chat-report-reason{font-weight:700;font-size:13px}
+.chat-report h3{margin:4px 0 2px}
+.chat-report-message{display:grid;gap:4px;margin:10px 0;padding:10px 12px;border-radius:12px;background:#ffffff08;border:1px solid var(--line)}
+.chat-report-message p{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.chat-report-message .context{color:var(--muted);font-size:13px}
+.chat-report-message .reported{padding:8px 10px;border-radius:10px;background:#ff4d6d22;border:1px solid #ff4d6d66;font-weight:600}
+.chat-report-details{font-style:italic;color:var(--muted)}
+.chat-report-actions{display:grid;gap:8px;margin-top:8px}
+.chat-report-actions .btn.danger{background:linear-gradient(135deg,#ff4d6d,#c9184a);color:#fff;border-color:transparent}
+.restricted-box{margin-bottom:12px}.restricted-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--line)}.restricted-row strong{flex:1}
