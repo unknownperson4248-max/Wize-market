@@ -195,16 +195,17 @@ body{background:var(--bg)!important}
 
 /* Messenger-style chat bubbles: mine on the right in blue, others on the left in grey with a small photo. */
 .chat-open #chatMessages{gap:0;padding:12px 12px 16px}
-#chatMessages>.bubble{position:relative;align-self:flex-start;max-width:min(76%,520px);margin:1px 0 1px 36px;padding:8px 12px;border:0!important;border-radius:18px;background:#24384b!important;color:#eef6ff!important;box-shadow:none;line-height:1.4}
-#chatMessages>.bubble.mine{align-self:flex-end;margin:1px 0 1px 40px;background:#0a7cff!important;color:#fff!important}
+#chatMessages>.bubble{position:relative;align-self:flex-start;max-width:min(72%,520px);margin:1px 0 1px 44px;padding:8px 12px;border:0!important;border-radius:18px;background:#24384b!important;color:#eef6ff!important;box-shadow:none;line-height:1.4}
+#chatMessages>.bubble.mine{align-self:flex-end;margin:1px 44px 1px 40px;background:#0a7cff!important;color:#fff!important}
 #chatMessages>.bubble.run-start{margin-top:10px}
 #chatMessages>.bubble:not(.mine):not(.run-end){border-bottom-left-radius:5px}
 #chatMessages>.bubble:not(.mine):not(.run-start){border-top-left-radius:5px}
 #chatMessages>.bubble.mine:not(.run-end){border-bottom-right-radius:5px}
 #chatMessages>.bubble.mine:not(.run-start){border-top-right-radius:5px}
 #chatMessages>.bubble p{margin:0;font-size:15px;color:inherit!important}
-#chatMessages>.bubble .msg-face{position:absolute;left:-36px;bottom:0;width:28px;height:28px}
-#chatMessages>.bubble .msg-face>.avatar{width:28px;height:28px;border-radius:50%;overflow:hidden;margin:0;font-size:11px}
+#chatMessages>.bubble .msg-face{position:absolute;left:-42px;bottom:0;width:32px;height:32px;padding:0;border:0;background:none;cursor:pointer}
+#chatMessages>.bubble.mine .msg-face{left:auto;right:-42px}
+#chatMessages>.bubble .msg-face>.avatar{width:32px;height:32px;border-radius:50%;overflow:hidden;margin:0;font-size:12px}
 #chatMessages>.bubble .msg-face>.avatar img{width:100%;height:100%;object-fit:cover}
 .msg-face-tick{position:absolute;right:-4px;bottom:-3px;width:15px;height:15px;box-sizing:border-box;border-radius:50%;background:#1877f2;border:2px solid var(--bg);display:grid;place-items:center}
 .msg-face-tick svg{width:9px;height:9px;fill:none;stroke:#fff;stroke-width:3.4;stroke-linecap:round;stroke-linejoin:round}
@@ -265,3 +266,39 @@ body #profileTabs .profile-tab[aria-selected=true],body .profile-tabs .profile-t
 .chat-subtitle .trust-badges{transform:scale(.85);transform-origin:left center}
 #chatMessages>.bubble .message-author{flex-wrap:wrap;row-gap:3px}
 #chatMessages>.bubble .message-author .trust-badges{flex:none;transform:scale(.88);transform-origin:left center}
+
+/* Sender line above each run: name + badge (others on the left, mine on the right). */
+.msg-sender{display:flex;align-items:center;gap:5px;max-width:82%;min-width:0;margin:12px 0 3px 46px}
+.msg-sender.mine{align-self:flex-end;margin:12px 46px 3px 0}
+.msg-sender-name{min-width:0;padding:0;border:0;background:none;color:#a9c8e4;font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+.msg-sender.mine .msg-sender-name{color:#8fb9e0}
+.msg-sender .trust-badges{flex:none;margin-left:2px;gap:3px}
+.msg-sender .trust-pill{font-size:9px;padding:1px 5px 1px 3px}
+.msg-sender .trust-pill .social-icon,.msg-sender .trust-pill .social-icon svg{width:11px;height:11px}
+.msg-sender .verified-tick{width:15px;height:15px}
+.msg-sender .verified-tick svg{width:10px;height:10px}
+.msg-sender+.bubble.run-start{margin-top:0}
+.chat-time-divider+.msg-sender{margin-top:4px}
+
+/* Post type chooser: Sell · Normal · Need (Normal sits a little higher in the middle). */
+.create-fan{width:300px;height:128px}
+.fan-option{--fan-x:-96px;width:92px;top:22px}
+.fan-option.normal{--fan-x:0px;top:0;animation-delay:.015s}
+.fan-option.need{--fan-x:96px}
+.fan-option.normal .fan-icon{background:linear-gradient(145deg,#b38cff,#6a3fe0)!important;border-color:#d9c7ff!important;color:#fff!important;box-shadow:0 0 15px #8a5cff66!important}
+.post-intent-label.normal{background:#2d2350;color:#d4c4ff;border-color:#5b4a99}
+.social-post[data-intent=normal] .post-copy h2{font-size:18px}
+/* Template tip under the post form heading */
+.post-template-tip{margin:-4px 0 12px;padding:10px 12px;border-radius:12px;background:#12304a;border:1px solid #2c557a;color:#cfe8ff;font-size:13px;line-height:1.5;white-space:pre-line}
+/* Feed notice from the Owner */
+.site-notice{display:flex;align-items:center;gap:10px;margin:0 0 14px;padding:10px 12px;border-radius:14px;background:#123150;border:1px solid #2f5f8a;color:#e3f2ff}
+.site-notice p{flex:1;margin:0;font-size:13px;line-height:1.45;white-space:pre-line;overflow-wrap:anywhere}
+.site-notice a{flex:none;color:#7cc4ff;font-weight:700;font-size:13px}
+.site-notice-icon{flex:none;font-size:18px}
+.site-notice-close{flex:none;border:0;background:none;color:#a9c4dc;font-size:20px;line-height:1;padding:2px 4px;cursor:pointer}
+/* Verification custom questions */
+#verificationQuestions:empty{display:none}
+#verificationQuestions .input{margin-bottom:6px}
+/* Dim the page behind the post type chooser so the three options are easy to read. */
+body.create-menu-open::after{content:'';position:fixed;inset:0;z-index:140;background:#020a14b3;pointer-events:none;animation:fade-in .15s ease-out both}
+@keyframes fade-in{from{opacity:0}to{opacity:1}}

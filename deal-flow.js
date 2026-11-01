@@ -333,3 +333,39 @@ async function openImageEditor(item){
  frame.append(work,box);stage.append(frame);modal.append(top,stage,options,tools);document.body.append(modal);photoEditor=modal;
  document.addEventListener('keydown',onKey);addEventListener('resize',placeCrop);setMode('draw');done.focus();
 }
+
+// Chat: every run of messages shows who sent it - name and badge above, photo beside the last bubble (mine too).
+function openChatPerson(m,kind,trigger){if(m.user_id===me?.id)return showProfile(me.id);if(kind==='group')return openMemberActions({id:m.user_id,name:m.name,picture:m.picture,verified:m.verified},trigger);if(kind==='private'&&typeof openPeerInfo==='function')return openPeerInfo();return showProfile(m.user_id)}
+function chatSenderLine(m,kind,mine){const line=node('div',undefined,'msg-sender'+(mine?' mine':'')),name=node('button',mine?m.name||me?.name||'You':m.name,'msg-sender-name');name.type='button';name.setAttribute('aria-label',(mine?'Your profile':'Open '+m.name));name.onclick=()=>openChatPerson(m,kind,name);line.append(name,verifiedMark(m.role||'member',undefined,!!m.verified));return line}
+function chatFace(m,kind,mine){const face=node('button',undefined,'msg-face');face.type='button';face.setAttribute('aria-label',mine?'Your profile':'Open '+m.name);face.onclick=()=>openChatPerson(m,kind,face);face.append(avatar({id:m.user_id,name:m.name,picture:m.picture,role:m.role,verified:m.verified}));if(m.verified||m.role==='owner'){const tick=node('span',undefined,'msg-face-tick');tick.innerHTML='<svg viewBox="0 0 24 24"><path d="m6.5 12.5 3.6 3.6L17.5 8.5"/></svg>';face.append(tick)}return face}
+
+// ---- Owner-editable texts and templates (Admin Panel → 📝 Texts & templates) ----
+globalThis.wmSiteContent=null;
+function isNormalPost(p){return !!p&&p.post_intent!=='need'&&p.kind==='Community post'}
+function postTemplate(intent){return globalThis.wmSiteContent?.templates?.[intent||(typeof postIntent==='string'?postIntent:'sell')]||{}}
+function postDetailsUntouched(){const value=$('postDetails').value.trim();return !value||['sell','need','normal'].some(k=>(postTemplate(k).details||'').trim()===value)}
+function postDraftEmpty(){return !uploads.length&&!$('postTitle').value.trim()&&postDetailsUntouched()&&!$('needDescription').value.trim()}
+async function loadSiteContent(){try{const {content}=await api('/site-content');globalThis.wmSiteContent=content;applySiteContent()}catch{}}
+function applySiteContent(){
+ const c=globalThis.wmSiteContent;if(!c)return;
+ const copy=$('footerCopy');if(copy){copy.textContent=c.footerText;copy.hidden=!c.footerText}
+ const powered=$('footerPowered');if(powered){powered.replaceChildren();powered.hidden=!c.poweredBy;if(c.poweredBy){if(c.poweredByUrl){const a=node('a',c.poweredBy);a.href=c.poweredByUrl;a.target='_blank';a.rel='noopener noreferrer';powered.append(a)}else powered.textContent=c.poweredBy}}
+ renderSiteNotice();
+ const v=c.verification||{},set=(id,value)=>{const el=$(id);if(el&&value)el.textContent=value};
+ set('verificationIntro',v.intro);set('verificationWhatsappLabel',v.whatsappLabel);set('verificationLocationLabel',v.locationLabel);set('verificationNidLabel',v.nidLabel);set('verificationConsentText',v.consent);
+ if(active==='post'&&typeof syncPostIntent==='function'&&!editingPost)syncPostIntent();
+}
+// Notice line at the top of the feed (Owner turns it on in the Admin Panel). A member can hide it until the text changes.
+function renderSiteNotice(){
+ const c=globalThis.wmSiteContent,home=$('page-home');let box=$('siteNotice');if(!home)return;
+ const key='wm-notice-hidden',hiddenText=(()=>{try{return localStorage.getItem(key)}catch{return null}})();
+ if(!c?.noticeOn||!c.noticeText||hiddenText===c.noticeText){box?.remove();return}
+ if(!box){box=node('div',undefined,'site-notice');box.id='siteNotice';box.setAttribute('role','status');home.prepend(box)}
+ box.replaceChildren(node('span','📢','site-notice-icon'),node('p',c.noticeText));
+ if(c.noticeLink){const a=node('a','Open');a.href=c.noticeLink;a.target='_blank';a.rel='noopener noreferrer';box.append(a)}
+ const close=button('×',()=>{try{localStorage.setItem(key,c.noticeText)}catch{}box.remove()},'site-notice-close');close.setAttribute('aria-label','Hide notice');box.append(close);
+}
+// Verification form: the Owner's custom questions.
+function renderVerificationQuestions(){const root=$('verificationQuestions');if(!root)return;root.replaceChildren();for(const [i,q] of (globalThis.wmSiteContent?.verification?.questions||[]).entries()){const label=node('label',q.label+(q.required?'':' (optional)'));label.htmlFor='verificationAnswer'+i;const input=node('input',undefined,'input verification-answer');input.id=label.htmlFor;input.maxLength=500;input.required=!!q.required;root.append(label,input)}}
+function verificationAnswers(){return [...document.querySelectorAll('#verificationQuestions .verification-answer')].map(input=>input.value.trim())}
+void loadSiteContent();

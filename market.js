@@ -154,7 +154,7 @@ $('verificationLocate').onclick=()=>{
 };
 async function openVerificationRequest(){
  if(!requireLogin())return;
- $('verificationForm').reset();verificationPlace=null;$('verificationLocationStatus').textContent='Needed once, to check you are a real person. Only the Owner can see it.';$('verificationModal').hidden=false;$('verificationHistory').textContent='Loading your application history…';
+ $('verificationForm').reset();renderVerificationQuestions();verificationPlace=null;$('verificationLocationStatus').textContent='Needed once, to check you are a real person. Only the Owner can see it.';$('verificationModal').hidden=false;$('verificationHistory').textContent='Loading your application history…';
  try{const result=await api('/verification');$('verificationHistory').textContent=result.requests.length?'Previous applications: '+result.requests.map(r=>r.kind+' — '+r.status).join(' · '):'No previous applications.'}catch(error){$('verificationHistory').textContent=error.message}
  $('verificationKind').focus();
 }
@@ -165,7 +165,7 @@ $('verificationForm').onsubmit=async e=>{
  try{
   if(!verificationPlace)throw Error('Tap “Share my live location” first.');
   const documentId=await uploadPrivateEvidence($('verificationNid').files[0],'verification');
-  await api('/verification',{kind:$('verificationKind').value,whatsapp:$('verificationWhatsapp').value.trim(),location:verificationPlace,documentId});
+  await api('/verification',{kind:$('verificationKind').value,whatsapp:$('verificationWhatsapp').value.trim(),location:verificationPlace,documentId,answers:verificationAnswers()});
   $('verificationModal').hidden=true;toast('Verification request submitted privately. Owner review is pending.');
  }catch(error){toast(error.message)}
  finally{submit.disabled=false}
