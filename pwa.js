@@ -4,21 +4,44 @@ const installSeen=()=>{try{return localStorage.getItem('wm_install_first_offer')
 const markInstallSeen=()=>{try{localStorage.setItem('wm_install_first_offer','1')}catch{}};
 const knownInstalled=()=>{try{return localStorage.getItem('wm_app_installed')==='1'}catch{return false}};
 function closeInstallHelp(){$('installHelp').hidden=true}
+const onIos=()=>/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+const inAppBrowser=()=>/FBAN|FBAV|FB_IAB|FBIOS|Instagram|Messenger|MicroMessenger|Line\/|Snapchat|musical_ly|TikTok|Twitter/i.test(navigator.userAgent);
+const iosOtherBrowser=()=>/CriOS|FxiOS|EdgiOS|OPiOS|YaBrowser/i.test(navigator.userAgent);
+const installHiddenUntil=()=>{try{return Number(localStorage.getItem('wm_install_hide_until')||0)}catch{return 0}};
+// iPhone has no install signal, so the banner comes back (3 days after ✕) until Wize X is opened from the Home Screen.
 function displayInstallOffer(){
- if(installedApp()||knownInstalled()||installSeen())return;
+ if(installedApp()||knownInstalled())return;
+ if(onIos()){if(installHiddenUntil()>Date.now())return}else if(installSeen())return;
  $('appInstallBanner').hidden=false;markInstallSeen();
 }
+const IOS_SHARE='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M8 10H6a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1h-2"/></svg>';
+function installStep(icon,html){const li=node('li'),badge=node('span',undefined,'install-step-icon'),text=node('span');if(icon.startsWith('<svg'))badge.innerHTML=icon;else badge.textContent=icon;text.innerHTML=html;li.append(badge,text);return li}
+// Step-by-step guide: iPhone (Safari / other browsers), apps like Facebook that open links inside, and Android browsers.
+function showInstallGuide(){
+ const box=$('installInstructions'),ios=onIos(),list=node('ol',undefined,'install-step-list'),browser=ios?'Safari':'Chrome',name=($('installHelpTitle')?.textContent||'').replace(/^Install\s+/i,'').trim().replace(/[<>&"]/g,'')||'WIZE MARKET';
+ if(inAppBrowser()){
+  box.replaceChildren(node('p','This page is open inside another app (Facebook, Messenger…). Apps can only be added from '+browser+':','hint'));
+  list.append(installStep('•••','Tap <b>•••</b> at the top and choose <b>Open in '+browser+'</b> (or <b>Open in browser</b>).'),installStep('🔗','Or copy the link and paste it into '+browser+'.'));
+  box.append(list,button('📋 Copy link',async()=>{try{await navigator.clipboard.writeText(location.origin+'/');toast('Link copied. Paste it in '+browser+'.')}catch{toast(location.origin+'/')}},'btn secondary install-copy'));
+ }else if(ios){
+  box.replaceChildren(node('p','iPhone does not allow one-tap install for websites. It takes 3 taps:','hint'));
+  list.append(installStep(IOS_SHARE,iosOtherBrowser()?'Tap the <b>Share</b> button at the top of the browser.':'Tap the <b>Share</b> button at the bottom of Safari. On newer iPhones, tap <b>•••</b> first, then <b>Share</b>.'),installStep('➕','Scroll down and tap <b>Add to Home Screen</b>.'),installStep('✅','Tap <b>Add</b> at the top right.'),installStep('📱','Open <b>'+name+'</b> from the Home Screen. Call alerts work only from there.'));
+  box.append(list);if(iosOtherBrowser())box.append(node('p','No "Add to Home Screen"? Open this page in Safari and try again.','hint'));
+ }else{
+  box.replaceChildren(node('p','Install from the browser menu:','hint'));
+  list.append(installStep('⋮','Tap the browser menu <b>⋮</b> at the top right.'),installStep('📲','Tap <b>Install app</b> or <b>Add to Home screen</b>.'),installStep('✅','Tap <b>Install</b>. Then open <b>'+name+'</b> from the Home Screen.'));box.append(list);
+ }
+ $('installHelp').hidden=false;$('closeInstallHelp').focus();
+}
 async function installMarketApp(){
- if(installedApp()||knownInstalled())return toast('WIZE MARKET is already installed or open as an app.');
- if(deferredInstall){
+ if(installedApp())return toast('WIZE MARKET is already open as an app.');
+ if(deferredInstall&&!inAppBrowser()){
   const prompt=deferredInstall;deferredInstall=null;await prompt.prompt();
   const result=await prompt.userChoice;
   if(result.outcome==='accepted'){$('appInstallBanner').hidden=true;markInstallSeen()}
   return;
  }
- const ios=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
- $('installInstructions').textContent=ios?'Open this website in Safari. Tap Share, then Add to Home Screen and confirm Add.':'Open your browser menu (⋮), then choose Install app or Add to Home screen. If this is an in-app browser, open the website in Chrome first.';
- $('installHelp').hidden=false;$('closeInstallHelp').focus();
+ showInstallGuide();
 }
 window.addEventListener('beforeinstallprompt',event=>{
  event.preventDefault();deferredInstall=event;
@@ -28,7 +51,7 @@ window.addEventListener('beforeinstallprompt',event=>{
 });
 window.addEventListener('appinstalled',()=>{deferredInstall=null;try{localStorage.setItem('wm_app_installed','1')}catch{}$('appInstallBanner').hidden=true;closeInstallHelp();toast('WIZE MARKET installed.')});
 $('installApp').onclick=()=>void installMarketApp().catch(e=>toast(e.message));
-$('dismissInstall').onclick=()=>{$('appInstallBanner').hidden=true;markInstallSeen()};
+$('dismissInstall').onclick=()=>{$('appInstallBanner').hidden=true;markInstallSeen();try{localStorage.setItem('wm_install_hide_until',String(Date.now()+3*24*3600000))}catch{}};
 $('closeInstallHelp').onclick=closeInstallHelp;
 $('installHelp').onclick=e=>{if(e.target===$('installHelp'))closeInstallHelp()};
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeInstallHelp()});
@@ -36,7 +59,7 @@ $('appInstallBanner').hidden=true;
 // Opening the installed app once remembers it for this browser too, so the banner never comes back.
 if(installedApp()){try{localStorage.setItem('wm_app_installed','1')}catch{}}
 // Android/Chrome only offers installation when the app is not installed yet: wait for that signal. iPhone has no signal, so show it once.
-if(/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1))displayInstallOffer();
+if(onIos())displayInstallOffer();
 if(navigator.getInstalledRelatedApps)void navigator.getInstalledRelatedApps().then(apps=>{if(apps.length){try{localStorage.setItem('wm_app_installed','1')}catch{}$('appInstallBanner').hidden=true}}).catch(()=>{});
 
 if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('/sw.js',{scope:'/',updateViaCache:'none'}).catch(()=>{});

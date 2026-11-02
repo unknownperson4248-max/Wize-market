@@ -266,7 +266,7 @@ function paintAlertsCard(){
  if(card.dataset.mode===mode&&!card.hidden)return;card.dataset.mode=mode;
  const text=node('div');text.append(node('strong','🔔 Call alerts'),node('small',mode==='ask'?'Know when someone calls you, even when Wize X is closed.':mode==='blocked'?'Notifications are blocked. Allow them for Wize X in your browser settings.':'On iPhone, add Wize X to the Home Screen first, then open it from there.'));
  const close=button('✕',()=>{try{localStorage.setItem('wm_alerts_hide',String(Date.now()+7*24*HOUR_MS))}catch{}card.hidden=true},'btn ghost call-alerts-close');close.setAttribute('aria-label','Hide');
- card.replaceChildren(text,...(mode==='ask'?[button('Turn on',()=>void enableCallAlerts(),'btn call-alerts-on')]:[]),close);card.hidden=false;
+ card.replaceChildren(text,...(mode==='ask'?[button('Turn on',()=>void enableCallAlerts(),'btn call-alerts-on')]:mode==='iphone'?[button('How?',()=>showInstallGuide(),'btn call-alerts-on')]:[]),close);card.hidden=false;
 }
 const HOUR_MS=3600000;
 // Opening Wize X from an alert: ?call=… (ringing personal call), ?room=… (group/deal call), ?thread=… (missed call → that chat).

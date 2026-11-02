@@ -376,7 +376,7 @@ function verifyPrompt(){
 function dealPersonFace(id,name,picture){const b=node('button',undefined,'deal-person-face');b.type='button';b.setAttribute('aria-label','Open '+name+'’s profile');b.append(avatar({name,picture}));b.onclick=e=>{e.stopPropagation();if(id)void showProfile(id)};return b}
 function dealPersonLink(id,name){const b=node('button',name,'deal-person-link');b.type='button';b.onclick=e=>{e.stopPropagation();if(id)void showProfile(id)};return b}
 // Profile menu (like Facebook): an icon for every item, Help & support group, two ways to apply.
-Object.assign(socialGlyphs,{
+Object.assign(socialGlyphs,{download:'<path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 20h14"/>',
  help:'<circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 1 1 3.4 2.4c-.6.3-1 .8-1 1.5v.6"/><path d="M12 17h.01"/>',
  flag:'<path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/>',
  bug:'<rect x="8" y="7" width="8" height="12" rx="4"/><path d="M12 7V5M10 5l-1-1.5M14 5l1-1.5M4 11h4M16 11h4M4 16h4M16 16h4"/>',
@@ -387,6 +387,7 @@ function profileMenuItems(){
  if(!me?.verified&&!admin)items.push(['Get verified (blue tick)','verified',()=>openVerificationRequest('seller')]);
  if(!admin)items.push(['Become an Admin','shield',()=>openVerificationRequest('trusted')]);
  items.push(['Call alerts','bell',()=>enableCallAlerts()]);
+ if(!installedApp())items.push(['Install app','download',()=>installMarketApp()]);
  items.push(['Account security','lock',openAccountSecurity]);
  items.push({group:'Help & support',icon:'help',items:[['Report a scammer','flag',()=>openReport(null,'scam')],['Help','help',()=>openReport(null,'help')],['Website issue','bug',()=>openReport(null,'website-issue')],['Other','chat',()=>openReport(null,'other')]]});
  items.push(['Privacy & Terms','file',()=>navigate('privacy')]);

@@ -104,6 +104,14 @@ body.chat-open{overflow:hidden;height:100dvh}.chat-open>header,.chat-open .side,
 .create-post-menu{position:fixed;z-index:150;left:50%;bottom:calc(100px + env(safe-area-inset-bottom));transform:translateX(-50%);width:270px;max-width:calc(100vw - 32px);padding:12px;background:#142037;border:1px solid #5a4c8a;border-radius:19px;box-shadow:0 14px 60px #000a;animation:create-menu-in .18s ease-out}.create-post-menu>p{font-size:12px;color:#b6c4de;margin:2px 8px 8px}.create-post-menu>button{display:flex;align-items:center;gap:13px;width:100%;padding:12px;border:0;background:transparent;color:#f5f7ff;text-align:left;border-radius:12px;cursor:pointer}.create-post-menu>button:hover,.create-post-menu>button:focus-visible{background:#253656}.create-post-menu button>span:last-child{display:flex;flex-direction:column;gap:5px}.create-post-menu small{color:#adbeda;font-size:11px}.create-kind-icon{display:grid;place-items:center;width:40px;height:40px;border-radius:12px;background:#204f4e;color:#94f1dc;font-size:25px}.create-kind-icon.need{background:#54263b;color:#ffb9c8}@keyframes create-menu-in{from{opacity:0;transform:translate(-50%,10px) scale(.96)}to{opacity:1;transform:translate(-50%,0) scale(1)}}
 .app-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 18px;padding:2px 0;min-height:44px}.app-wordmark{font:700 12px system-ui;color:#aabbd7;text-decoration:none;letter-spacing:1.5px}.notification-anchor{position:relative}.notification-bell{position:relative;display:grid;place-items:center;width:42px;height:42px;border-radius:50%;background:#142038;border:1px solid #334c70;color:#dce7ff;cursor:pointer}.notification-bell svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}#notificationCount{position:absolute;top:-3px;right:-5px;min-width:19px;height:19px;padding:0 4px;box-sizing:border-box;display:grid;place-items:center;border-radius:12px;border:2px solid #0b1323;background:#ed334e;color:#fff;font:700 10px system-ui}.notification-panel{position:fixed;box-sizing:border-box;z-index:180;right:0;top:50px;width:370px;max-width:calc(100vw - 28px);max-height:min(650px,calc(100dvh - 160px));overflow:auto;overscroll-behavior:contain;background:#121e32;border:1px solid #425a7f;border-radius:16px;box-shadow:0 16px 70px #000b}.notification-panel-head{display:flex;align-items:center;gap:8px;padding:12px;border-bottom:1px solid #2a3e5b;position:sticky;top:0;background:#121e32;z-index:1}.notification-panel h2{font-size:17px;margin:0;flex:1}.notification-panel .btn{font-size:11px;padding:9px}.notification-panel .popup-close{display:grid;place-items:center;flex:none;width:31px;height:31px;border:1px solid #455d80;border-radius:50%;background:#22344f;color:#ecf4ff;font-size:22px;cursor:pointer}.notification-empty{padding:20px;font-size:13px;color:#b5c6df}.notification-row{padding:5px 9px;border-bottom:1px solid #25354e}.notification-row.unread{background:#1b2d49}.notification-link{display:flex;align-items:center;gap:10px;width:100%;border:0;border-radius:8px;padding:9px 2px;background:transparent;color:#e7efff;text-align:left;cursor:pointer}.notification-link .avatar{width:38px;height:38px;flex:none;border-radius:50%}.notification-copy{display:flex;flex-direction:column;gap:5px;flex:1;min-width:0;overflow-wrap:anywhere}.notification-copy strong{display:flex;align-items:center;gap:4px;font-size:12px}.notification-copy>span{font-size:12px;color:#d4e1f4}.notification-copy small{font-size:10px;color:#a5b7d2}.notification-dot{width:8px;height:8px;flex:none;border-radius:50%;background:#ff425c}.notification-dot.muted{background:#78879f}.notification-read{display:block;margin:0 0 5px 49px;border:0;background:transparent;color:#8ecce9;font-size:10px;padding:5px;cursor:pointer}.notification-preference{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:13px;margin:0;font-size:13px}.notification-preference input{width:21px;height:21px;accent-color:#2ed5cc}#notificationPreferences>.hint{padding:10px 13px;margin:0}.chat-open .app-header{display:none}#notificationToolbar{padding:2px 9px}#moreNotifications{display:block;margin:10px auto}.notification-bell:focus-visible,.create-post-menu button:focus-visible{outline:2px solid #6af0e4;outline-offset:3px}
 @media(min-width:1000px){.create-post-menu{left:150px;bottom:40px}}@media(max-width:720px){.app-header{margin:0 0 10px}.profile-page .app-header{padding:0 14px}.notification-panel{position:fixed;right:14px;top:calc(68px + env(safe-area-inset-top));max-height:calc(100dvh - 180px)}}@media(prefers-reduced-motion:reduce){.create-post-menu{animation:none}}
+/* Install guide (iPhone needs Share → Add to Home Screen) */
+#installHelp .dialog{max-width:440px}
+.install-step-list{list-style:none;margin:10px 0 6px;padding:0;display:grid;gap:8px}
+.install-step-list li{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;background:#0f2235;border:1px solid #ffffff14;line-height:1.35}
+.install-step-icon{flex:none;width:38px;height:38px;border-radius:11px;display:grid;place-items:center;background:#1c3a57;font-size:18px;font-weight:800;color:#fff}
+.install-step-icon svg{width:22px;height:22px;fill:none;stroke:#7cc4ff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.install-steps .hint{margin:4px 0}
+.install-copy{width:100%;margin-top:4px}
 
 /* Compact Wize gaming skin: electric blue, violet energy and dark glass. */
 :root{--bg:#07091a;--panel:#0e142c;--line:#26365a;--text:#f1f5ff;--muted:#8c9bbd;--mint:#51e6ff;--purple:#a36bff;--aura:#9a4dff;color-scheme:dark}
@@ -737,7 +745,7 @@ audio.call-tile-media{display:none!important}
 
 <div id="profileMenuModal" class="profile-menu-overlay" hidden><aside id="profileMenuPanel" role="dialog" aria-modal="true" aria-label="Profile menu" tabindex="-1"><div class="profile-drawer-heading"><h2>Profile menu</h2><button id="closeProfileMenu" type="button" aria-label="Close profile menu">×</button></div><div id="profileMenuIdentity"></div><nav id="profileMenuItems" aria-label="Profile actions"></nav><footer class="profile-menu-footer"><p id="footerCopy">© 2026 Buy Sell This Site. All rights reserved.</p><a id="profilePrivacyLink" href="#privacy">Privacy &amp; Terms</a><p id="footerPowered">Powered by <a href="https://rahatwize.com/" target="_blank" rel="noopener noreferrer">@Rahat Wize</a></p></footer><button id="profileMenuSignOut" class="profile-menu-sign-out" type="button">Log out</button></aside></div>
 
-<div id="installHelp" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="installHelpTitle"><div class="dialog card"><div class="page-heading"><h2 id="installHelpTitle">Install WIZE MARKET</h2><button id="closeInstallHelp" class="btn ghost" aria-label="Close install instructions">×</button></div><p id="installInstructions"></p></div></div>
+<div id="installHelp" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="installHelpTitle"><div class="dialog card"><div class="page-heading"><h2 id="installHelpTitle">Install WIZE MARKET</h2><button id="closeInstallHelp" class="btn ghost" aria-label="Close install instructions">×</button></div><div id="installInstructions" class="install-steps"></div></div></div>
 
 <div id="memberActionModal" class="modal member-action-modal" hidden role="dialog" aria-modal="true" aria-labelledby="memberActionName"><div class="dialog card"><div class="page-heading"><h2 id="memberActionName">Member</h2><button id="closeMemberActions" class="btn ghost" type="button" aria-label="Close member options">×</button></div><div id="memberActionIdentity"></div><div id="memberActionButtons"></div></div></div>
 
@@ -1558,21 +1566,44 @@ const installSeen=()=>{try{return localStorage.getItem('wm_install_first_offer')
 const markInstallSeen=()=>{try{localStorage.setItem('wm_install_first_offer','1')}catch{}};
 const knownInstalled=()=>{try{return localStorage.getItem('wm_app_installed')==='1'}catch{return false}};
 function closeInstallHelp(){$('installHelp').hidden=true}
+const onIos=()=>/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+const inAppBrowser=()=>/FBAN|FBAV|FB_IAB|FBIOS|Instagram|Messenger|MicroMessenger|Line\/|Snapchat|musical_ly|TikTok|Twitter/i.test(navigator.userAgent);
+const iosOtherBrowser=()=>/CriOS|FxiOS|EdgiOS|OPiOS|YaBrowser/i.test(navigator.userAgent);
+const installHiddenUntil=()=>{try{return Number(localStorage.getItem('wm_install_hide_until')||0)}catch{return 0}};
+// iPhone has no install signal, so the banner comes back (3 days after ✕) until Wize X is opened from the Home Screen.
 function displayInstallOffer(){
- if(installedApp()||knownInstalled()||installSeen())return;
+ if(installedApp()||knownInstalled())return;
+ if(onIos()){if(installHiddenUntil()>Date.now())return}else if(installSeen())return;
  $('appInstallBanner').hidden=false;markInstallSeen();
 }
+const IOS_SHARE='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M8 10H6a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1h-2"/></svg>';
+function installStep(icon,html){const li=node('li'),badge=node('span',undefined,'install-step-icon'),text=node('span');if(icon.startsWith('<svg'))badge.innerHTML=icon;else badge.textContent=icon;text.innerHTML=html;li.append(badge,text);return li}
+// Step-by-step guide: iPhone (Safari / other browsers), apps like Facebook that open links inside, and Android browsers.
+function showInstallGuide(){
+ const box=$('installInstructions'),ios=onIos(),list=node('ol',undefined,'install-step-list'),browser=ios?'Safari':'Chrome',name=($('installHelpTitle')?.textContent||'').replace(/^Install\s+/i,'').trim().replace(/[<>&"]/g,'')||'WIZE MARKET';
+ if(inAppBrowser()){
+  box.replaceChildren(node('p','This page is open inside another app (Facebook, Messenger…). Apps can only be added from '+browser+':','hint'));
+  list.append(installStep('•••','Tap <b>•••</b> at the top and choose <b>Open in '+browser+'</b> (or <b>Open in browser</b>).'),installStep('🔗','Or copy the link and paste it into '+browser+'.'));
+  box.append(list,button('📋 Copy link',async()=>{try{await navigator.clipboard.writeText(location.origin+'/');toast('Link copied. Paste it in '+browser+'.')}catch{toast(location.origin+'/')}},'btn secondary install-copy'));
+ }else if(ios){
+  box.replaceChildren(node('p','iPhone does not allow one-tap install for websites. It takes 3 taps:','hint'));
+  list.append(installStep(IOS_SHARE,iosOtherBrowser()?'Tap the <b>Share</b> button at the top of the browser.':'Tap the <b>Share</b> button at the bottom of Safari. On newer iPhones, tap <b>•••</b> first, then <b>Share</b>.'),installStep('➕','Scroll down and tap <b>Add to Home Screen</b>.'),installStep('✅','Tap <b>Add</b> at the top right.'),installStep('📱','Open <b>'+name+'</b> from the Home Screen. Call alerts work only from there.'));
+  box.append(list);if(iosOtherBrowser())box.append(node('p','No "Add to Home Screen"? Open this page in Safari and try again.','hint'));
+ }else{
+  box.replaceChildren(node('p','Install from the browser menu:','hint'));
+  list.append(installStep('⋮','Tap the browser menu <b>⋮</b> at the top right.'),installStep('📲','Tap <b>Install app</b> or <b>Add to Home screen</b>.'),installStep('✅','Tap <b>Install</b>. Then open <b>'+name+'</b> from the Home Screen.'));box.append(list);
+ }
+ $('installHelp').hidden=false;$('closeInstallHelp').focus();
+}
 async function installMarketApp(){
- if(installedApp()||knownInstalled())return toast('WIZE MARKET is already installed or open as an app.');
- if(deferredInstall){
+ if(installedApp())return toast('WIZE MARKET is already open as an app.');
+ if(deferredInstall&&!inAppBrowser()){
   const prompt=deferredInstall;deferredInstall=null;await prompt.prompt();
   const result=await prompt.userChoice;
   if(result.outcome==='accepted'){$('appInstallBanner').hidden=true;markInstallSeen()}
   return;
  }
- const ios=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
- $('installInstructions').textContent=ios?'Open this website in Safari. Tap Share, then Add to Home Screen and confirm Add.':'Open your browser menu (⋮), then choose Install app or Add to Home screen. If this is an in-app browser, open the website in Chrome first.';
- $('installHelp').hidden=false;$('closeInstallHelp').focus();
+ showInstallGuide();
 }
 window.addEventListener('beforeinstallprompt',event=>{
  event.preventDefault();deferredInstall=event;
@@ -1582,7 +1613,7 @@ window.addEventListener('beforeinstallprompt',event=>{
 });
 window.addEventListener('appinstalled',()=>{deferredInstall=null;try{localStorage.setItem('wm_app_installed','1')}catch{}$('appInstallBanner').hidden=true;closeInstallHelp();toast('WIZE MARKET installed.')});
 $('installApp').onclick=()=>void installMarketApp().catch(e=>toast(e.message));
-$('dismissInstall').onclick=()=>{$('appInstallBanner').hidden=true;markInstallSeen()};
+$('dismissInstall').onclick=()=>{$('appInstallBanner').hidden=true;markInstallSeen();try{localStorage.setItem('wm_install_hide_until',String(Date.now()+3*24*3600000))}catch{}};
 $('closeInstallHelp').onclick=closeInstallHelp;
 $('installHelp').onclick=e=>{if(e.target===$('installHelp'))closeInstallHelp()};
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeInstallHelp()});
@@ -1590,7 +1621,7 @@ $('appInstallBanner').hidden=true;
 // Opening the installed app once remembers it for this browser too, so the banner never comes back.
 if(installedApp()){try{localStorage.setItem('wm_app_installed','1')}catch{}}
 // Android/Chrome only offers installation when the app is not installed yet: wait for that signal. iPhone has no signal, so show it once.
-if(/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1))displayInstallOffer();
+if(onIos())displayInstallOffer();
 if(navigator.getInstalledRelatedApps)void navigator.getInstalledRelatedApps().then(apps=>{if(apps.length){try{localStorage.setItem('wm_app_installed','1')}catch{}$('appInstallBanner').hidden=true}}).catch(()=>{});
 
 if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('/sw.js',{scope:'/',updateViaCache:'none'}).catch(()=>{});
@@ -1988,7 +2019,7 @@ function verifyPrompt(){
 function dealPersonFace(id,name,picture){const b=node('button',undefined,'deal-person-face');b.type='button';b.setAttribute('aria-label','Open '+name+'’s profile');b.append(avatar({name,picture}));b.onclick=e=>{e.stopPropagation();if(id)void showProfile(id)};return b}
 function dealPersonLink(id,name){const b=node('button',name,'deal-person-link');b.type='button';b.onclick=e=>{e.stopPropagation();if(id)void showProfile(id)};return b}
 // Profile menu (like Facebook): an icon for every item, Help & support group, two ways to apply.
-Object.assign(socialGlyphs,{
+Object.assign(socialGlyphs,{download:'<path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 20h14"/>',
  help:'<circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 1 1 3.4 2.4c-.6.3-1 .8-1 1.5v.6"/><path d="M12 17h.01"/>',
  flag:'<path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/>',
  bug:'<rect x="8" y="7" width="8" height="12" rx="4"/><path d="M12 7V5M10 5l-1-1.5M14 5l1-1.5M4 11h4M16 11h4M4 16h4M16 16h4"/>',
@@ -1999,6 +2030,7 @@ function profileMenuItems(){
  if(!me?.verified&&!admin)items.push(['Get verified (blue tick)','verified',()=>openVerificationRequest('seller')]);
  if(!admin)items.push(['Become an Admin','shield',()=>openVerificationRequest('trusted')]);
  items.push(['Call alerts','bell',()=>enableCallAlerts()]);
+ if(!installedApp())items.push(['Install app','download',()=>installMarketApp()]);
  items.push(['Account security','lock',openAccountSecurity]);
  items.push({group:'Help & support',icon:'help',items:[['Report a scammer','flag',()=>openReport(null,'scam')],['Help','help',()=>openReport(null,'help')],['Website issue','bug',()=>openReport(null,'website-issue')],['Other','chat',()=>openReport(null,'other')]]});
  items.push(['Privacy & Terms','file',()=>navigate('privacy')]);
@@ -2296,7 +2328,7 @@ function paintAlertsCard(){
  if(card.dataset.mode===mode&&!card.hidden)return;card.dataset.mode=mode;
  const text=node('div');text.append(node('strong','🔔 Call alerts'),node('small',mode==='ask'?'Know when someone calls you, even when Wize X is closed.':mode==='blocked'?'Notifications are blocked. Allow them for Wize X in your browser settings.':'On iPhone, add Wize X to the Home Screen first, then open it from there.'));
  const close=button('✕',()=>{try{localStorage.setItem('wm_alerts_hide',String(Date.now()+7*24*HOUR_MS))}catch{}card.hidden=true},'btn ghost call-alerts-close');close.setAttribute('aria-label','Hide');
- card.replaceChildren(text,...(mode==='ask'?[button('Turn on',()=>void enableCallAlerts(),'btn call-alerts-on')]:[]),close);card.hidden=false;
+ card.replaceChildren(text,...(mode==='ask'?[button('Turn on',()=>void enableCallAlerts(),'btn call-alerts-on')]:mode==='iphone'?[button('How?',()=>showInstallGuide(),'btn call-alerts-on')]:[]),close);card.hidden=false;
 }
 const HOUR_MS=3600000;
 // Opening Wize X from an alert: ?call=… (ringing personal call), ?room=… (group/deal call), ?thread=… (missed call → that chat).
