@@ -50,3 +50,14 @@
 .in-app-login-note small{color:#f3dcae;line-height:1.35}
 .in-app-login-actions{display:flex;gap:8px;flex-wrap:wrap}
 .in-app-login-actions .btn{flex:1;min-height:38px;padding:8px 12px}
+/* iPhone: the top bar shows how to add to the Home Screen */
+.app-install-banner.iphone-install{align-items:flex-start}
+.app-install-banner.iphone-install>img{margin-top:2px}
+.app-install-banner.iphone-install strong{font-size:14px}
+.app-install-banner.iphone-install{flex-wrap:wrap;row-gap:8px}
+.app-install-banner>.iphone-steps{order:5;flex:0 0 100%;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:4px 3px}
+.iphone-step{display:inline-flex;align-items:center;gap:4px;padding:3px 8px 3px 4px;border-radius:999px;background:#1c3a57;border:1px solid #79d4ff33;color:#eaf4ff;font-size:11.5px;font-weight:700;white-space:nowrap}
+.iphone-step-icon{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:#0d2236;font-size:11px}
+.iphone-step-icon svg{width:14px;height:14px;fill:none;stroke:#7cc4ff;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.iphone-step-arrow{color:#7cc4ff;font-weight:800;font-size:12px}
+.app-install-banner.iphone-install #installApp{margin-top:2px}

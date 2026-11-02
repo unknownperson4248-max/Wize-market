@@ -20,8 +20,19 @@ const installHiddenUntil=()=>{try{return Number(localStorage.getItem('wm_install
 // iPhone has no install signal, so the banner comes back (3 days after ✕) until Wize X is opened from the Home Screen.
 function displayInstallOffer(){
  if(installedApp()||knownInstalled())return;
- if(onIos()){if(installHiddenUntil()>Date.now())return}else if(installSeen())return;
+ if(onIos()){if(installHiddenUntil()>Date.now())return;iphoneBanner()}else if(installSeen())return;
  $('appInstallBanner').hidden=false;markInstallSeen();
+}
+const appName=()=>($('installHelpTitle')?.textContent||'').replace(/^Install\s+/i,'').trim()||'WIZE MARKET';
+// iPhone cannot install with one tap: the top bar itself shows the 3 steps (Share → Add to Home Screen → Add); "How?" opens the full guide.
+function iphoneBanner(){
+ const bar=$('appInstallBanner'),text=bar.querySelector(':scope>div');if(!text||bar.classList.contains('iphone-install'))return;bar.classList.add('iphone-install');
+ const chip=(icon,label)=>{const c=node('span',undefined,'iphone-step'),i=node('span',undefined,'iphone-step-icon');if(icon.startsWith('<svg'))i.innerHTML=icon;else i.textContent=icon;c.append(i,node('span',label));return c};
+ const steps=node('div',undefined,'iphone-steps');
+ if(inAppBrowser())steps.append(chip('•••','Open in Safari'),node('span','→','iphone-step-arrow'),chip(IOS_SHARE,'Share'),node('span','→','iphone-step-arrow'),chip('➕','Add to Home Screen'));
+ else steps.append(chip(IOS_SHARE,iosOtherBrowser()?'Share (top)':'Share'),node('span','→','iphone-step-arrow'),chip('➕','Add to Home Screen'),node('span','→','iphone-step-arrow'),chip('✅','Add'));
+ text.replaceChildren(node('strong','📲 Add '+appName()+' to your Home Screen'),node('small',inAppBrowser()?'Open this page in Safari first, then:':iosOtherBrowser()?'iPhone: no App Store needed. In this browser or Safari:':'iPhone: no App Store needed — 3 taps in Safari:'));bar.append(steps);
+ $('installApp').textContent='How?';$('installApp').setAttribute('aria-label','How to add to Home Screen');
 }
 const IOS_SHARE='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M8 10H6a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1h-2"/></svg>';
 function installStep(icon,html){const li=node('li'),badge=node('span',undefined,'install-step-icon'),text=node('span');if(icon.startsWith('<svg'))badge.innerHTML=icon;else badge.textContent=icon;text.innerHTML=html;li.append(badge,text);return li}
@@ -86,5 +97,5 @@ async function renderPublicDeals(root,offset=0){
 }
 async function loadFeatures(){}
 
-async function loadPwaBranding(){try{const config=await api('/pwa');document.title=config.name;document.querySelectorAll('[data-app-name],.app-wordmark,#loginBrand').forEach(element=>element.textContent=config.name);if(globalThis.wmSiteContent?.login?.brand)$('loginBrand').textContent=globalThis.wmSiteContent.login.brand;document.querySelectorAll('[data-app-description]').forEach(element=>element.textContent=config.description);let description=document.querySelector('meta[name="description"]');if(!description){description=document.createElement('meta');description.name='description';document.head.append(description)}description.content=config.description;$('appInstallBanner').setAttribute('aria-label','Install '+config.name);$('appInstallBanner').querySelector('strong').textContent=config.name;$('appInstallBanner').querySelector('img').src=config.icons[0].src;document.querySelector('link[rel="apple-touch-icon"]').href=config.icons[0].src;$('installHelpTitle').textContent='Install '+config.name;await loadAppearance()}catch{}}
+async function loadPwaBranding(){try{const config=await api('/pwa');document.title=config.name;document.querySelectorAll('[data-app-name],.app-wordmark,#loginBrand').forEach(element=>element.textContent=config.name);if(globalThis.wmSiteContent?.login?.brand)$('loginBrand').textContent=globalThis.wmSiteContent.login.brand;document.querySelectorAll('[data-app-description]').forEach(element=>element.textContent=config.description);let description=document.querySelector('meta[name="description"]');if(!description){description=document.createElement('meta');description.name='description';document.head.append(description)}description.content=config.description;$('appInstallBanner').setAttribute('aria-label','Install '+config.name);$('appInstallBanner').querySelector('strong').textContent=$('appInstallBanner').classList.contains('iphone-install')?'📲 Add '+config.name+' to your Home Screen':config.name;$('appInstallBanner').querySelector('img').src=config.icons[0].src;document.querySelector('link[rel="apple-touch-icon"]').href=config.icons[0].src;$('installHelpTitle').textContent='Install '+config.name;await loadAppearance()}catch{}}
 void loadPwaBranding();
