@@ -1,0 +1,110 @@
+/* Call buttons in the personal chat header */
+.chat-call-btn{flex:none;display:grid;place-items:center;width:38px;height:38px;padding:0;border:0;border-radius:50%;background:transparent;color:#84cfff;cursor:pointer}
+.chat-call-btn svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.chat-call-btn:hover,.chat-call-btn:focus-visible{background:#ffffff12}
+.chat-call-btn[hidden]{display:none}
+body.call-open{overflow:hidden}
+/* Call screen */
+.call-screen{position:fixed;inset:0;z-index:220;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 20%,#1c4a73,#071321 70%);color:#fff;overflow:hidden}
+.call-screen[hidden],.incoming-call[hidden]{display:none}
+.call-remote-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000;display:none}
+.call-screen.video .call-remote-video{display:block}
+.call-local-video{position:absolute;top:max(16px,env(safe-area-inset-top));right:16px;width:108px;height:148px;border-radius:16px;object-fit:cover;background:#0b1b2b;border:2px solid #ffffff55;box-shadow:0 8px 24px #0008;z-index:2;display:none}
+.call-local-video.mirror{transform:scaleX(-1)}
+.call-screen.video .call-local-video{display:block}
+.call-local-video.off{opacity:.25}
+.call-info{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;padding:0 24px}
+.call-screen.video.connected .call-info{position:absolute;top:max(18px,env(safe-area-inset-top));left:18px;align-items:flex-start;text-align:left;padding:0;text-shadow:0 1px 6px #000}
+.call-screen.video.connected .call-avatar{display:none}
+.call-avatar .avatar{width:118px;height:118px;border-radius:50%;overflow:hidden;margin:0 0 10px;font-size:36px}
+.call-avatar .avatar img{width:100%;height:100%;object-fit:cover}
+.call-info h2,.incoming-card strong{margin:0;font-size:26px}
+.call-badge{min-height:22px}
+.call-status{margin:0;color:#cfe4f7;font-size:15px}
+.call-status[hidden]{display:none}
+.call-timer{margin:0;font-variant-numeric:tabular-nums;font-size:18px;font-weight:700}
+.call-timer[hidden]{display:none}
+.call-controls{position:absolute;bottom:max(28px,env(safe-area-inset-bottom));left:0;right:0;z-index:3;display:flex;justify-content:center;gap:16px;padding:0 12px}
+.call-btn{display:flex;flex-direction:column;align-items:center;gap:6px;width:68px;padding:0;border:0;background:none;color:#fff;font-size:12px;cursor:pointer}
+.call-btn[hidden]{display:none}
+.call-btn svg{width:58px;height:58px;padding:16px;box-sizing:border-box;border-radius:50%;background:#ffffff26;fill:none;stroke:#fff;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;backdrop-filter:blur(6px)}
+.call-btn[aria-pressed=true] svg{background:#fff;stroke:#0b1b2b}
+.call-btn.hangup svg{background:#e5303f}
+/* Incoming call */
+.incoming-call{position:fixed;inset:0;z-index:230;display:grid;place-items:center;background:radial-gradient(ellipse at 50% 25%,#1c4a73f2,#071321f7 70%);color:#fff;padding:20px}
+.incoming-card{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center}
+.incoming-actions{display:flex;gap:70px;margin-top:40px}
+.incoming-labels{display:flex;gap:70px;font-size:13px;color:#cfe4f7}.incoming-labels span{width:72px;text-align:center}
+.call-round{width:72px;height:72px;padding:0;border:0;border-radius:50%;display:grid;place-items:center;cursor:pointer;box-shadow:0 10px 30px #0008}
+.call-round svg{width:32px;height:32px;fill:none;stroke:#fff;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.call-round.decline{background:#e5303f}
+.call-round.accept{background:#22b35e;animation:call-pulse 1.4s ease-in-out infinite}
+@keyframes call-pulse{0%,100%{box-shadow:0 0 0 0 #22b35e88}50%{box-shadow:0 0 0 16px #22b35e00}}
+@media(prefers-reduced-motion:reduce){.call-round.accept{animation:none}}
+/* Call notes in the chat */
+#chatMessages>.bubble.call-note .call-note-text{margin:0 0 0 35px!important;font-weight:700}
+#chatMessages>.bubble.call-note.call-missed .call-note-text{color:#ff9a9a!important}
+#chatMessages>.bubble.call-note .call-again{margin:6px 0 0 35px;padding:6px 12px;font-size:12px}
+/* Report a message */
+.report-message-preview{margin:6px 0 10px;padding:10px 12px;border-radius:12px;border:1px solid #ff6b6b55;background:#ff6b6b12}
+.report-message-preview strong{font-size:13px}
+.report-message-preview p{margin:4px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.report-reasons{display:grid;gap:6px;margin-bottom:8px}
+.report-reason{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;cursor:pointer}
+.report-reason:has(input:checked){border-color:#79d4ff;background:#16334c}
+/* Group and deal calls: participant grid */
+.call-grid{display:none}
+.call-screen.room .call-remote-video{display:none}
+.call-screen.room .call-info{position:absolute;top:max(14px,env(safe-area-inset-top));left:16px;right:104px;display:grid;grid-template-columns:44px minmax(0,1fr);column-gap:12px;row-gap:1px;align-items:center;text-align:left;padding:0;text-shadow:0 1px 6px #000}
+.call-screen.room .call-avatar{grid-row:span 4;align-self:start}
+.call-screen.room .call-info>*:not(.call-avatar){grid-column:2}
+.call-screen.room .call-badge{display:none}
+.call-screen.room .call-timer{font-size:15px}
+.call-screen.room .call-local-video{width:76px;height:104px}
+.call-screen.room:not(.video) .call-info{right:16px}
+.call-screen.room .call-info h2{font-size:19px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.call-room-icon{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:#ffffff1f;font-size:22px}
+.call-people{margin:0;font-size:13px;color:#cfe4f7}
+.call-people[hidden]{display:none}
+.call-screen.room .call-grid{position:absolute;top:calc(max(14px,env(safe-area-inset-top)) + 96px);bottom:calc(max(28px,env(safe-area-inset-bottom)) + 96px);left:10px;right:10px;display:grid;gap:8px;grid-template-columns:1fr;grid-auto-rows:1fr;z-index:1}
+.call-grid[data-count="3"],.call-grid[data-count="4"],.call-grid[data-count="5"]{grid-template-columns:1fr 1fr}
+@media(min-width:760px){.call-grid[data-count="2"]{grid-template-columns:1fr 1fr}}
+.call-tile{position:relative;min-height:0;border-radius:18px;overflow:hidden;background:#0d2236;border:1px solid #ffffff1f;display:grid;place-items:center}
+.call-tile.connected{border-color:#22b35e88}
+.call-tile-media{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;background:#000}
+audio.call-tile-media{display:none!important}
+.call-screen.video .call-tile.has-video .call-tile-media{display:block}
+.call-tile.has-video .call-tile-face{visibility:hidden}
+.call-tile-face .avatar{width:72px;height:72px;border-radius:50%;overflow:hidden;font-size:24px}
+.call-tile-face .avatar img{width:100%;height:100%;object-fit:cover}
+.call-tile-label{position:absolute;left:10px;right:10px;bottom:8px;display:flex;flex-direction:column;text-shadow:0 1px 4px #000;pointer-events:none}
+.call-tile-name{font-weight:700;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.call-tile-state{font-size:12px;color:#cfe4f7}
+.call-tile-state:empty{display:none}
+/* "Call in progress · Join" bar in a group or deal chat */
+.live-call-bar{display:flex;align-items:center;gap:10px;margin:6px 10px;padding:8px 10px;border-radius:14px;background:linear-gradient(90deg,#0f5132,#13693f);color:#fff;border:1px solid #22b35e66}
+.live-call-bar[hidden]{display:none}
+.live-call-faces{display:flex;padding-left:8px}
+.live-call-faces .avatar{width:26px;height:26px;border-radius:50%;overflow:hidden;margin-left:-8px;border:2px solid #13693f;font-size:11px}
+.live-call-faces .avatar img{width:100%;height:100%;object-fit:cover}
+.live-call-text{flex:1;min-width:0;font-weight:700;font-size:14px}
+.live-call-bar button.btn.live-call-join,.room-banner button.btn.room-banner-join,.call-alerts-card button.btn.call-alerts-on{background:#22b35e;color:#fff;border:0;border-radius:999px;padding:8px 16px;font-weight:800;min-height:0;box-shadow:none}
+.live-call-join{animation:call-pulse 1.6s ease-in-out infinite}
+@media(prefers-reduced-motion:reduce){.live-call-join{animation:none}}
+/* Group call started: small bar on top of the screen */
+.room-banner{position:fixed;top:max(10px,env(safe-area-inset-top));left:10px;right:10px;z-index:215;display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:18px;background:#0b1f33f2;color:#fff;border:1px solid #79d4ff55;box-shadow:0 12px 30px #0009;backdrop-filter:blur(8px)}
+.room-banner[hidden]{display:none}
+@media(min-width:700px){.room-banner{left:auto;right:16px;width:390px}}
+.room-banner-who{flex:1;min-width:0;display:flex;align-items:center;gap:10px}
+.room-banner-who .avatar{width:40px;height:40px;border-radius:50%;overflow:hidden;flex:none}
+.room-banner-who .avatar img{width:100%;height:100%;object-fit:cover}
+.room-banner-who div{display:flex;flex-direction:column;min-width:0}
+.room-banner-who strong,.room-banner-who small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.room-banner-who small{color:#cfe4f7}
+.room-banner-close{padding:6px 10px;min-height:0;color:#fff}
+/* "Turn on call alerts" card in Messages */
+.call-alerts-card{display:flex;align-items:center;gap:10px;margin:8px 0;padding:10px 12px;border-radius:14px;background:#12304a;border:1px solid #79d4ff44;color:#fff}
+.call-alerts-card[hidden]{display:none}
+.call-alerts-card>div{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.call-alerts-card small{color:#cfe4f7}
+.call-alerts-close{padding:6px 10px;min-height:0}

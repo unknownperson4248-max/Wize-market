@@ -2,6 +2,8 @@
   "name": "wize-market-preview-2026",
   "main": "dist/worker.mjs",
   "compatibility_date": "2026-10-29",
+  // Keep variables added in the Cloudflare dashboard (for example TURN_KEY_ID) when deploying with Wrangler.
+  "keep_vars": true,
   "build": {
     "command": "node build.mjs"
   },
