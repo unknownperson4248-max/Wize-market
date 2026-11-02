@@ -4,6 +4,15 @@ const installSeen=()=>{try{return localStorage.getItem('wm_install_first_offer')
 const markInstallSeen=()=>{try{localStorage.setItem('wm_install_first_offer','1')}catch{}};
 const knownInstalled=()=>{try{return localStorage.getItem('wm_app_installed')==='1'}catch{return false}};
 function closeInstallHelp(){$('installHelp').hidden=true}
+// The same page in the phone's real browser: Chrome on Android (intent link), Safari on iPhone.
+function realBrowserUrl(){const url='https://'+location.host+location.pathname+location.search;return onIos()?'x-safari-'+url:'intent://'+location.host+location.pathname+location.search+'#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url='+encodeURIComponent(url)+';end'}
+// Google blocks login inside apps like Messenger and Facebook, so the login page says so and offers the real browser.
+function inAppLoginNote(){
+ if(!inAppBrowser()||$('inAppLoginNote')||!$('authGoogle'))return;const browser=onIos()?'Safari':'Chrome',note=node('div',undefined,'in-app-login-note');note.id='inAppLoginNote';
+ note.append(node('strong','⚠️ Google login does not work inside Messenger / Facebook'),node('small','Open this page in '+browser+' to use Google, or log in with Email or Number below.'));
+ const actions=node('div',undefined,'in-app-login-actions');actions.append(button('Open in '+browser,()=>{location.href=realBrowserUrl()},'btn in-app-open'),button('📋 Copy link',async()=>{try{await navigator.clipboard.writeText(location.origin+'/');toast('Link copied. Paste it in '+browser+'.')}catch{toast(location.origin+'/')}},'btn secondary in-app-copy'));
+ note.append(actions);$('authGoogle').prepend(note);
+}
 const onIos=()=>/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 const inAppBrowser=()=>/FBAN|FBAV|FB_IAB|FBIOS|Instagram|Messenger|MicroMessenger|Line\/|Snapchat|musical_ly|TikTok|Twitter/i.test(navigator.userAgent);
 const iosOtherBrowser=()=>/CriOS|FxiOS|EdgiOS|OPiOS|YaBrowser/i.test(navigator.userAgent);
@@ -60,6 +69,7 @@ $('appInstallBanner').hidden=true;
 if(installedApp()){try{localStorage.setItem('wm_app_installed','1')}catch{}}
 // Android/Chrome only offers installation when the app is not installed yet: wait for that signal. iPhone has no signal, so show it once.
 if(onIos())displayInstallOffer();
+inAppLoginNote();
 if(navigator.getInstalledRelatedApps)void navigator.getInstalledRelatedApps().then(apps=>{if(apps.length){try{localStorage.setItem('wm_app_installed','1')}catch{}$('appInstallBanner').hidden=true}}).catch(()=>{});
 
 if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('/sw.js',{scope:'/',updateViaCache:'none'}).catch(()=>{});

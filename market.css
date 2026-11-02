@@ -45,3 +45,8 @@
 .install-step-icon svg{width:22px;height:22px;fill:none;stroke:#7cc4ff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .install-steps .hint{margin:4px 0}
 .install-copy{width:100%;margin-top:4px}
+/* Login inside Messenger / Facebook: Google blocks it there */
+.in-app-login-note{display:grid;gap:6px;margin:0 0 10px;padding:10px 12px;border-radius:14px;background:#3a2a0d;border:1px solid #f5b94166;color:#ffe7b0;text-align:left}
+.in-app-login-note small{color:#f3dcae;line-height:1.35}
+.in-app-login-actions{display:flex;gap:8px;flex-wrap:wrap}
+.in-app-login-actions .btn{flex:1;min-height:38px;padding:8px 12px}

@@ -1102,3 +1102,13 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  }finally{globalThis.fetch=realFetch;sql.prepare("DELETE FROM wm_chat_restrictions WHERE user_id='rds'").run()}
  console.log('PASS: group calls (members only, ring in Wize X, offers/answers picked up once, 6-person cap, busy, leave, call notes), deal calls (buyer/seller/Admin of an open deal), and call alerts (VAPID-signed Web Push, ringing and missed alerts, expired phones removed).');
 }
+// One site address: http → https and the workers.dev address → the real domain; local and test addresses stay as they are.
+{
+ const go=(u,method='GET')=>worker.fetch(new Request(u,{method}),env);
+ let r=await go('http://buysell.rahatwize.com/post/abc?x=1');assert.equal(r.status,301);assert.equal(r.headers.get('location'),'https://buysell.rahatwize.com/post/abc?x=1');
+ r=await go('https://wize-market-preview-2026.rahatwize.workers.dev/u/rahat');assert.equal(r.status,301);assert.equal(r.headers.get('location'),'https://buysell.rahatwize.com/u/rahat');
+ r=await go('http://wize-market-preview-2026.rahatwize.workers.dev/');assert.equal(r.headers.get('location'),'https://buysell.rahatwize.com/');
+ r=await go('https://wize-market-preview-2026.rahatwize.workers.dev/api/me','POST');assert.equal(r.status,308);
+ assert.notEqual((await go('https://buysell.rahatwize.com/api/market-rules')).status,301);assert.notEqual((await go('https://test.local/api/market-rules')).status,301);assert.notEqual((await go('http://127.0.0.1:8787/api/market-rules')).status,301);
+ console.log('PASS: one site address (http → https, workers.dev → buysell.rahatwize.com); local and test addresses untouched.');
+}
