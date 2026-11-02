@@ -1030,6 +1030,75 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  migrated.exec(readFileSync(new URL('./migrations/025_password_reset_requests.sql',import.meta.url),'utf8'));migrated.exec(readFileSync(new URL('./migrations/026_verification_whatsapp_location.sql',import.meta.url),'utf8'));assert.equal(migrated.prepare("SELECT count(*) n FROM pragma_table_info('wm_verification_requests') WHERE name IN ('whatsapp','location_lat','location_lng','location_accuracy','location_at')").get().n,5);assert.equal(migrated.prepare("SELECT count(*) n FROM wm_credentials").get().n,1);
  migrated.exec(readFileSync(new URL('./migrations/028_verification_answers.sql',import.meta.url),'utf8'));migrated.exec(readFileSync(new URL('./migrations/029_admin_agreement_alerts.sql',import.meta.url),'utf8'));assert.equal(migrated.prepare("SELECT count(*) n FROM sqlite_master WHERE type='trigger' AND name='wm_notify_deal_event'").get().n,1);assert.equal(migrated.prepare("SELECT count(*) n FROM pragma_table_info('wm_verification_requests') WHERE name='answers'").get().n,1);
  migrated.exec(readFileSync(new URL('./migrations/030_chat_reports_calls.sql',import.meta.url),'utf8'));assert.equal(migrated.prepare("SELECT count(*) n FROM sqlite_master WHERE type='table' AND name IN ('wm_message_reports','wm_chat_restrictions','wm_calls')").get().n,3);
+ for(let i=0;i<2;i++)migrated.exec(readFileSync(new URL('./migrations/031_call_rooms_push.sql',import.meta.url),'utf8'));assert.equal(migrated.prepare("SELECT count(*) n FROM sqlite_master WHERE type='table' AND name IN ('wm_call_rooms','wm_call_room_members','wm_call_signals','wm_push_subscriptions','wm_push_events')").get().n,5);assert.equal(migrated.prepare('SELECT count(*) n FROM users').get().n,3);
  const m027=new DatabaseSync(':memory:');m027.exec("CREATE TABLE users(id TEXT PRIMARY KEY);CREATE TABLE wm_profile_details(user_id TEXT PRIMARY KEY REFERENCES users(id),display_name TEXT,bio TEXT NOT NULL DEFAULT '',picture_id TEXT,updated_at INTEGER NOT NULL,cover_id TEXT);INSERT INTO users VALUES('a');INSERT INTO wm_profile_details(user_id,display_name,bio,updated_at) VALUES('a','A','Hi',1)");m027.exec(readFileSync(new URL('./migrations/027_profile_links.sql',import.meta.url),'utf8'));assert.deepEqual({...m027.prepare('SELECT display_name,bio,links FROM wm_profile_details').get()},{display_name:'A',bio:'Hi',links:'[]'});m027.close();
  migrated.close();console.log('PASS: migrations 021 and 022 add protected-deal and listing-rule data without changing existing deals, posts or counters, and keep game UIDs out of wm_posts.');
+}
+// Group and deal calls (call rooms) and call alerts when Wize X is closed (Web Push).
+{
+ const mk=async id=>{sql.prepare('INSERT INTO users VALUES(?,?,?,?,?,?,?)').run(id,id,id+'@example.com',id,'',Date.now(),Date.now());const token=Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('hex');tokens[id]=token;sql.prepare('INSERT INTO sessions VALUES(?,?,?,?)').run(await hash(token),id,Date.now()+1000000,Date.now())};
+ for(const id of ['rc1','rc2','rc3','rc4','rc5','rc6','rc7','rdb','rds','rda'])await mk(id);sql.prepare("INSERT INTO wm_roles VALUES('rda','trusted')").run();
+ for(const id of ['rc1','rc2','rc3','rc4','rc5','rc6','rc7','rdb'])assert.equal((await call('/api/groups/'+group+'/join','POST',{},id)).status<300,true);
+ const sdp='v=0\r\no=- 1 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\n';
+ const realFetch=globalThis.fetch,pushes=[];let pushStatus=201;globalThis.fetch=async(url,init)=>{pushes.push({url:String(url),headers:init.headers});return new Response(null,{status:pushStatus})};
+ try{
+  // Call alerts: VAPID key, only real push services, one phone per member.
+  let r=await call('/api/push/key','GET',undefined,'rc2');assert.equal(r.status,200);const key=r.data.key;assert.equal(Buffer.from(key,'base64url').length,65);assert.equal((await call('/api/push/key','GET',undefined,'rc3')).data.key,key);assert.equal((await call('/api/push/key')).status,401);
+  assert.equal((await call('/api/push/subscribe','POST',{endpoint:'https://evil.example/push/1',keys:{p256dh:'x',auth:'y'}},'rc2')).status,400);
+  const phone='https://fcm.googleapis.com/fcm/send/rc2-phone';assert.equal((await call('/api/push/subscribe','POST',{endpoint:phone,keys:{p256dh:'p',auth:'a'}},'rc2')).status,200);
+  assert.equal(sql.prepare('SELECT user_id FROM wm_push_subscriptions WHERE endpoint=?').get(phone).user_id,'rc2');
+  // Group call: members only, invite in Wize X, alert to phones, join, offers and answers, cap of 6, busy, leave, call note.
+  assert.equal((await call('/api/rooms','POST',{kind:'group',id:group},'outsider')).status,403);
+  sql.prepare('INSERT INTO wm_member_permissions(user_id,can_post,can_message,can_start_deal,updated_by,updated_at) VALUES(?,?,?,?,?,?)').run('rc7',1,0,1,'owner',Date.now());assert.equal((await call('/api/rooms','POST',{kind:'group',id:group},'rc7')).status,403);
+  r=await call('/api/rooms','POST',{kind:'group',id:group,video:false},'rc1');assert.equal(r.status,201);const room=r.data.room.id;assert.deepEqual(r.data.members.map(m=>m.id),['rc1']);assert.equal(r.data.room.video,false);
+  const alert=pushes.find(x=>x.url===phone);assert.ok(alert,'group members get a call alert');assert.equal(alert.headers.urgency,'high');assert.equal(alert.headers.ttl,'45');
+  const [jwt,k]=alert.headers.authorization.slice('vapid t='.length).split(', k=');assert.equal(k,key);const [h,c,sg]=jwt.split('.');assert.equal(JSON.parse(Buffer.from(c,'base64url')).aud,'https://fcm.googleapis.com');
+  const pub=await crypto.subtle.importKey('raw',Buffer.from(key,'base64url'),{name:'ECDSA',namedCurve:'P-256'},false,['verify']);assert.ok(await crypto.subtle.verify({name:'ECDSA',hash:'SHA-256'},pub,Buffer.from(sg,'base64url'),new TextEncoder().encode(h+'.'+c)),'VAPID signature is valid');
+  r=await call('/api/push/pending','GET',undefined,'rc2');assert.equal(r.data.events[0].kind,'room');assert.match(r.data.events[0].url,new RegExp('room='+room));assert.equal((await call('/api/push/pending','GET',undefined,'outsider')).data.events.length,0);
+  assert.equal((await call('/api/chat-unread','GET',undefined,'rc2')).data.room_invite.id,room);assert.equal((await call('/api/chat-unread','GET',undefined,'rc1')).data.room_invite,null);assert.equal((await call('/api/chat-unread','GET',undefined,'outsider')).data.room_invite,null);
+  r=await call('/api/groups/'+group+'/messages','GET',undefined,'rc2');assert.equal(r.data.call.id,room);assert.equal(r.data.call.joined,false);assert.equal(r.data.call.count,1);
+  r=await call('/api/rooms','POST',{kind:'group',id:group},'rc2');assert.equal(r.status,200);assert.equal(r.data.room.id,room);assert.deepEqual(r.data.members.map(m=>m.id),['rc1','rc2']);assert.ok(r.data.room.answered_at);
+  assert.equal((await call('/api/chat-unread','GET',undefined,'rc2')).data.room_invite,null,'no ring after joining');
+  assert.equal((await call('/api/rooms/'+room+'/signal','POST',{to:'rc1',kind:'offer',sdp:'hello'},'rc2')).status,400);assert.equal((await call('/api/rooms/'+room+'/signal','POST',{to:'rc5',kind:'offer',sdp},'rc2')).status,409);
+  assert.equal((await call('/api/rooms/'+room+'/signal','POST',{to:'rc1',kind:'offer',sdp},'rc2')).status,200);assert.equal((await call('/api/rooms/'+room+'/signal','POST',{to:'rc1',kind:'offer',sdp},'outsider')).status,409);
+  r=await call('/api/rooms/'+room,'GET',undefined,'rc1');assert.equal(r.data.joined,true);assert.deepEqual(r.data.signals.map(x=>x.from_id+':'+x.kind),['rc2:offer']);assert.equal((await call('/api/rooms/'+room,'GET',undefined,'rc1')).data.signals.length,0,'signals are picked up once');
+  assert.equal((await call('/api/rooms/'+room+'/signal','POST',{to:'rc2',kind:'answer',sdp},'rc1')).status,200);assert.deepEqual((await call('/api/rooms/'+room,'GET',undefined,'rc2')).data.signals.map(x=>x.from_id+':'+x.kind),['rc1:answer']);
+  assert.equal((await call('/api/rooms/'+room,'GET',undefined,'outsider')).status,403);r=await call('/api/rooms/'+room,'GET',undefined,'rc3');assert.equal(r.data.joined,false);assert.equal(r.data.signals.length,0);
+  for(const id of ['rc3','rc4','rdb','rc5'])assert.equal((await call('/api/rooms','POST',{kind:'group',id:group},id)).status,200,id);
+  r=await call('/api/rooms','POST',{kind:'group',id:group},'rc6');assert.equal(r.status,409);assert.match(r.data.error,/full/);
+  // Deal call: only the buyer, seller and Admin of an open deal; busy while in another call; deal calls work for restricted members.
+  const dealThread=crypto.randomUUID(),deal=crypto.randomUUID();sql.prepare("INSERT INTO wm_threads(id,buyer_id,seller_id,pair_key,status,created_at,is_deal) VALUES(?,'rdb','rds',?,'accepted',?,1)").run(dealThread,'room:'+dealThread,Date.now());sql.prepare("INSERT INTO wm_deals(id,thread_id,buyer_id,seller_id,admin_id,price,status,buyer_ok,seller_ok,created_at) VALUES(?,?,'rdb','rds','rda',9000,'active',1,1,?)").run(deal,dealThread,Date.now());
+  assert.equal((await call('/api/deals/'+deal+'/messages','POST',{text:'call:video:300'},'rdb')).status,400,'no fake call notes in deal chats');
+  r=await call('/api/rooms','POST',{kind:'deal',id:deal},'rdb');assert.equal(r.status,409);assert.match(r.data.error,/another call/);
+  sql.prepare('INSERT INTO wm_chat_restrictions(user_id,until_at,reason,created_at) VALUES(?,?,?,?)').run('rds',Date.now()+3600000,'test',Date.now());
+  assert.equal((await call('/api/rooms','POST',{kind:'deal',id:deal},'outsider')).status,404);assert.equal((await call('/api/rooms','POST',{kind:'deal',id:deal},'owner')).status,404);
+  r=await call('/api/rooms','POST',{kind:'deal',id:deal,video:true},'rds');assert.equal(r.status,201);const dealRoom=r.data.room.id;assert.equal(r.data.room.video,true);assert.match(r.data.title,/^Deal - /);
+  assert.equal((await call('/api/chat-unread','GET',undefined,'rda')).data.room_invite.kind,'deal');assert.equal((await call('/api/chat-unread','GET',undefined,'rdb')).data.room_invite.id,dealRoom);
+  assert.equal((await call('/api/deals/'+deal+'/messages','GET',undefined,'rda')).data.call.id,dealRoom);
+  assert.equal((await call('/api/rooms','POST',{kind:'group',id:group},'rds')).status,403,'restricted members cannot start or join group calls');
+  assert.equal((await call('/api/rooms/'+room+'/leave','POST',{},'rdb')).status,200);assert.equal((await call('/api/rooms','POST',{kind:'deal',id:deal},'rdb')).status,200);assert.equal((await call('/api/rooms','POST',{kind:'deal',id:deal},'rda')).status,200);
+  assert.deepEqual((await call('/api/rooms/'+dealRoom,'GET',undefined,'rda')).data.members.map(m=>m.id),['rds','rdb','rda']);
+  for(const id of ['rds','rdb','rda'])assert.equal((await call('/api/rooms/'+dealRoom+'/leave','POST',{},id)).status,200);
+  assert.equal(sql.prepare('SELECT status FROM wm_call_rooms WHERE id=?').get(dealRoom).status,'ended');assert.ok((await call('/api/deals/'+deal+'/messages','GET',undefined,'rdb')).data.messages.some(m=>/^chat:call:video:\d+$/.test(m.text)),'deal call note');
+  sql.prepare("UPDATE wm_deals SET status='completed' WHERE id=?").run(deal);assert.equal((await call('/api/rooms','POST',{kind:'deal',id:deal},'rdb')).status,409);
+  // Everybody leaves the group call: it ends with a note; the ringing alert is gone.
+  for(const id of ['rc1','rc2','rc3','rc4','rc5'])assert.equal((await call('/api/rooms/'+room+'/leave','POST',{},id)).status,200);
+  assert.equal(sql.prepare('SELECT status FROM wm_call_rooms WHERE id=?').get(room).status,'ended');assert.equal((await call('/api/groups/'+group+'/messages','GET',undefined,'rc2')).data.call,null);
+  assert.ok((await call('/api/groups/'+group+'/messages','GET',undefined,'rc2')).data.messages.some(m=>m.user_id==='rc1'&&/^call:audio:\d+$/.test(m.text)),'group call note');assert.equal((await call('/api/push/pending','GET',undefined,'rc2')).data.events.filter(e=>e.kind==='room').length,0);
+  assert.equal((await call('/api/rooms/'+room+'/signal','POST',{to:'rc1',kind:'offer',sdp},'rc2')).status,409);
+  // A call nobody joins, and a phone that stopped answering for 30 s, ends as a missed call.
+  r=await call('/api/rooms','POST',{kind:'group',id:group},'rc3');const lonely=r.data.room.id;sql.prepare('UPDATE wm_call_room_members SET seen_at=seen_at-40000 WHERE room_id=?').run(lonely);
+  assert.equal((await call('/api/groups/'+group+'/messages','GET',undefined,'rc4')).data.call,null);assert.ok((await call('/api/groups/'+group+'/messages','GET',undefined,'rc4')).data.messages.some(m=>m.user_id==='rc3'&&m.text==='call:audio:missed'));
+  // At most 5 new group/deal calls per member every 10 minutes.
+  sql.prepare("UPDATE wm_call_rooms SET created_at=? WHERE started_by='rc3'").run(Date.now()-1000);for(let i=0;i<4;i++)sql.prepare("INSERT INTO wm_call_rooms(id,kind,chat_id,video,started_by,status,created_at,ended_at) VALUES(?,'group',?,0,'rc3','ended',?,?)").run(crypto.randomUUID(),group,Date.now(),Date.now());
+  r=await call('/api/rooms','POST',{kind:'group',id:group},'rc3');assert.equal(r.status,429);assert.match(r.data.error,/many calls/);
+  // Personal call alert: ringing alert, then "Missed call" when the caller gives up; a phone the push service dropped (410) is removed.
+  const pt=crypto.randomUUID();sql.prepare("INSERT INTO wm_threads(id,buyer_id,seller_id,pair_key,status,created_at) VALUES(?,'rc1','rc2',?,'accepted',?)").run(pt,'rc1:rc2',Date.now());
+  pushes.length=0;r=await call('/api/calls','POST',{threadId:pt,video:true,offer:sdp},'rc1');assert.equal(r.status,201);const pc=r.data.id;assert.equal(pushes.filter(x=>x.url===phone).length,1);
+  r=await call('/api/push/pending','GET',undefined,'rc2');assert.equal(r.data.events[0].kind,'call');assert.match(r.data.events[0].title,/rc1/);assert.match(r.data.events[0].url,new RegExp('call='+pc));
+  assert.equal((await call('/api/calls/'+pc+'/end','POST',{},'rc1')).status,200);r=await call('/api/push/pending','GET',undefined,'rc2');assert.deepEqual(r.data.events.map(e=>e.kind),['missed']);assert.match(r.data.events[0].url,new RegExp('thread='+pt));
+  pushStatus=410;r=await call('/api/calls','POST',{threadId:pt,offer:sdp},'rc1');assert.equal(r.status,201);assert.equal(sql.prepare('SELECT count(*) n FROM wm_push_subscriptions WHERE endpoint=?').get(phone).n,0,'expired phones are removed');await call('/api/calls/'+r.data.id+'/end','POST',{},'rc1');pushStatus=201;
+  assert.equal((await call('/api/push/subscribe','POST',{endpoint:phone,keys:{}},'rc2')).status,200);assert.equal((await call('/api/push/unsubscribe','POST',{endpoint:phone},'rc2')).status,200);assert.equal(sql.prepare('SELECT count(*) n FROM wm_push_subscriptions WHERE endpoint=?').get(phone).n,0);
+ }finally{globalThis.fetch=realFetch;sql.prepare("DELETE FROM wm_chat_restrictions WHERE user_id='rds'").run()}
+ console.log('PASS: group calls (members only, ring in Wize X, offers/answers picked up once, 6-person cap, busy, leave, call notes), deal calls (buyer/seller/Admin of an open deal), and call alerts (VAPID-signed Web Push, ringing and missed alerts, expired phones removed).');
 }

@@ -386,6 +386,7 @@ function profileMenuItems(){
  const admin=['owner','trusted'].includes(me?.role),items=[['Friends','users',()=>navigate('friends')],['Saved posts','bookmark',async()=>{if(active!=='profile'||profileViewId)await showProfile(me.id);await loadProfileTab('saved')}],['My deals','deals',()=>navigate('deals')]];
  if(!me?.verified&&!admin)items.push(['Get verified (blue tick)','verified',()=>openVerificationRequest('seller')]);
  if(!admin)items.push(['Become an Admin','shield',()=>openVerificationRequest('trusted')]);
+ items.push(['Call alerts','bell',()=>enableCallAlerts()]);
  items.push(['Account security','lock',openAccountSecurity]);
  items.push({group:'Help & support',icon:'help',items:[['Report a scammer','flag',()=>openReport(null,'scam')],['Help','help',()=>openReport(null,'help')],['Website issue','bug',()=>openReport(null,'website-issue')],['Other','chat',()=>openReport(null,'other')]]});
  items.push(['Privacy & Terms','file',()=>navigate('privacy')]);

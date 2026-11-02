@@ -34,9 +34,9 @@ let callState=null,incomingCall=null,toneCtx=null,toneTimer=null;
 function callUi(){
  if($('callScreen'))return;
  const screen=node('div',undefined,'call-screen');screen.id='callScreen';screen.hidden=true;screen.setAttribute('role','dialog');screen.setAttribute('aria-modal','true');screen.setAttribute('aria-label','Call');
- screen.innerHTML='<video id="callRemoteVideo" class="call-remote-video" autoplay playsinline></video><audio id="callRemoteAudio" autoplay></audio><div class="call-info"><div id="callAvatar" class="call-avatar"></div><h2 id="callName"></h2><div id="callBadge" class="call-badge"></div><p id="callStatus" class="call-status"></p><p id="callTimer" class="call-timer" hidden>0:00</p></div><video id="callLocalVideo" class="call-local-video" autoplay playsinline muted></video><div class="call-controls"><button type="button" id="callMute" class="call-btn" aria-label="Mute microphone" aria-pressed="false">'+callSvg('mic')+'<span>Mute</span></button><button type="button" id="callCamera" class="call-btn" aria-label="Turn camera off" aria-pressed="false">'+callSvg('video')+'<span>Camera</span></button><button type="button" id="callFlip" class="call-btn" aria-label="Switch camera">'+callSvg('flip')+'<span>Flip</span></button><button type="button" id="callHangup" class="call-btn hangup" aria-label="End call">'+callSvg('hangup')+'<span>End</span></button></div>';
+ screen.innerHTML='<video id="callRemoteVideo" class="call-remote-video" autoplay playsinline></video><audio id="callRemoteAudio" autoplay></audio><div id="callGrid" class="call-grid"></div><div class="call-info"><div id="callAvatar" class="call-avatar"></div><h2 id="callName"></h2><div id="callBadge" class="call-badge"></div><p id="callStatus" class="call-status"></p><p id="callTimer" class="call-timer" hidden>0:00</p><p id="callPeople" class="call-people" hidden></p></div><video id="callLocalVideo" class="call-local-video" autoplay playsinline muted></video><div class="call-controls"><button type="button" id="callMute" class="call-btn" aria-label="Mute microphone" aria-pressed="false">'+callSvg('mic')+'<span>Mute</span></button><button type="button" id="callCamera" class="call-btn" aria-label="Turn camera off" aria-pressed="false">'+callSvg('video')+'<span>Camera</span></button><button type="button" id="callFlip" class="call-btn" aria-label="Switch camera">'+callSvg('flip')+'<span>Flip</span></button><button type="button" id="callHangup" class="call-btn hangup" aria-label="End call">'+callSvg('hangup')+'<span>End</span></button></div>';
  const ring=node('div',undefined,'incoming-call');ring.id='incomingCall';ring.hidden=true;ring.setAttribute('role','alertdialog');ring.setAttribute('aria-label','Incoming call');
- ring.innerHTML='<div class="incoming-card"><div id="incomingAvatar" class="call-avatar"></div><strong id="incomingName"></strong><div id="incomingBadge" class="call-badge"></div><p id="incomingKind" class="call-status"></p><div class="incoming-actions"><button type="button" id="declineCall" class="call-round decline" aria-label="Decline">'+callSvg('hangup')+'</button><button type="button" id="acceptCall" class="call-round accept" aria-label="Accept">'+callSvg('phone')+'</button></div><div class="incoming-labels"><span>Decline</span><span>Accept</span></div></div>';
+ ring.innerHTML='<div class="incoming-card"><div id="incomingAvatar" class="call-avatar"></div><strong id="incomingName"></strong><div id="incomingBadge" class="call-badge"></div><p id="incomingKind" class="call-status"></p><div class="incoming-actions"><button type="button" id="declineCall" class="call-round decline" aria-label="Decline">'+callSvg('hangup')+'</button><button type="button" id="acceptCall" class="call-round accept" aria-label="Accept">'+callSvg('phone')+'</button></div><div class="incoming-labels"><span id="incomingNoLabel">Decline</span><span id="incomingYesLabel">Accept</span></div></div>';
  document.body.append(screen,ring);
  $('callHangup').onclick=()=>void endCall('hangup');$('acceptCall').onclick=()=>void acceptCall();$('declineCall').onclick=()=>void declineCall();
  $('callMute').onclick=()=>{const s=callState;if(!s?.local)return;const off=!s.muted;s.muted=off;for(const t of s.local.getAudioTracks())t.enabled=!off;$('callMute').setAttribute('aria-pressed',String(off));$('callMute').innerHTML=callSvg(off?'micOff':'mic')+'<span>'+(off?'Unmute':'Mute')+'</span>'};
@@ -48,18 +48,18 @@ function stopTone(){clearInterval(toneTimer);toneTimer=null;try{navigator.vibrat
 async function callIce(){try{return await api('/calls/ice')}catch{return {iceServers:[{urls:['stun:stun.cloudflare.com:3478']}],relay:false}}}
 // Wait for the connection addresses: until gathering completes, or 0.6 s after the first TURN relay address, or the time limit.
 function waitForIce(pc,ms=2500){return new Promise(resolve=>{if(pc.iceGatheringState==='complete')return resolve();let early=null;const finish=()=>{clearTimeout(early);pc.removeEventListener('icegatheringstatechange',done);pc.removeEventListener('icecandidate',found);resolve()};const done=()=>{if(pc.iceGatheringState==='complete')finish()};const found=e=>{if(!early&&/ typ relay /.test(e.candidate?.candidate||''))early=setTimeout(finish,600)};pc.addEventListener('icegatheringstatechange',done);pc.addEventListener('icecandidate',found);setTimeout(finish,ms)})}
-async function callMedia(video){
+async function callMedia(video,room=false){
  if(!navigator.mediaDevices?.getUserMedia||!window.RTCPeerConnection)throw Error('This browser cannot make calls. Please use Chrome.');
- try{return await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:video?{facingMode:'user',width:{ideal:640},height:{ideal:480}}:false})}
+ try{return await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:video?{facingMode:'user',width:{ideal:room?480:640},height:{ideal:room?360:480},frameRate:{ideal:room?15:24}}:false})}
  catch(e){throw Error(e?.name==='NotAllowedError'?(video?'Allow the camera and microphone for this site, then try again.':'Allow the microphone for this site, then try again.'):'Could not open the '+(video?'camera or microphone.':'microphone.'))}
 }
 function setCallStatus(text){const el=$('callStatus');if(el){el.textContent=text;el.hidden=!text}}
 function showCallScreen(state,status){
  callUi();const p=state.peer;$('callAvatar').replaceChildren(avatar(p));$('callName').textContent=p.name||'Member';$('callBadge').replaceChildren(verifiedMark(p.role||'member',undefined,!!p.verified));setCallStatus(status);$('callTimer').hidden=true;$('callTimer').textContent='0:00';
- const screen=$('callScreen');screen.classList.toggle('video',!!state.video);screen.classList.remove('connected');screen.hidden=false;document.body.classList.add('call-open');
+ const screen=$('callScreen');screen.classList.toggle('video',!!state.video);screen.classList.remove('connected','room');$('callPeople').hidden=true;$('callGrid').replaceChildren();screen.hidden=false;document.body.classList.add('call-open');
  $('callCamera').hidden=$('callFlip').hidden=!state.video;$('callMute').setAttribute('aria-pressed','false');$('callMute').innerHTML=callSvg('mic')+'<span>Mute</span>';$('callCamera').innerHTML=callSvg('video')+'<span>Camera</span>';$('callLocalVideo').classList.remove('off');
 }
-function attachLocal(state){if(state.video){const v=$('callLocalVideo');v.srcObject=state.local;v.classList.add('mirror');state.facing='user';void v.play().catch(()=>{})}}
+function attachLocal(state){if(state.local?.getVideoTracks().length){const v=$('callLocalVideo');v.srcObject=state.local;v.classList.add('mirror');state.facing='user';void v.play().catch(()=>{})}}
 function buildPeer(state){
  const pc=new RTCPeerConnection({iceServers:state.ice.iceServers,iceTransportPolicy:state.ice.relay?'relay':'all'});
  for(const track of state.local.getTracks())pc.addTrack(track,state.local);
@@ -90,16 +90,17 @@ async function pollCall(state){
  }catch(e){if(/not found/i.test(e.message)){closeCall(state)}}finally{state.polling=false}
 }
 function closeCall(state){
- if(!state||callState!==state)return;callState=null;clearInterval(state.poll);clearTimeout(state.ringTimeout);clearInterval(state.timer);stopTone();try{state.pc?.close()}catch{}stopMedia(state);
- if($('callScreen')){$('callScreen').hidden=true;for(const id of ['callRemoteAudio','callRemoteVideo','callLocalVideo'])$(id).srcObject=null}document.body.classList.remove('call-open');
+ if(!state||callState!==state)return;callState=null;clearInterval(state.poll);clearTimeout(state.ringTimeout);clearInterval(state.timer);stopTone();try{state.pc?.close()}catch{}for(const peer of state.peers?.values()||[])try{peer.pc?.close()}catch{}stopMedia(state);
+ if($('callScreen')){$('callScreen').hidden=true;$('callScreen').classList.remove('room');$('callGrid').replaceChildren();for(const id of ['callRemoteAudio','callRemoteVideo','callLocalVideo'])$(id).srcObject=null}document.body.classList.remove('call-open');
 }
 async function endCall(reason='hangup',silent=false){
  const state=callState;if(!state)return;closeCall(state);
+ if(state.kind==='room'){if(state.id)try{await api('/rooms/'+state.id+'/leave',{})}catch{}if(!silent)toast('You left the call.');if(['group','deal'].includes(chat?.kind))void refreshChat().catch(()=>{});return}
  if(state.id)try{await api('/calls/'+state.id+'/end',{reason:reason==='failed'?'failed':'hangup'})}catch{}
  if(!silent&&reason==='hangup')toast('Call ended.');if(chat?.kind==='private')void refreshChat().catch(()=>{});
 }
 async function flipCamera(){
- const s=callState;if(!s?.video||!s.pc)return;try{s.facing=s.facing==='environment'?'user':'environment';const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:s.facing,width:{ideal:640},height:{ideal:480}}}),track=stream.getVideoTracks()[0],sender=s.pc.getSenders().find(x=>x.track?.kind==='video');if(!track||!sender)return;await sender.replaceTrack(track);for(const old of s.local.getVideoTracks()){s.local.removeTrack(old);old.stop()}s.local.addTrack(track);track.enabled=!s.cameraOff;$('callLocalVideo').srcObject=s.local;$('callLocalVideo').classList.toggle('mirror',s.facing==='user')}catch{toast('Could not switch the camera.')}
+ const s=callState;if(!s?.local?.getVideoTracks().length||!s.pc&&s.kind!=='room')return;try{s.facing=s.facing==='environment'?'user':'environment';const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:s.facing,width:{ideal:s.kind==='room'?480:640},height:{ideal:s.kind==='room'?360:480}}}),track=stream.getVideoTracks()[0],senders=(s.kind==='room'?[...s.peers.values()].map(p=>p.pc):[s.pc]).filter(Boolean).flatMap(pc=>pc.getSenders()).filter(x=>x.track?.kind==='video');if(!track)return;for(const sender of senders)await sender.replaceTrack(track);for(const old of s.local.getVideoTracks()){s.local.removeTrack(old);old.stop()}s.local.addTrack(track);track.enabled=!s.cameraOff;$('callLocalVideo').srcObject=s.local;$('callLocalVideo').classList.toggle('mirror',s.facing==='user')}catch{toast('Could not switch the camera.')}
 }
 // Incoming calls: checked every few seconds while Wize X is open.
 async function pollIncoming(){
@@ -107,13 +108,14 @@ async function pollIncoming(){
  try{const {call}=await api('/calls/incoming');if(call&&!callState&&!incomingCall)showIncoming(call)}catch{}
 }
 function showIncoming(c){
- callUi();incomingCall=c;$('incomingAvatar').replaceChildren(avatar({name:c.name,picture:c.picture,role:c.role,verified:c.verified}));$('incomingName').textContent=c.name||'Member';$('incomingBadge').replaceChildren(verifiedMark(c.role||'member',undefined,!!c.verified));$('incomingKind').textContent=c.video?'🎥 Incoming video call…':'📞 Incoming voice call…';
+ callUi();incomingCall=c;$('incomingAvatar').replaceChildren(avatar({name:c.name,picture:c.picture,role:c.role,verified:c.verified}));$('incomingName').textContent=c.name||'Member';$('incomingBadge').replaceChildren(verifiedMark(c.role||'member',undefined,!!c.verified));$('incomingKind').textContent=c.room?(c.video?'🎥 ':'📞 ')+(c.kind==='deal'?'Deal call':'Group call')+' · '+(c.chat_name||''):c.video?'🎥 Incoming video call…':'📞 Incoming voice call…';$('incomingNoLabel').textContent=c.room?'Ignore':'Decline';$('incomingYesLabel').textContent=c.room?'Join':'Accept';closeAlerts((c.room?'room-':'call-')+c.id);
  $('incomingCall').hidden=false;document.body.classList.add('call-open');playTone('ring');$('acceptCall').focus();
- c.watch=setInterval(async()=>{if(incomingCall!==c)return clearInterval(c.watch);try{const s=await api('/calls/'+c.id);if(s.status!=='ringing'&&incomingCall===c){hideIncoming();toast('📞 Missed call from '+(c.name||'a member')+'.')}}catch{hideIncoming()}},2500);
+ c.shownAt=Date.now();c.watch=setInterval(async()=>{if(incomingCall!==c)return clearInterval(c.watch);try{if(c.room){const r=await api('/rooms/'+c.id);if((r.room.status!=='live'||Date.now()-c.shownAt>45000)&&incomingCall===c){dismissedRooms.add(c.id);hideIncoming();if(r.room.status!=='live')toast('📞 The call has ended.')}return}const s=await api('/calls/'+c.id);if(s.status!=='ringing'&&incomingCall===c){hideIncoming();toast('📞 Missed call from '+(c.name||'a member')+'.')}}catch{hideIncoming()}},2500);
 }
 function hideIncoming(){const c=incomingCall;if(!c)return;clearInterval(c.watch);incomingCall=null;stopTone();if($('incomingCall'))$('incomingCall').hidden=true;if(!callState)document.body.classList.remove('call-open')}
 async function acceptCall(){
  const c=incomingCall;if(!c)return;hideIncoming();
+ if(c.room){dismissedRooms.add(c.id);return joinRoom({kind:c.kind,id:c.chat_id,video:c.video,title:c.chat_name})}
  const state={role:'callee',video:!!c.video,peer:{id:c.caller_id,name:c.name,picture:c.picture,role:c.role,verified:c.verified},threadId:c.thread_id,id:c.id};callState=state;showCallScreen(state,'Connecting…');
  try{
   state.ice=await callIce();state.local=await callMedia(state.video);if(callState!==state)return stopMedia(state);attachLocal(state);state.pc=buildPeer(state);
@@ -121,12 +123,164 @@ async function acceptCall(){
   await api('/calls/'+c.id+'/answer',{answer:state.pc.localDescription.sdp});state.answered=true;state.poll=setInterval(()=>void pollCall(state),2000);
  }catch(e){toast(e.message);await endCall('failed',true)}
 }
-async function declineCall(){const c=incomingCall;if(!c)return;hideIncoming();try{await api('/calls/'+c.id+'/decline',{})}catch{}}
-$('chatCallAudio').onclick=()=>void startCall(false);$('chatCallVideo').onclick=()=>void startCall(true);
+async function declineCall(){const c=incomingCall;if(!c)return;hideIncoming();if(c.room){dismissedRooms.add(c.id);return}try{await api('/calls/'+c.id+'/decline',{})}catch{}}
+$('chatCallAudio').onclick=()=>void(chat?.kind==='private'?startCall(false):startRoomCall(false));$('chatCallVideo').onclick=()=>void(chat?.kind==='private'?startCall(true):startRoomCall(true));
 // The chat-unread check (every 4 seconds) also brings a ringing call, so no extra request is needed.
 function onIncomingCall(c){if(c&&me&&!callState&&!incomingCall)showIncoming(c)}
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)void pollIncoming()});
-window.addEventListener('pagehide',()=>{const s=callState;if(s?.id)navigator.sendBeacon?.('/api/calls/'+s.id+'/end',new Blob([JSON.stringify({reason:'hangup'})],{type:'application/json'}))});
+window.addEventListener('pagehide',()=>{const s=callState;if(s?.id)navigator.sendBeacon?.(s.kind==='room'?'/api/rooms/'+s.id+'/leave':'/api/calls/'+s.id+'/end',new Blob([JSON.stringify({reason:'hangup'})],{type:'application/json'}))});
+
+// ---- Group and deal calls: everyone in the call connects to everyone else (up to 6 people in a group, the 3 deal members in a deal). ----
+// The newer person always sends the offer to the people already in the call; offers and answers go through /api/rooms.
+const dismissedRooms=new Set();let liveChatCall=null;
+const roomOffer=(state,peer)=>{peer.queue=peer.queue.then(()=>makeRoomOffer(state,peer)).catch(()=>{})};
+function roomTile(state,peer){
+ let tile=$('callGrid').querySelector('[data-peer="'+peer.id+'"]');
+ if(!tile){tile=node('div',undefined,'call-tile');tile.dataset.peer=peer.id;const face=node('div',undefined,'call-tile-face');face.append(avatar(peer.person));const media=node(state.video?'video':'audio',undefined,'call-tile-media');media.autoplay=true;media.playsInline=true;const label=node('div',undefined,'call-tile-label');label.append(node('span',peer.person.name||'Member','call-tile-name'),node('small','Connecting…','call-tile-state'));tile.append(face,media,label);$('callGrid').append(tile)}
+ return tile;
+}
+function paintRoom(state){
+ if(callState!==state||!$('callGrid'))return;const peers=[...state.peers.values()];$('callGrid').dataset.count=String(Math.max(1,peers.length));
+ for(const peer of peers){const tile=roomTile(state,peer),st=peer.pc?.connectionState;tile.querySelector('.call-tile-state').textContent=st==='connected'?'':st==='disconnected'?'Reconnecting…':st==='failed'?'Trying again…':'Connecting…';tile.classList.toggle('connected',st==='connected');const media=tile.querySelector('.call-tile-media');tile.classList.toggle('has-video',!!media.srcObject?.getVideoTracks().some(t=>t.readyState==='live'&&!t.muted))}
+ $('callPeople').hidden=false;$('callPeople').textContent=(peers.length+1)+' in call';
+ setCallStatus(peers.length?'':state.ring?'Ringing…':'Waiting for others to join…');$('callScreen').classList.toggle('connected',peers.some(p=>p.pc?.connectionState==='connected'));
+}
+function buildRoomPc(state,peer){
+ const pc=new RTCPeerConnection({iceServers:state.ice.iceServers,iceTransportPolicy:state.ice.relay?'relay':'all'});
+ for(const track of state.local.getTracks())pc.addTrack(track,state.local);
+ pc.ontrack=e=>{if(peer.pc!==pc)return;const stream=e.streams[0]||new MediaStream([e.track]),media=roomTile(state,peer).querySelector('.call-tile-media');if(media.srcObject!==stream){media.srcObject=stream;void media.play().catch(()=>{})}e.track.onunmute=e.track.onmute=()=>paintRoom(state);paintRoom(state)};
+ pc.onconnectionstatechange=()=>{if(callState!==state||peer.pc!==pc)return;const st=pc.connectionState;if(st==='connected'){state.ring=false;stopTone();startCallTimer(state);state.everConnected=true;limitRoomVideo(state)}else if(st==='failed'&&peer.offerer&&peer.tries<4)setTimeout(()=>{if(callState===state&&peer.pc===pc)roomOffer(state,peer)},1500);paintRoom(state)};
+ return pc;
+}
+// Every phone sends its video to everyone, so keep each copy small.
+function limitRoomVideo(state){const max=state.peers.size>2?250000:450000;for(const peer of state.peers.values())for(const sender of peer.pc?.getSenders()||[]){if(sender.track?.kind!=='video')continue;try{const p=sender.getParameters();if(!p.encodings?.length)p.encodings=[{}];p.encodings[0].maxBitrate=max;void sender.setParameters(p).catch(()=>{})}catch{}}}
+async function makeRoomOffer(state,peer){
+ if(callState!==state||!state.peers.has(peer.id))return;try{peer.pc?.close()}catch{}
+ const pc=buildRoomPc(state,peer);peer.pc=pc;peer.tries++;
+ await pc.setLocalDescription(await pc.createOffer());await waitForIce(pc,state.ice.relay?5000:2500);if(callState!==state||peer.pc!==pc)return;
+ peer.offeredAt=Date.now();await api('/rooms/'+state.id+'/signal',{to:peer.id,kind:'offer',sdp:pc.localDescription.sdp}).catch(()=>{});
+}
+async function takeRoomSignal(state,peer,signal){
+ if(callState!==state)return;
+ if(signal.kind==='offer'){try{peer.pc?.close()}catch{}const pc=buildRoomPc(state,peer);peer.pc=pc;await pc.setRemoteDescription({type:'offer',sdp:signal.sdp});await pc.setLocalDescription(await pc.createAnswer());await waitForIce(pc,state.ice.relay?5000:2500);if(callState!==state||peer.pc!==pc)return;await api('/rooms/'+state.id+'/signal',{to:peer.id,kind:'answer',sdp:pc.localDescription.sdp}).catch(()=>{})}
+ else if(signal.kind==='answer'&&peer.pc?.signalingState==='have-local-offer')await peer.pc.setRemoteDescription({type:'answer',sdp:signal.sdp});
+}
+function dropRoomPeer(state,id){const peer=state.peers.get(id);if(!peer)return;try{peer.pc?.close()}catch{}peer.pc=null;state.peers.delete(id);$('callGrid')?.querySelector('[data-peer="'+id+'"]')?.remove()}
+function syncRoom(state,data){
+ const mine=data.members.find(m=>m.id===me.id);if(mine)state.joinedAt=mine.joined_at;const others=data.members.filter(m=>m.id!==me.id);
+ for(const [id,peer] of [...state.peers])if(!others.some(m=>m.id===id&&m.joined_at===peer.joinedAt))dropRoomPeer(state,id);
+ for(const m of others)if(!state.peers.has(m.id)){const peer={id:m.id,joinedAt:m.joined_at,person:m,pc:null,tries:0,queue:Promise.resolve(),offerer:m.joined_at<state.joinedAt||m.joined_at===state.joinedAt&&m.id<me.id};state.peers.set(m.id,peer);roomTile(state,peer);if(peer.offerer)roomOffer(state,peer)}
+ for(const signal of data.signals||[]){const peer=state.peers.get(signal.from_id);if(peer)peer.queue=peer.queue.then(()=>takeRoomSignal(state,peer,signal)).catch(()=>{})}
+ if(others.length){state.aloneSince=0;state.everJoined=true}else if(!state.aloneSince)state.aloneSince=Date.now();
+ paintRoom(state);
+}
+async function pollRoom(state){
+ if(callState!==state||!state.id||state.polling)return;state.polling=true;
+ try{const r=await api('/rooms/'+state.id);if(callState!==state)return;
+  if(r.room.status!=='live'||!r.joined){closeCall(state);toast('Call ended.');if(['group','deal'].includes(chat?.kind))void refreshChat().catch(()=>{});return}
+  syncRoom(state,r);
+  for(const peer of state.peers.values())if(peer.offerer&&peer.pc?.signalingState==='have-local-offer'&&Date.now()-(peer.offeredAt||Date.now())>12000&&peer.tries<4)roomOffer(state,peer);
+  // Nobody came (or everybody left): end after a while instead of waiting forever.
+  if(state.aloneSince&&Date.now()-state.aloneSince>(state.everJoined?60000:state.chatKind==='deal'?60000:120000)){toast(state.everJoined?'Everyone left the call.':'No one joined the call.');await endCall('hangup',true);return}
+  const settled=state.peers.size>0&&[...state.peers.values()].every(p=>p.pc?.connectionState==='connected'),every=settled?4000:1500;
+  if(state.pollMs!==every){clearInterval(state.poll);state.pollMs=every;state.poll=setInterval(()=>void pollRoom(state),every)}
+ }catch(e){if(/not found|not in this call|deal room/i.test(e.message)){closeCall(state);toast('Call ended.')}}finally{state.polling=false}
+}
+function showRoomScreen(state,status){
+ callUi();const screen=$('callScreen');screen.classList.add('room');screen.classList.toggle('video',!!state.video);screen.classList.remove('connected');
+ const icon=node('div',undefined,'call-room-icon');icon.textContent=state.chatKind==='deal'?'🤝':'👥';$('callAvatar').replaceChildren(icon);$('callName').textContent=state.title;$('callBadge').replaceChildren();setCallStatus(status);
+ $('callTimer').hidden=true;$('callTimer').textContent='0:00';$('callPeople').hidden=true;$('callGrid').replaceChildren();screen.hidden=false;document.body.classList.add('call-open');
+ $('callCamera').hidden=$('callFlip').hidden=!state.video;$('callMute').setAttribute('aria-pressed','false');$('callMute').innerHTML=callSvg('mic')+'<span>Mute</span>';$('callCamera').innerHTML=callSvg('video')+'<span>Camera</span>';$('callLocalVideo').classList.remove('off');
+}
+async function joinRoom(t){
+ if(!requireLogin())return;if(callState)return toast('You are already on a call.');
+ const state={kind:'room',chatKind:t.kind,chatId:t.id,video:!!t.video,title:t.title||(t.kind==='deal'?'Deal call':'Group call'),peers:new Map(),id:null,ring:false};callState=state;showRoomScreen(state,'Joining…');
+ try{
+  state.ice=await callIce();state.local=await callMedia(state.video,true);if(callState!==state)return stopMedia(state);
+  const r=await api('/rooms',{kind:t.kind,id:t.id,video:state.video});if(callState!==state){void api('/rooms/'+r.room.id+'/leave',{}).catch(()=>{});return}
+  state.id=r.room.id;state.title=r.title||state.title;$('callName').textContent=state.title;closeAlerts('room-'+state.id);dismissedRooms.add(state.id);
+  // The call that is already running decides: no camera in a voice call.
+  if(!r.room.video&&state.video){for(const track of state.local.getVideoTracks()){track.stop();state.local.removeTrack(track)}state.video=false;$('callScreen').classList.remove('video');$('callCamera').hidden=$('callFlip').hidden=true}
+  else if(r.room.video&&!state.video){state.video=true;$('callScreen').classList.add('video')}
+  attachLocal(state);state.joinedAt=r.members.find(m=>m.id===me.id)?.joined_at||Date.now();
+  state.ring=r.members.length===1&&t.kind==='deal';if(state.ring)playTone('ringback');
+  syncRoom(state,{...r,signals:[]});state.pollMs=1500;state.poll=setInterval(()=>void pollRoom(state),1500);
+  if(['group','deal'].includes(chat?.kind))void refreshChat().catch(()=>{});
+ }catch(e){toast(e.message);const id=state.id;closeCall(state);if(id)void api('/rooms/'+id+'/leave',{}).catch(()=>{})}
+}
+function startRoomCall(video){
+ if(!requireLogin())return;if(callState||incomingCall)return toast('You are already on a call.');if(!['group','deal'].includes(chat?.kind))return;
+ const live=liveChatCall&&liveChatCall.kind===chat.kind&&liveChatCall.id===chat.id?liveChatCall.call:null;
+ return joinRoom({kind:chat.kind,id:chat.id,video:live?live.video:!!video,title:$('chatTitle').textContent});
+}
+// "📞 Voice call · 3 people · Join" bar in a group or deal chat while a call is running there.
+function paintLiveCall(c,data){
+ if(c.kind==='deal'){const open=['active','awaiting_final','disputed'].includes(data.deal?.status);$('chatCallAudio').hidden=$('chatCallVideo').hidden=!open}
+ const call=['group','deal'].includes(c.kind)?data.call||null:null;liveChatCall=call?{kind:c.kind,id:c.id,call}:null;
+ if(call&&$('roomBanner')?.dataset.room===call.id)hideRoomBanner();
+ let bar=$('liveCallBar');if(!call||call.joined||callState?.id===call.id){if(bar)bar.hidden=true;return}
+ if(!bar){bar=node('div',undefined,'live-call-bar');bar.id='liveCallBar';$('chatMessages').before(bar)}
+ const faces=node('div',undefined,'live-call-faces');for(const m of call.members.slice(0,3))faces.append(avatar(m));
+ bar.replaceChildren(faces,node('span',(call.video?'🎥 Video':'📞 Voice')+' call · '+call.count+(call.count===1?' person':' people'),'live-call-text'),button('Join',()=>void joinRoom({kind:c.kind,id:c.id,video:call.video,title:$('chatTitle').textContent}),'btn live-call-join'));bar.hidden=false;
+}
+// A group or deal call started where I am a member: the deal rings like a call, a group shows a small bar on top.
+function onRoomInvite(r){
+ paintAlertsCard();if(!r||!me||callState||incomingCall||dismissedRooms.has(r.id))return;
+ if(r.kind==='deal')return showIncoming({...r,room:true});
+ if(chat?.kind==='group'&&chat.id===r.chat_id&&!document.hidden)return;
+ const bar=$('roomBanner');if(bar&&!bar.hidden&&bar.dataset.room===r.id)return;showRoomBanner(r);
+}
+function hideRoomBanner(){const bar=$('roomBanner');if(bar){clearTimeout(bar.timer);bar.hidden=true}}
+function showRoomBanner(r){
+ let bar=$('roomBanner');if(!bar){bar=node('div',undefined,'room-banner');bar.id='roomBanner';bar.setAttribute('role','alert');document.body.append(bar)}
+ const who=node('div',undefined,'room-banner-who'),copy=node('div');who.append(avatar({name:r.name,picture:r.picture}));copy.append(node('strong',(r.video?'🎥 ':'📞 ')+(r.name||'Member')),node('small','Group call · '+(r.chat_name||'Group')));who.append(copy);
+ bar.replaceChildren(who,button('Join',()=>{dismissedRooms.add(r.id);hideRoomBanner();void joinRoom({kind:r.kind,id:r.chat_id,video:r.video,title:r.chat_name})},'btn room-banner-join'),button('✕',()=>{dismissedRooms.add(r.id);hideRoomBanner()},'btn ghost room-banner-close'));
+ bar.lastChild.setAttribute('aria-label','Ignore');bar.dataset.room=r.id;bar.hidden=false;clearTimeout(bar.timer);bar.timer=setTimeout(()=>{dismissedRooms.add(r.id);hideRoomBanner()},45000);
+ try{navigator.vibrate?.([200,120,200])}catch{}playTone('ringback');setTimeout(()=>{if(!callState&&!incomingCall)stopTone()},2600);
+}
+
+// ---- Call alerts when Wize X is closed (Web Push). The alert says who is calling; tapping it opens the call. ----
+Object.assign(socialGlyphs,{bell:'<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15Z"/><path d="M10 20.5a2.2 2.2 0 0 0 4 0"/>'});
+const pushSupported=()=>'serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window&&location.protocol==='https:';
+const onIphone=()=>/iPad|iPhone|iPod/.test(navigator.userAgent)||navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1;
+function keyBytes(s){const b=atob(s.replace(/-/g,'+').replace(/_/g,'/')+'==='.slice((s.length+3)%4));return Uint8Array.from(b,c=>c.charCodeAt(0))}
+async function phoneSubscription(create){const reg=await navigator.serviceWorker.ready;let sub=await reg.pushManager.getSubscription();if(!sub&&create){const {key}=await api('/push/key');sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:keyBytes(key)})}return sub}
+async function enableCallAlerts(){
+ if(!requireLogin())return false;
+ if(!pushSupported()){toast(onIphone()?'On iPhone: tap Share → Add to Home Screen, open Wize X from the Home Screen, then turn on call alerts.':'This browser cannot show call alerts. Please use Chrome.');return false}
+ const permission=Notification.permission==='granted'?'granted':await Notification.requestPermission();
+ if(permission!=='granted'){toast('Call alerts are blocked. Allow notifications for Wize X in the browser settings.');paintAlertsCard();return false}
+ try{const sub=await phoneSubscription(true);await api('/push/subscribe',sub.toJSON());toast('🔔 Call alerts are on for this phone.');paintAlertsCard();return true}
+ catch(e){toast('Could not turn on call alerts: '+(e.message||'try again'));return false}
+}
+async function syncCallAlerts(){if(!me||!pushSupported()||Notification.permission!=='granted')return;try{const sub=await phoneSubscription(false);if(sub)await api('/push/subscribe',sub.toJSON())}catch{}}
+async function stopCallAlertsForThisPhone(){try{if(!pushSupported())return;const reg=await navigator.serviceWorker.getRegistration();const sub=await reg?.pushManager.getSubscription();if(sub)await api('/push/unsubscribe',{endpoint:sub.endpoint})}catch{}}
+function closeAlerts(tag){try{void navigator.serviceWorker?.getRegistration().then(reg=>reg?.getNotifications({tag})).then(list=>{for(const n of list||[])n.close()}).catch(()=>{})}catch{}}
+// "Turn on call alerts" card at the top of Messages, until alerts are on (hidden for 7 days with ✕).
+function paintAlertsCard(){
+ const inbox=$('messengerInbox');if(!inbox)return;let card=$('callAlertsCard');
+ let hidden=false;try{hidden=Number(localStorage.getItem('wm_alerts_hide')||0)>Date.now()}catch{}
+ const mode=!me||hidden?null:pushSupported()?(Notification.permission==='default'?'ask':Notification.permission==='denied'?'blocked':null):onIphone()?'iphone':null;
+ if(!mode){if(card)card.hidden=true;return}
+ if(!card){card=node('div',undefined,'call-alerts-card');card.id='callAlertsCard';(inbox.querySelector('.messenger-tabs')||inbox.firstChild)?.before(card)}
+ if(card.dataset.mode===mode&&!card.hidden)return;card.dataset.mode=mode;
+ const text=node('div');text.append(node('strong','🔔 Call alerts'),node('small',mode==='ask'?'Know when someone calls you, even when Wize X is closed.':mode==='blocked'?'Notifications are blocked. Allow them for Wize X in your browser settings.':'On iPhone, add Wize X to the Home Screen first, then open it from there.'));
+ const close=button('✕',()=>{try{localStorage.setItem('wm_alerts_hide',String(Date.now()+7*24*HOUR_MS))}catch{}card.hidden=true},'btn ghost call-alerts-close');close.setAttribute('aria-label','Hide');
+ card.replaceChildren(text,...(mode==='ask'?[button('Turn on',()=>void enableCallAlerts(),'btn call-alerts-on')]:[]),close);card.hidden=false;
+}
+const HOUR_MS=3600000;
+// Opening Wize X from an alert: ?call=… (ringing personal call), ?room=… (group/deal call), ?thread=… (missed call → that chat).
+async function openFromAlert(params){
+ const callId=params.get('call'),roomId=params.get('room'),threadId=params.get('thread');if(!callId&&!roomId&&!threadId)return;
+ if(location.search)history.replaceState(history.state,'',location.pathname+location.hash);if(!me)return;
+ try{
+  if(threadId){navigate('messages');await openChat('private',threadId);return}
+  if(callId){if(incomingCall?.id===callId||callState?.id===callId)return;const {call}=await api('/calls/incoming');if(call?.id===callId)return onIncomingCall(call);navigate('messages');return toast('📞 This call has ended.')}
+  if(roomId&&callState?.id!==roomId&&incomingCall?.id!==roomId){const r=await api('/rooms/'+roomId);if(r.room.status!=='live')return toast('📞 This call has ended.');if(r.joined||callState||incomingCall)return;const starter=r.members[0]||{};hideRoomBanner();showIncoming({room:true,id:r.room.id,kind:r.room.kind,chat_id:r.room.chat_id,chat_name:r.title,video:r.room.video,name:starter.name,picture:starter.picture,role:starter.role,verified:starter.verified})}
+ }catch(e){toast(e.message)}
+}
+{let waited=0;const ready=setInterval(()=>{waited+=250;if(document.body.classList.contains('auth-pending')&&waited<10000)return;clearInterval(ready);void openFromAlert(new URLSearchParams(location.search));void syncCallAlerts();paintAlertsCard()},250)}
+navigator.serviceWorker?.addEventListener('message',e=>{if(e.data?.type==='wize-open')void openFromAlert(new URL(e.data.url,location.origin).searchParams)});
 
 // ---- Back button: every screen opened on top (photo, post, comments, profile, deal room, dialogs, chat info) gets one history step,
 // so the phone's back button closes only the top screen, then the chat, then goes to the previous page. One press = one visible step. ----
