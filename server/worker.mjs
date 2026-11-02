@@ -571,8 +571,11 @@ if(p==='/api/message-reports'&&method==='POST'){
  const result=await run(db,'INSERT OR IGNORE INTO wm_message_reports(id,reporter_id,target_id,kind,chat_id,message_id,message_text,message_at,context,reason,details,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',uuid(),u.id,message.user_id,d.kind,d.chatId,message.id,message.text.slice(0,2000),message.created_at,JSON.stringify(context),d.reason,details,now());
  return reply({ok:true,already:!result.meta?.changes},201)}
 if(p==='/api/calls/ice'&&method==='GET'){
+ await throttle(db,'ice:'+u.id,6);
  const iceServers=[{urls:['stun:stun.cloudflare.com:3478','stun:stun.l.google.com:19302']}];let relay=false;
- if(env.TURN_KEY_ID&&env.TURN_KEY_API_TOKEN){try{const r=await fetch('https://rtc.live.cloudflare.com/v1/turn/keys/'+env.TURN_KEY_ID+'/credentials/generate',{method:'POST',headers:{authorization:'Bearer '+env.TURN_KEY_API_TOKEN,'content-type':'application/json'},body:JSON.stringify({ttl:3600})});if(r.ok){const s=(await r.json()).iceServers;for(const x of Array.isArray(s)?s:[s])if(x?.urls){iceServers.push(x);relay=true}}}catch{}}
+ // Cloudflare TURN login for one call. generate-ice-servers also lists ports 443/80 for networks that only allow web traffic;
+ // port 53 is dropped (browsers block it). The login lasts 4 hours so long calls are not cut. Relay-only mode only when a TURN login came back.
+ if(env.TURN_KEY_ID&&env.TURN_KEY_API_TOKEN)for(const kind of ['generate-ice-servers','generate']){try{const r=await fetch('https://rtc.live.cloudflare.com/v1/turn/keys/'+encodeURIComponent(env.TURN_KEY_ID)+'/credentials/'+kind,{method:'POST',headers:{authorization:'Bearer '+env.TURN_KEY_API_TOKEN,'content-type':'application/json'},body:JSON.stringify({ttl:4*3600})});if(!r.ok)continue;const s=(await r.json()).iceServers;for(const x of Array.isArray(s)?s:[s]){const urls=(Array.isArray(x?.urls)?x.urls:[x?.urls]).filter(v=>typeof v==='string'&&!/:53(\?|$)/.test(v));if(!urls.length)continue;iceServers.push({...x,urls});if(x.username&&x.credential)relay=true}break}catch{}}
  return reply({iceServers,relay})}
 if(p==='/api/calls'&&method==='POST'){
  await throttle(db,'call:'+u.id,8);await needChatAllowed(db,u);const d=await body(req);

@@ -979,6 +979,16 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  assert.equal((await call('/api/threads/'+th.id+'/messages','POST',{text:'call:audio:120'},'pbuyer')).status,400);
  // Calls: STUN servers, ring, busy, answer, end with a call note in the chat; decline; missed after 45 seconds; no calls in unaccepted chats or while restricted.
  r=await call('/api/calls/ice','GET',undefined,'newbie');assert.equal(r.status,200);assert.ok(r.data.iceServers[0].urls.some(u=>u.startsWith('stun:')));assert.equal(r.data.relay,false);assert.equal((await call('/api/calls/ice')).status,401);
+ {const realFetch=globalThis.fetch,seen=[];env.TURN_KEY_ID='key1';env.TURN_KEY_API_TOKEN='token1';
+  globalThis.fetch=async(url,init)=>{seen.push({url:String(url),auth:init.headers.authorization,ttl:JSON.parse(init.body).ttl});return new Response(JSON.stringify({iceServers:[{urls:['stun:stun.cloudflare.com:3478','stun:stun.cloudflare.com:53']},{urls:['turn:turn.cloudflare.com:3478?transport=udp','turn:turn.cloudflare.com:53?transport=udp','turns:turn.cloudflare.com:443?transport=tcp'],username:'u1',credential:'c1'}]}),{status:201})};
+  try{let t=await call('/api/calls/ice','GET',undefined,'pbuyer');assert.equal(t.status,200);assert.equal(t.data.relay,true);const urls=t.data.iceServers.flatMap(x=>x.urls);assert.ok(urls.includes('turns:turn.cloudflare.com:443?transport=tcp'));assert.ok(!urls.some(v=>/:53(\?|$)/.test(v)),'port 53 is dropped');assert.match(seen[0].url,/\/keys\/key1\/credentials\/generate-ice-servers$/);assert.equal(seen[0].auth,'Bearer token1');assert.equal(seen[0].ttl,14400);
+   globalThis.fetch=async url=>String(url).endsWith('generate-ice-servers')?new Response('{}',{status:404}):new Response(JSON.stringify({iceServers:{urls:['turn:turn.cloudflare.com:3478?transport=udp'],username:'u2',credential:'c2'}}),{status:201});
+   t=await call('/api/calls/ice','GET',undefined,'pbuyer');assert.equal(t.data.relay,true,'falls back to the older TURN endpoint');
+   globalThis.fetch=async()=>new Response(JSON.stringify({iceServers:[{urls:['stun:stun.cloudflare.com:3478']}]}),{status:201});
+   t=await call('/api/calls/ice','GET',undefined,'pbuyer');assert.equal(t.data.relay,false,'no relay-only mode without a TURN login');
+   globalThis.fetch=async()=>{throw new Error('network down')};t=await call('/api/calls/ice','GET',undefined,'pbuyer');assert.equal(t.status,200);assert.equal(t.data.relay,false);
+   let limited=false;for(let i=0;i<13;i++)if((await call('/api/calls/ice','GET',undefined,'pbuyer')).status===429)limited=true;assert.ok(limited,'ICE logins are rate limited');
+  }finally{globalThis.fetch=realFetch;delete env.TURN_KEY_ID;delete env.TURN_KEY_API_TOKEN;await env.DB.prepare("DELETE FROM wm_limits WHERE key LIKE 'ice:%'").run()}}
  const offer='v=0\r\no=- 1 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\n';
  assert.equal((await call('/api/calls','POST',{threadId:th.id,offer:'hello'},'newbie')).status,400);
  r=await call('/api/calls','POST',{threadId:th.id,video:false,offer},'newbie');assert.equal(r.status,201);const callId=r.data.id;
