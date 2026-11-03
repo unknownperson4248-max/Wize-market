@@ -243,17 +243,16 @@ function openGroupIdPost(){
  if(chat?.kind!=='group')return;const groupId=chat.id;closeChatTools?.();
  openStepDialog('🏷️ Sell ID in this group',body=>{
   body.append(node('p','Only members of this group can see this post.','hint'));
-  const title=node('input',undefined,'input');title.maxLength=100;title.placeholder='Example: All max account';field(body,'Title',title).required=true;
-  const uid=node('input',undefined,'input');uid.maxLength=20;uid.inputMode='numeric';uid.placeholder='Game ID / UID (kept private)';field(body,'ID',uid).required=true;
+  const details=node('textarea',undefined,'input');details.rows=4;details.maxLength=2000;details.placeholder='ID details: level, rank, skins, guns, evo items…';field(body,'ID details',details).required=true;
   const price=node('input',undefined,'input');price.maxLength=12;price.inputMode='decimal';price.placeholder='Example: 5000 or 5k';field(body,'Price (৳)',price).required=true;
   const files=node('input',undefined,'input');files.type='file';files.multiple=true;files.accept='image/jpeg,image/png,image/webp,video/mp4,video/webm';field(body,'Photos or video',files);
-  body.append(node('p','Up to 10 files. A video helps buyers trust the ID.','hint'));
- },'Post in group',async body=>{
-  const [title,uid,price]=[...body.querySelectorAll('input:not([type=file])')].map(i=>i.value.trim()),list=[...body.querySelector('input[type=file]').files].slice(0,10);
-  if(!title||!uid||!price)throw Error('Fill in title, ID and price.');if(list.some(f=>f.size>(f.type.startsWith('video/')?50:8)*1024*1024))throw Error('Photos up to 8 MB and videos up to 50 MB.');
+ },'Post',async body=>{
+  const details=body.querySelector('textarea').value.trim(),price=body.querySelector('input[inputmode=decimal]').value.trim(),list=[...body.querySelector('input[type=file]').files].slice(0,10);
+  if(!details||!price)throw Error('Write the ID details and the price.');if(list.some(f=>f.size>(f.type.startsWith('video/')?50:8)*1024*1024))throw Error('Photos up to 8 MB and videos up to 50 MB.');
+  const title=(details.split('\n').map(x=>x.trim()).find(Boolean)||'Free Fire ID').slice(0,100);
   const status=body.closest('form').querySelector('.deal-step-status'),media=[];
   for(const [i,f] of list.entries()){status.textContent='Uploading '+(i+1)+' of '+list.length+'…';const r=await fetch('/api/upload',{method:'POST',credentials:'same-origin',headers:{'content-type':f.type,'x-upload-purpose':'post'},body:f}),d=await r.json();if(!r.ok)throw Error(d.error||'Upload failed');media.push(d)}
-  status.textContent='Posting…';const result=await api('/posts',{title,details:title,price,kind:'Game ID',postIntent:'sell',gameCategory:'free-fire',gameUid:uid,groupId,media,clientKey:crypto.randomUUID()});
+  status.textContent='Posting…';const result=await api('/posts',{title,details,price,kind:'Game ID',postIntent:'sell',gameCategory:'free-fire',groupId,media,clientKey:crypto.randomUUID()});
   toast(result.status==='approved'?'✅ Posted in the group.':'⏳ Saved. It appears after the safety check.');if(chat?.id===groupId&&typeof loadGroupPosts==='function')void loadGroupPosts().catch(()=>{});
  });
 }
