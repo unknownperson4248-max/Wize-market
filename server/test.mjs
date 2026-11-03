@@ -1139,3 +1139,32 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  assert.equal((await call('/api/groups/'+g+'/messages','GET',undefined,'outsider')).status,200);
  console.log('PASS: group invite link joins directly or waits for admin approval; only the group admin changes settings and answers join requests.');
 }
+{
+ // Chat extras: nicknames, colour/emoji and pins. Group: own nickname for members; the rest is for the group admin only.
+ const g=(await call('/api/groups','POST',{name:'Extras group',logoId},'admin')).data.id;await call('/api/groups/'+g+'/join','POST',{},'buyer');
+ const base='/api/chat-extras/group/'+g;
+ assert.equal((await call(base+'/nickname','POST',{userId:'buyer',nickname:'Boss buyer'},'buyer')).status,200);
+ assert.equal((await call(base+'/nickname','POST',{userId:'admin',nickname:'Hacked'},'buyer')).status,403);
+ assert.equal((await call(base+'/nickname','POST',{userId:'buyer',nickname:'Call 01711111111'},'buyer')).status,400);
+ assert.equal((await call(base+'/nickname','POST',{userId:'admin',nickname:'Group Boss'},'admin')).status,200);
+ assert.equal((await call(base+'/nickname','POST',{userId:'outsider',nickname:'x'},'admin')).status,404);
+ assert.equal((await call(base+'/theme','POST',{color:'#a033ff',emoji:'🔥'},'buyer')).status,403);
+ assert.equal((await call(base+'/theme','POST',{color:'#123456',emoji:'🔥'},'admin')).status,400);
+ assert.equal((await call(base+'/theme','POST',{color:'#a033ff',emoji:'🔥'},'admin')).status,200);
+ await call('/api/groups/'+g+'/messages','POST',{text:'Pin me'},'buyer');const mid=(await call('/api/groups/'+g+'/messages','GET',undefined,'admin')).data.messages.find(m=>m.text==='Pin me')?.id;assert.ok(Number.isInteger(mid));
+ assert.equal((await call(base+'/pin','POST',{messageId:mid,pinned:true},'buyer')).status,403);
+ assert.equal((await call(base+'/pin','POST',{messageId:mid,pinned:true},'admin')).status,200);
+ assert.equal((await call(base+'/pin','POST',{messageId:999999,pinned:true},'admin')).status,404);
+ let x=(await call(base,'GET',undefined,'buyer')).data;assert.equal(x.nicknames.buyer,'Boss buyer');assert.equal(x.nicknames.admin,'Group Boss');assert.deepEqual(x.theme,{color:'#a033ff',emoji:'🔥'});assert.equal(x.pins.length,1);assert.equal(x.pins[0].text,'Pin me');assert.equal(x.can.theme,false);
+ assert.equal((await call(base,'GET',undefined,'outsider')).status,403);
+ assert.equal((await call(base+'/nickname','POST',{userId:'buyer',nickname:''},'buyer')).status,200);
+ assert.equal((await call(base+'/pin','POST',{messageId:mid,pinned:false},'admin')).status,200);
+ x=(await call(base,'GET',undefined,'admin')).data;assert.equal(x.nicknames.buyer,undefined);assert.equal(x.pins.length,0);assert.equal(x.can.theme,true);
+ // personal chat: both people can change everything; others cannot see it
+ const t=(await call('/api/threads','POST',{userId:'seller'},'outsider')).data.thread.id;const pbase='/api/chat-extras/private/'+t;
+ assert.equal((await call(pbase+'/nickname','POST',{userId:'seller',nickname:'Bhai'},'outsider')).status,200);
+ assert.equal((await call(pbase+'/theme','POST',{color:'#13b06b',emoji:'❤️'},'seller')).status,200);
+ assert.equal((await call(pbase,'GET',undefined,'buyer')).status,404);
+ x=(await call(pbase,'GET',undefined,'seller')).data;assert.equal(x.nicknames.seller,'Bhai');assert.equal(x.theme.emoji,'❤️');assert.equal(x.can.pin,true);
+ console.log('PASS: chat nicknames, colour and emoji, pinned messages (personal: both people; group: own nickname, admin for the rest).');
+}

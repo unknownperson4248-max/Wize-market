@@ -178,3 +178,16 @@ i[data-icon] svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-wid
 #peerInfoPanel .peer-info-shortcuts>button svg{color:#fff;stroke:#fff}
 #groupSettingsPanel .info-row>span:not(:last-child){margin-left:0}
 html body #chatPanel #groupSettingsPanel,html body #chatPanel #peerInfoPanel{background:#000!important}
+#chatPanel[data-chat-theme] .bubble.mine{background:var(--chat-accent)!important;border-color:transparent!important;color:#fff!important}
+#chatPanel[data-chat-theme] .composer-send{background:var(--chat-accent)!important}
+#chatPanel[data-chat-theme] .chat-quick-emoji{color:var(--chat-accent)}
+.chat-quick-emoji{flex:none;width:38px;height:38px;padding:0;border:0;background:none;font-size:24px;line-height:1;cursor:pointer;display:grid;place-items:center}.chat-quick-emoji[hidden]{display:none}
+#peerInfoPanel .peer-info-shortcuts>button>i,#groupSettingsPanel .info-shortcut>i{width:48px;height:48px;border-radius:50%;background:#2a2b2e;display:grid;place-items:center}
+#peerInfoPanel .peer-info-shortcuts>button>i svg{width:24px;height:24px;stroke:#fff}
+#groupSettingsPanel .info-shortcuts,#peerInfoPanel .peer-info-shortcuts{gap:6px!important}#groupSettingsPanel .info-shortcut,#peerInfoPanel .peer-info-shortcuts>button{width:64px!important;font-size:12px!important}
+.nickname-row .avatar{width:44px!important;height:44px!important;flex:none}.nickname-who{display:flex;flex-direction:column;min-width:0}.nickname-who small{color:#b0b3b8;font-size:13px}
+.chat-color-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:8px 0}.chat-color-swatch{aspect-ratio:1;border-radius:50%;border:3px solid transparent;padding:0;cursor:pointer;min-height:0}.chat-color-swatch[aria-pressed=true]{border-color:#fff;box-shadow:0 0 0 2px #000 inset}
+.chat-emoji-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin:8px 0}.chat-emoji-choice{font-size:28px;padding:8px 0;border-radius:14px;border:2px solid transparent;background:#1c1d20;cursor:pointer;min-height:0}.chat-emoji-choice[aria-pressed=true]{border-color:#fff}
+.chat-color-swatch:disabled,.chat-emoji-choice:disabled{opacity:.6;cursor:default}.chat-customize-save{width:100%;margin-top:16px}
+.pinned-message{padding:12px;border-radius:14px;background:#1c1d20;margin:8px 0}.pinned-head{display:flex;justify-content:space-between;gap:8px}.pinned-head small{color:#8a8d91;font-size:12px}.pinned-message p{margin:6px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}.pinned-unpin{margin-top:8px;padding:6px 12px;min-height:0;font-size:13px}
+#peerInfoBody>h2{font-size:20px;margin:6px 0 12px}
