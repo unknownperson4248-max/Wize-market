@@ -113,3 +113,31 @@ audio.call-tile-media{display:none!important}
 .swipe-back-cue{position:fixed;top:50%;left:6px;z-index:400;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font:600 30px/1 system-ui;color:#fff;background:#163a58e6;border:1px solid #73ccff66;box-shadow:0 6px 18px #0008;pointer-events:none;transition:background .15s}.swipe-back-cue.right{left:auto;right:6px}.swipe-back-cue.ready{background:#2a8de0}
 .install-step-list li{flex-wrap:wrap}.install-step-pic{flex:0 0 100%;margin:8px 0 4px}.install-step-pic svg{display:block;width:100%;max-width:300px;height:auto;stroke:none;stroke-width:1px}
 #installHelp{z-index:250}#installHelp .dialog{max-height:calc(100dvh - 40px);overflow:auto}
+/* Messenger-style call screen */
+.call-screen:not(.room){background:linear-gradient(180deg,#15327a 0%,#1b2e6e 40%,#181c40 100%)}
+.call-top{position:absolute;top:max(14px,env(safe-area-inset-top));left:12px;right:12px;z-index:4;display:flex;justify-content:space-between;pointer-events:none}
+.call-top-btn{pointer-events:auto;width:44px;height:44px;padding:0;border:0;border-radius:50%;display:grid;place-items:center;background:transparent;color:#fff;cursor:pointer}
+.call-top-btn[hidden]{visibility:hidden;display:grid}
+.call-top-btn svg{width:26px;height:26px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.call-screen:not(.room) .call-controls{gap:0;justify-content:space-evenly;padding:0 8px}
+.call-screen:not(.room) .call-btn{width:62px}
+.call-screen:not(.room) .call-btn span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.call-screen:not(.room) .call-btn svg{width:56px;height:56px;padding:15px;background:#0b0e22e6}
+.call-screen:not(.room) .call-btn[aria-pressed=true] svg{background:#fff;stroke:#0b1b2b}
+.call-screen:not(.room) .call-btn.hangup svg{background:#e0383e}
+.call-screen.remote-video .call-remote-video{display:block}
+.call-screen.remote-screen .call-remote-video{object-fit:contain;background:#000}
+.call-screen.local-cam .call-local-video{display:block;top:calc(max(14px,env(safe-area-inset-top)) + 52px)}
+.call-screen.remote-video.connected .call-info{position:absolute;top:calc(max(14px,env(safe-area-inset-top)) + 52px);left:18px;align-items:flex-start;text-align:left;padding:0;text-shadow:0 1px 6px #000}
+.call-screen.remote-video.connected .call-avatar{display:none}
+.call-screen.remote-video .call-info h2{font-size:20px}
+/* Small call window */
+.call-screen.mini{inset:auto;right:12px;bottom:calc(96px + env(safe-area-inset-bottom));width:116px;height:164px;border-radius:20px;box-shadow:0 12px 32px #000a;border:1px solid #ffffff33;cursor:pointer;z-index:215;justify-content:center}
+.call-screen.mini .call-controls,.call-screen.mini .call-top,.call-screen.mini .call-local-video,.call-screen.mini .call-grid,.call-screen.mini .call-badge,.call-screen.mini .call-people{display:none!important}
+.call-screen.mini .call-info{position:relative!important;inset:auto!important;align-items:center!important;text-align:center!important;gap:2px;padding:0 6px!important}
+.call-screen.mini .call-avatar{display:block!important}.call-screen.mini.remote-video .call-avatar{display:none!important}
+.call-screen.mini .call-avatar .avatar{width:56px;height:56px;margin:0 0 4px;font-size:20px}
+.call-screen.mini .call-info h2{font-size:13px;max-width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.call-screen.mini .call-status,.call-screen.mini .call-timer{font-size:12px}
+.call-screen.mini.remote-video .call-info{position:absolute!important;left:0!important;right:0!important;bottom:8px!important;top:auto!important}
+.call-screen:not(.room) #callCamera[aria-pressed] svg{background:#0b0e22e6;stroke:#fff}

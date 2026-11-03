@@ -27,6 +27,10 @@ const CALL_SVG={
  micOff:'<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M3 3l18 18"/>',
  camOff:'<rect x="2.5" y="6" width="13" height="12" rx="2.5"/><path d="m15.5 10.5 6-3.5v10l-6-3.5ZM2 2l20 20"/>',
  flip:'<path d="M4 8h3l2-3h6l2 3h3v11H4Z"/><path d="M9.3 13a2.7 2.7 0 0 0 5 1.4M14.7 12a2.7 2.7 0 0 0-5-1.4"/>',
+ screen:'<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4M12 13V7M9 10l3-3 3 3"/>',
+ speaker:'<path d="M4 9v6h4l5 4V5L8 9H4Z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/>',
+ speakerOff:'<path d="M4 9v6h4l5 4V5L8 9H4Z"/><path d="m17 9 5 6M22 9l-5 6"/>',
+ minimize:'<path d="M10 4v6H4M14 20v-6h6M10 10 3 3M14 14l7 7"/>',
  hangup:'<path transform="rotate(135 12 12)" d="M5 4h3.5l2 4.6-2.3 1.5a11 11 0 0 0 5.7 5.7l1.5-2.3 4.6 2V19a2 2 0 0 1-2 2A17 17 0 0 1 3 6a2 2 0 0 1 2-2Z"/>'
 };
 const callSvg=name=>'<svg viewBox="0 0 24 24" aria-hidden="true">'+CALL_SVG[name]+'</svg>';
@@ -34,14 +38,16 @@ let callState=null,incomingCall=null,toneCtx=null,toneTimer=null;
 function callUi(){
  if($('callScreen'))return;
  const screen=node('div',undefined,'call-screen');screen.id='callScreen';screen.hidden=true;screen.setAttribute('role','dialog');screen.setAttribute('aria-modal','true');screen.setAttribute('aria-label','Call');
- screen.innerHTML='<video id="callRemoteVideo" class="call-remote-video" autoplay playsinline></video><audio id="callRemoteAudio" autoplay></audio><div id="callGrid" class="call-grid"></div><div class="call-info"><div id="callAvatar" class="call-avatar"></div><h2 id="callName"></h2><div id="callBadge" class="call-badge"></div><p id="callStatus" class="call-status"></p><p id="callTimer" class="call-timer" hidden>0:00</p><p id="callPeople" class="call-people" hidden></p></div><video id="callLocalVideo" class="call-local-video" autoplay playsinline muted></video><div class="call-controls"><button type="button" id="callMute" class="call-btn" aria-label="Mute microphone" aria-pressed="false">'+callSvg('mic')+'<span>Mute</span></button><button type="button" id="callCamera" class="call-btn" aria-label="Turn camera off" aria-pressed="false">'+callSvg('video')+'<span>Camera</span></button><button type="button" id="callFlip" class="call-btn" aria-label="Switch camera">'+callSvg('flip')+'<span>Flip</span></button><button type="button" id="callHangup" class="call-btn hangup" aria-label="End call">'+callSvg('hangup')+'<span>End</span></button></div>';
+ screen.innerHTML='<video id="callRemoteVideo" class="call-remote-video" autoplay playsinline></video><audio id="callRemoteAudio" autoplay></audio><div id="callGrid" class="call-grid"></div><div class="call-info"><div id="callAvatar" class="call-avatar"></div><h2 id="callName"></h2><div id="callBadge" class="call-badge"></div><p id="callStatus" class="call-status"></p><p id="callTimer" class="call-timer" hidden>0:00</p><p id="callPeople" class="call-people" hidden></p></div><video id="callLocalVideo" class="call-local-video" autoplay playsinline muted></video><div class="call-top"><button type="button" id="callMinimize" class="call-top-btn" aria-label="Minimize call">'+callSvg('minimize')+'</button><button type="button" id="callFlip" class="call-top-btn" aria-label="Switch camera">'+callSvg('flip')+'</button></div><div class="call-controls"><button type="button" id="callCamera" class="call-btn" aria-label="Turn camera off" aria-pressed="false">'+callSvg('video')+'<span>Camera</span></button><button type="button" id="callMute" class="call-btn" aria-label="Mute microphone" aria-pressed="false">'+callSvg('mic')+'<span>Mute</span></button><button type="button" id="callShare" class="call-btn" aria-label="Share screen" aria-pressed="false">'+callSvg('screen')+'<span>Share</span></button><button type="button" id="callSpeaker" class="call-btn" aria-label="Speaker" aria-pressed="false">'+callSvg('speaker')+'<span>Speaker</span></button><button type="button" id="callHangup" class="call-btn hangup" aria-label="End call">'+callSvg('hangup')+'<span>End</span></button></div>';
  const ring=node('div',undefined,'incoming-call');ring.id='incomingCall';ring.hidden=true;ring.setAttribute('role','alertdialog');ring.setAttribute('aria-label','Incoming call');
  ring.innerHTML='<div class="incoming-card"><div id="incomingAvatar" class="call-avatar"></div><strong id="incomingName"></strong><div id="incomingBadge" class="call-badge"></div><p id="incomingKind" class="call-status"></p><div class="incoming-actions"><button type="button" id="declineCall" class="call-round decline" aria-label="Decline">'+callSvg('hangup')+'</button><button type="button" id="acceptCall" class="call-round accept" aria-label="Accept">'+callSvg('phone')+'</button></div><div class="incoming-labels"><span id="incomingNoLabel">Decline</span><span id="incomingYesLabel">Accept</span></div></div>';
  document.body.append(screen,ring);
  $('callHangup').onclick=()=>void endCall('hangup');$('acceptCall').onclick=()=>void acceptCall();$('declineCall').onclick=()=>void declineCall();
  $('callMute').onclick=()=>{const s=callState;if(!s?.local)return;const off=!s.muted;s.muted=off;for(const t of s.local.getAudioTracks())t.enabled=!off;$('callMute').setAttribute('aria-pressed',String(off));$('callMute').innerHTML=callSvg(off?'micOff':'mic')+'<span>'+(off?'Unmute':'Mute')+'</span>'};
- $('callCamera').onclick=()=>{const s=callState;if(!s?.local)return;const off=!s.cameraOff;s.cameraOff=off;for(const t of s.local.getVideoTracks())t.enabled=!off;$('callCamera').setAttribute('aria-pressed',String(off));$('callCamera').innerHTML=callSvg(off?'camOff':'video')+'<span>'+(off?'Camera on':'Camera')+'</span>';$('callLocalVideo').classList.toggle('off',off)};
+ $('callCamera').onclick=()=>{const s=callState;if(!s?.local)return;if(s.kind!=='room')return void toggleCallCamera();const off=!s.cameraOff;s.cameraOff=off;for(const t of s.local.getVideoTracks())t.enabled=!off;$('callCamera').setAttribute('aria-pressed',String(off));$('callCamera').innerHTML=callSvg(off?'camOff':'video')+'<span>'+(off?'Camera on':'Camera')+'</span>';$('callLocalVideo').classList.toggle('off',off)};
  $('callFlip').onclick=()=>void flipCamera();
+ $('callShare').onclick=()=>void toggleScreenShare();$('callSpeaker').onclick=()=>void toggleSpeaker();$('callMinimize').onclick=()=>minimizeCall(true);
+ screen.addEventListener('click',e=>{if(screen.classList.contains('mini')&&!e.target.closest('#callHangup')){e.preventDefault();minimizeCall(false)}},true);
 }
 function playTone(kind){stopTone();try{toneCtx=toneCtx||new (window.AudioContext||window.webkitAudioContext)();void toneCtx.resume();const beep=()=>{const t=toneCtx.currentTime,o=toneCtx.createOscillator(),g=toneCtx.createGain();o.frequency.value=kind==='ring'?660:440;g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.12,t+0.05);g.gain.exponentialRampToValueAtTime(0.0001,t+(kind==='ring'?0.9:1.2));o.connect(g).connect(toneCtx.destination);o.start(t);o.stop(t+1.3);if(kind==='ring')navigator.vibrate?.([300,150,300])};beep();toneTimer=setInterval(beep,kind==='ring'?1600:3000)}catch{}}
 function stopTone(){clearInterval(toneTimer);toneTimer=null;try{navigator.vibrate?.(0)}catch{}}
@@ -57,13 +63,18 @@ function setCallStatus(text){const el=$('callStatus');if(el){el.textContent=text
 function showCallScreen(state,status){
  callUi();const p=state.peer;$('callAvatar').replaceChildren(avatar(p));$('callName').textContent=p.name||'Member';$('callBadge').replaceChildren(verifiedMark(p.role||'member',undefined,!!p.verified));setCallStatus(status);$('callTimer').hidden=true;$('callTimer').textContent='0:00';
  const screen=$('callScreen');screen.classList.toggle('video',!!state.video);screen.classList.remove('connected','room');$('callPeople').hidden=true;$('callGrid').replaceChildren();screen.hidden=false;document.body.classList.add('call-open');
- $('callCamera').hidden=$('callFlip').hidden=!state.video;$('callMute').setAttribute('aria-pressed','false');$('callMute').innerHTML=callSvg('mic')+'<span>Mute</span>';$('callCamera').innerHTML=callSvg('video')+'<span>Camera</span>';$('callLocalVideo').classList.remove('off');
+ $('callMute').setAttribute('aria-pressed','false');$('callMute').innerHTML=callSvg('mic')+'<span>Mute</span>';$('callLocalVideo').classList.remove('off');
+ screen.classList.remove('video','mini','remote-video','remote-screen','local-cam');state.camOn=!!state.video;state.remoteVideo=!!state.video;$('callCamera').hidden=false;$('callShare').hidden=!canShareScreen();resetSpeaker();paintCallVideo(state);
 }
 function attachLocal(state){if(state.local?.getVideoTracks().length){const v=$('callLocalVideo');v.srcObject=state.local;v.classList.add('mirror');state.facing='user';void v.play().catch(()=>{})}}
 function buildPeer(state){
  const pc=new RTCPeerConnection({iceServers:state.ice.iceServers,iceTransportPolicy:state.ice.relay?'relay':'all'});
  for(const track of state.local.getTracks())pc.addTrack(track,state.local);
- pc.ontrack=e=>{const stream=e.streams[0],el=state.video?$('callRemoteVideo'):$('callRemoteAudio');if(stream&&el.srcObject!==stream){el.srcObject=stream;void el.play().catch(()=>{})}};
+ // A video line in every call, so the camera or a shared screen can be turned on later without a new offer.
+ if(!state.local.getVideoTracks().length&&state.role==='caller')pc.addTransceiver('video',{direction:'sendrecv'});
+ state.ctl=pc.createDataChannel('wm-call',{negotiated:true,id:7});state.ctl.onopen=()=>sendCallState(state);
+ state.ctl.onmessage=e=>{try{const m=JSON.parse(e.data);if(callState!==state)return;state.remoteVideo=!!m.video||!!m.screen;state.remoteScreen=!!m.screen;paintCallVideo(state)}catch{}};
+ pc.ontrack=e=>{const audio=e.track.kind==='audio',el=audio?$('callRemoteAudio'):$('callRemoteVideo'),stream=audio?(e.streams[0]||new MediaStream([e.track])):new MediaStream([e.track]);if(!audio)el.muted=true;el.srcObject=stream;void el.play().catch(()=>{})};
  pc.onconnectionstatechange=()=>{if(callState!==state)return;const s=pc.connectionState;if(s==='connected'){stopTone();setCallStatus('');$('callScreen').classList.add('connected');startCallTimer(state);if(state.poll){clearInterval(state.poll);state.poll=setInterval(()=>void pollCall(state),4000)}}else if(s==='disconnected')setCallStatus('Reconnecting…');else if(s==='failed'){toast('📵 Call failed. The internet connection could not reach the other phone.');void endCall('failed',true)}};
  return pc;
 }
@@ -90,7 +101,7 @@ async function pollCall(state){
  }catch(e){if(/not found/i.test(e.message)){closeCall(state)}}finally{state.polling=false}
 }
 function closeCall(state){
- if(!state||callState!==state)return;callState=null;clearInterval(state.poll);clearTimeout(state.ringTimeout);clearInterval(state.timer);stopTone();try{state.pc?.close()}catch{}for(const peer of state.peers?.values()||[])try{peer.pc?.close()}catch{}stopMedia(state);
+ if(!state||callState!==state)return;callState=null;try{state.screen?.stop()}catch{}document.body.classList.remove('call-mini');$('callScreen')?.classList.remove('mini','remote-video','remote-screen','local-cam');clearInterval(state.poll);clearTimeout(state.ringTimeout);clearInterval(state.timer);stopTone();try{state.pc?.close()}catch{}for(const peer of state.peers?.values()||[])try{peer.pc?.close()}catch{}stopMedia(state);
  if($('callScreen')){$('callScreen').hidden=true;$('callScreen').classList.remove('room');$('callGrid').replaceChildren();for(const id of ['callRemoteAudio','callRemoteVideo','callLocalVideo'])$(id).srcObject=null}document.body.classList.remove('call-open');
 }
 async function endCall(reason='hangup',silent=false){
@@ -100,8 +111,48 @@ async function endCall(reason='hangup',silent=false){
  if(!silent&&reason==='hangup')toast('Call ended.');if(chat?.kind==='private')void refreshChat().catch(()=>{});
 }
 async function flipCamera(){
- const s=callState;if(!s?.local?.getVideoTracks().length||!s.pc&&s.kind!=='room')return;try{s.facing=s.facing==='environment'?'user':'environment';const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:s.facing,width:{ideal:s.kind==='room'?480:640},height:{ideal:s.kind==='room'?360:480}}}),track=stream.getVideoTracks()[0],senders=(s.kind==='room'?[...s.peers.values()].map(p=>p.pc):[s.pc]).filter(Boolean).flatMap(pc=>pc.getSenders()).filter(x=>x.track?.kind==='video');if(!track)return;for(const sender of senders)await sender.replaceTrack(track);for(const old of s.local.getVideoTracks()){s.local.removeTrack(old);old.stop()}s.local.addTrack(track);track.enabled=!s.cameraOff;$('callLocalVideo').srcObject=s.local;$('callLocalVideo').classList.toggle('mirror',s.facing==='user')}catch{toast('Could not switch the camera.')}
+ const s=callState;if(s?.screen)return toast('Stop sharing the screen first.');if(!s?.local?.getVideoTracks().length||!s.pc&&s.kind!=='room')return;try{s.facing=s.facing==='environment'?'user':'environment';const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:s.facing,width:{ideal:s.kind==='room'?480:640},height:{ideal:s.kind==='room'?360:480}}}),track=stream.getVideoTracks()[0],senders=(s.kind==='room'?[...s.peers.values()].map(p=>p.pc):[s.pc]).filter(Boolean).flatMap(pc=>pc.getSenders()).filter(x=>x.track?.kind==='video');if(!track)return;for(const sender of senders)await sender.replaceTrack(track);for(const old of s.local.getVideoTracks()){s.local.removeTrack(old);old.stop()}s.local.addTrack(track);track.enabled=!s.cameraOff;$('callLocalVideo').srcObject=s.local;$('callLocalVideo').classList.toggle('mirror',s.facing==='user')}catch{toast('Could not switch the camera.')}
 }
+// ---- Messenger-style call tools: camera on/off in any call, screen sharing, speaker, small call window ----
+const canShareScreen=()=>!!navigator.mediaDevices?.getDisplayMedia;
+function videoSender(s){const t=s?.pc?.getTransceivers().find(x=>x.receiver.track.kind==='video'&&x.direction!=='inactive');return t?.sender||null}
+function sendCallState(s){try{if(s?.ctl?.readyState==='open')s.ctl.send(JSON.stringify({video:!!s.camOn,screen:!!s.screen}))}catch{}}
+// Shows the other person's video when they send camera or screen, otherwise their photo; and my own small preview.
+function paintCallVideo(s){
+ const screen=$('callScreen');if(!screen||s.kind==='room')return;
+ screen.classList.toggle('remote-video',!!s.remoteVideo);screen.classList.toggle('remote-screen',!!s.remoteScreen);screen.classList.toggle('local-cam',!!(s.camOn||s.screen));
+ const local=$('callLocalVideo');if(s.screen){local.srcObject=new MediaStream([s.screen]);local.classList.remove('mirror')}else if(s.camOn&&s.local){local.srcObject=s.local;local.classList.toggle('mirror',(s.facing||'user')==='user')}else local.srcObject=null;
+ if(local.srcObject)void local.play().catch(()=>{});
+ $('callCamera').setAttribute('aria-pressed',String(!s.camOn));$('callCamera').setAttribute('aria-label',s.camOn?'Turn camera off':'Turn camera on');$('callCamera').innerHTML=callSvg(s.camOn?'video':'camOff')+'<span>'+(s.camOn?'Camera':'Camera off')+'</span>';
+ $('callShare').setAttribute('aria-pressed',String(!!s.screen));$('callShare').querySelector('span').textContent=s.screen?'Stop share':'Share';
+ $('callFlip').hidden=!s.camOn||!!s.screen;
+}
+async function toggleCallCamera(){
+ const s=callState;if(!s||s.kind==='room'||s.cameraBusy)return;const sender=videoSender(s);if(!sender)return toast('Camera is not available in this call.');s.cameraBusy=true;
+ try{
+  if(s.camOn){if(!s.screen)await sender.replaceTrack(null);for(const t of s.local.getVideoTracks()){s.local.removeTrack(t);t.stop()}s.camOn=false}
+  else{const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:s.facing||'user',width:{ideal:640},height:{ideal:480},frameRate:{ideal:24}}}),track=stream.getVideoTracks()[0];if(!track)throw Error();if(callState!==s){track.stop();return}if(!s.screen)await sender.replaceTrack(track);s.local.addTrack(track);s.facing=s.facing||'user';s.camOn=true}
+  paintCallVideo(s);sendCallState(s);
+ }catch{toast('Could not open the camera. Allow the camera for this site, then try again.')}finally{s.cameraBusy=false}
+}
+async function toggleScreenShare(){
+ const s=callState;if(!s||s.kind==='room')return;if(!canShareScreen())return toast('Screen sharing works from a computer browser. Phones do not let websites share the screen.');
+ if(s.screen)return stopScreenShare(s);const sender=videoSender(s);if(!sender)return toast('Screen sharing is not available in this call.');
+ try{const stream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:15}},audio:false}),track=stream.getVideoTracks()[0];if(!track||callState!==s){for(const t of stream.getTracks())t.stop();return}
+  track.contentHint='detail';await sender.replaceTrack(track);s.screen=track;track.onended=()=>void stopScreenShare(s);paintCallVideo(s);sendCallState(s);toast('🖥️ Sharing your screen.')
+ }catch(e){if(e?.name!=='NotAllowedError')toast('Could not share the screen.')}
+}
+async function stopScreenShare(s){if(!s?.screen)return;const track=s.screen;s.screen=null;try{await videoSender(s)?.replaceTrack(s.camOn?s.local.getVideoTracks()[0]||null:null)}catch{}track.onended=null;track.stop();if(callState===s){paintCallVideo(s);sendCallState(s)}}
+// Speaker: switches between the phone's sound outputs where the browser allows it, otherwise turns the other side's sound off and on.
+function callAudioEls(){return [...document.querySelectorAll('#callScreen audio,#callScreen video')].filter(el=>el.id!=='callLocalVideo'&&el.id!=='callRemoteVideo')}
+function resetSpeaker(){const b=$('callSpeaker');if(!b)return;b.setAttribute('aria-pressed','false');b.innerHTML=callSvg('speaker')+'<span>Speaker</span>';for(const el of callAudioEls())el.muted=false;if(callState)callState.soundOff=false}
+async function toggleSpeaker(){
+ const s=callState;if(!s)return;const els=callAudioEls(),b=$('callSpeaker');
+ try{if(typeof HTMLMediaElement.prototype.setSinkId==='function'){const outs=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='audiooutput'&&d.deviceId);if(outs.length>1){s.out=((s.out??0)+1)%outs.length;const out=outs[s.out];for(const el of els)await el.setSinkId(out.deviceId).catch(()=>{});b.setAttribute('aria-pressed',String(s.out!==0));b.querySelector('span').textContent=s.out===0?'Speaker':'Output '+(s.out+1);return toast('🔊 '+(out.label||'Sound output '+(s.out+1)))}}}catch{}
+ s.soundOff=!s.soundOff;for(const el of els)el.muted=s.soundOff;b.setAttribute('aria-pressed',String(s.soundOff));b.innerHTML=callSvg(s.soundOff?'speakerOff':'speaker')+'<span>'+(s.soundOff?'Sound off':'Speaker')+'</span>';toast(s.soundOff?'🔇 Call sound off. Tap again to hear.':'🔊 Call sound on.');
+}
+// Small call window: keep talking while using the rest of the site. Tap it to open the call again.
+function minimizeCall(on){const screen=$('callScreen');if(!screen||screen.hidden)return;screen.classList.toggle('mini',on);document.body.classList.toggle('call-open',!on);document.body.classList.toggle('call-mini',on);screen.setAttribute('aria-modal',String(!on));screen.setAttribute('aria-label',on?'Call in progress. Tap to open.':'Call')}
 // Incoming calls: checked every few seconds while Wize X is open.
 async function pollIncoming(){
  if(!me||callState||incomingCall||document.hidden)return;
@@ -119,7 +170,7 @@ async function acceptCall(){
  const state={role:'callee',video:!!c.video,peer:{id:c.caller_id,name:c.name,picture:c.picture,role:c.role,verified:c.verified},threadId:c.thread_id,id:c.id};callState=state;showCallScreen(state,'Connecting…');
  try{
   state.ice=await callIce();state.local=await callMedia(state.video);if(callState!==state)return stopMedia(state);attachLocal(state);state.pc=buildPeer(state);
-  await state.pc.setRemoteDescription({type:'offer',sdp:c.offer});await state.pc.setLocalDescription(await state.pc.createAnswer());await waitForIce(state.pc,state.ice.relay?5000:2500);if(callState!==state)return;
+  await state.pc.setRemoteDescription({type:'offer',sdp:c.offer});for(const t of state.pc.getTransceivers())if(t.receiver.track.kind==='video'&&!t.sender.track)t.direction='sendrecv';await state.pc.setLocalDescription(await state.pc.createAnswer());await waitForIce(state.pc,state.ice.relay?5000:2500);if(callState!==state)return;
   await api('/calls/'+c.id+'/answer',{answer:state.pc.localDescription.sdp});state.answered=true;state.poll=setInterval(()=>void pollCall(state),2000);
  }catch(e){toast(e.message);await endCall('failed',true)}
 }
@@ -191,6 +242,7 @@ function showRoomScreen(state,status){
  const icon=node('div',undefined,'call-room-icon');icon.textContent=state.chatKind==='deal'?'🤝':'👥';$('callAvatar').replaceChildren(icon);$('callName').textContent=state.title;$('callBadge').replaceChildren();setCallStatus(status);
  $('callTimer').hidden=true;$('callTimer').textContent='0:00';$('callPeople').hidden=true;$('callGrid').replaceChildren();screen.hidden=false;document.body.classList.add('call-open');
  $('callCamera').hidden=$('callFlip').hidden=!state.video;$('callMute').setAttribute('aria-pressed','false');$('callMute').innerHTML=callSvg('mic')+'<span>Mute</span>';$('callCamera').innerHTML=callSvg('video')+'<span>Camera</span>';$('callLocalVideo').classList.remove('off');
+ screen.classList.remove('mini','remote-video','remote-screen','local-cam');$('callShare').hidden=true;resetSpeaker();
 }
 async function joinRoom(t){
  if(!requireLogin())return;if(callState)return toast('You are already on a call.');
@@ -311,7 +363,8 @@ document.addEventListener('click',e=>{const a=e.target.closest?.('a[href^="#"]')
 window.addEventListener('popstate',e=>{
  lastPopAt=Date.now();const s=e.state,kind=hops.length&&Date.now()-hopsAt<2500?hops.shift():(hops=[],'user');
  if(kind!=='user'){syncHistory();return}
- if(callState||incomingCall)return hop('forward');// the call screen stays until the call ends
+ if(incomingCall)return hop('forward');// answer or decline first
+ if(callState&&!$('callScreen')?.classList.contains('mini')){minimizeCall(true);return hop('forward')}// back makes the call small; it keeps running
  backStack=backStack.filter(layerOpen);
  const at=s?.layer?backStack.indexOf(s.layer):-1;
  if(backStack.length-1>at){const top=backStack.pop();closeLayer(top);
