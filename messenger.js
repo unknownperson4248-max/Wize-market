@@ -327,9 +327,9 @@ function closeMentionPicker(){$('mentionPicker')?.remove()}
 async function updateMentionPicker(){
  const input=$('messageText');if(chat?.kind!=='group'||!input)return closeMentionPicker();const before=input.value.slice(0,input.selectionStart??input.value.length),m=before.match(/(^|\s)@([^\s@]{0,30})$/);if(!m)return closeMentionPicker();
  const q=m[2].toLowerCase(),people=(await membersForMentions()).filter(p=>p.id!==me.id&&(nicknameFor(p.id,p.name)+' '+p.name).toLowerCase().includes(q)).slice(0,30);
- const admin=!!groupDetail?.group?.canManage&&groupDetail.group.id===chat.id;let box=$('mentionPicker');if(!box){box=node('div',undefined,'mention-picker');box.id='mentionPicker';box.setAttribute('role','listbox');$('chatForm').before(box)}box.replaceChildren();
+ let box=$('mentionPicker');if(!box){box=node('div',undefined,'mention-picker');box.id='mentionPicker';box.setAttribute('role','listbox');$('chatForm').before(box)}box.replaceChildren();
  const pick=(label,id)=>{const start=before.length-m[2].length-1,after=input.value.slice(before.length);input.value=input.value.slice(0,start)+'@'+label+' '+after;const pos=start+label.length+2;input.setSelectionRange(pos,pos);if(id==='everyone')mentionEveryone=true;else pendingMentions.set(label,id);closeMentionPicker();input.focus();input.dispatchEvent(new Event('input',{bubbles:true}))};
- if(admin&&'everyone'.startsWith(q)){const row=button('',()=>pick('everyone','everyone'),'mention-row everyone');row.innerHTML='<span class="mention-all">@</span><span><strong>everyone</strong><small>Notify all members</small></span>';box.append(row)}
+ if('everyone'.startsWith(q)){const row=button('',()=>pick('everyone','everyone'),'mention-row everyone');row.innerHTML='<span class="mention-all">@</span><span><strong>everyone</strong><small>Notify all members</small></span>';box.append(row)}
  for(const p of people){const label=nicknameFor(p.id,p.name),row=button('',()=>pick(label,p.id),'mention-row');const t=node('span');t.append(node('strong',label));if(p.is_admin)t.append(node('small','Admin'));row.append(avatar(p),t);box.append(row)}
  if(!box.children.length)closeMentionPicker();
 }
