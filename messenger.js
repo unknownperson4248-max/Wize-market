@@ -220,3 +220,13 @@ function paintMessageExtras(){
   const pill=node('button',undefined,'reaction-pill'+(list.some(r=>r.mine)?' mine':''));pill.type='button';const total=list.reduce((n,r)=>n+r.total,0);pill.textContent=list.sort((a,z)=>z.total-a.total).slice(0,3).map(r=>r.emoji).join('')+(total>1?' '+total:'');pill.setAttribute('aria-label',total+' reactions');pill.onclick=()=>openMessageSheet(b);b.append(pill)}
 }
 {const base=refreshChat;refreshChat=async function(...args){const r=await base.apply(this,args);if(Date.now()-extrasLoadedAt>10000&&extrasKey(chat)){extrasLoadedAt=Date.now();void loadChatExtras().then(paintMessageExtras)}paintMessageExtras();return r}}
+
+// ---- Animated mute bell: a line falls across the bell when muted ----
+const MUTE_BELL='<svg viewBox="0 0 24 24" class="mute-bell" aria-hidden="true"><g class="bell"><path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15Z"/><path d="M10 21h4"/></g><path class="slash" d="M4 4l16 16"/></svg>';
+function paintMuteButton(btn,muted,animate){if(!btn)return;let i=btn.querySelector('i.mute-wrap');if(!i){const old=btn.querySelector('i[data-icon],svg');i=document.createElement('i');i.className='mute-wrap';i.innerHTML=MUTE_BELL;if(old)old.replaceWith(i);else btn.prepend(i)}
+ const was=btn.classList.contains('is-muted');btn.classList.toggle('is-muted',!!muted);if(animate&&was!==!!muted){btn.classList.remove('bell-ring');void btn.offsetWidth;btn.classList.add('bell-ring')}}
+new MutationObserver(()=>paintMuteButton($('muteGroup'),/unmute/i.test($('muteGroupLabel').textContent),!$('groupSettingsPanel').hidden)).observe($('muteGroupLabel'),{childList:true,characterData:true,subtree:true});
+paintMuteButton($('muteGroup'),false,false);
+{let lastPeerMuted=null;const base=renderPeerInfo;renderPeerInfo=function(){base();const btn=[...$('peerInfoBody').querySelectorAll('.peer-info-shortcuts>button')].find(b=>/^(un)?mute$/i.test(b.textContent.trim()));if(!btn)return;const muted=/unmute/i.test(btn.textContent),changed=lastPeerMuted!==null&&lastPeerMuted!==muted;
+ // draw the old state first, then animate to the new one
+ paintMuteButton(btn,changed?lastPeerMuted:muted,false);if(changed)requestAnimationFrame(()=>requestAnimationFrame(()=>paintMuteButton(btn,muted,true)));lastPeerMuted=muted}}

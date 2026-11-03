@@ -224,3 +224,20 @@ html body #chatPanel #groupSettingsPanel,html body #chatPanel #peerInfoPanel{bac
 .reaction-pill{position:absolute;bottom:-12px;right:10px;padding:2px 7px;min-height:0;height:22px;border-radius:999px;border:2px solid #071321;background:#2a2b2e;color:#fff;font-size:12px;line-height:1;cursor:pointer;z-index:1}.bubble.mine .reaction-pill{right:auto;left:10px}.reaction-pill.mine{background:#1d3d5c}
 #chatMessages .bubble:has(.reaction-pill){margin-bottom:18px}
 .reaction-bar{width:max-content;flex-wrap:nowrap;overflow-x:auto}
+/* Compact chat list: more chats on one screen, photo with online dot and blue tick */
+#messengerInbox .chat-row{min-height:0!important;padding:7px 4px!important;gap:12px!important;border-bottom:0!important}
+#messengerInbox .chat-row>.avatar{width:50px!important;height:50px!important;flex:none}
+#messengerInbox .chat-row{position:relative}#messengerInbox .chat-row.is-online:before{content:'';position:absolute;left:43px;top:46px;width:13px;height:13px;border-radius:50%;background:#31d36b;border:2.5px solid #071321;z-index:1}
+#messengerInbox .chat-list-item{position:relative}#messengerInbox .chat-list-item>.social-menu{top:50%!important;transform:translateY(-50%)}#messengerInbox .chat-row-meta{padding-right:30px}
+#messengerInbox .chat-row-label strong{font-size:15px}#messengerInbox .chat-row-label small{font-size:13px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+#messengerInbox .chat-row-meta{gap:2px!important}#messengerInbox .chat-row-meta time{font-size:11px}
+#messengerInbox .inbox-person-name{display:flex;align-items:center;gap:4px;min-width:0}#messengerInbox .inbox-person-name strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#messengerInbox .inbox-person-name .trust-pill{display:none}
+.profile-editor-banner{aspect-ratio:2/1!important}
+/* Animated mute bell */
+.mute-wrap{display:grid;place-items:center}.mute-bell{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;overflow:visible}
+.mute-bell .slash{stroke-dasharray:23;stroke-dashoffset:23;transition:stroke-dashoffset .35s ease .1s}.is-muted .mute-bell .slash{stroke-dashoffset:0}
+.mute-bell .bell{transform-origin:12px 4px}.bell-ring .mute-bell .bell{animation:bell-ring .6s ease}
+@keyframes bell-ring{0%,100%{transform:rotate(0)}20%{transform:rotate(16deg)}40%{transform:rotate(-14deg)}60%{transform:rotate(9deg)}80%{transform:rotate(-5deg)}}
+@media(prefers-reduced-motion:reduce){.bell-ring .mute-bell .bell{animation:none}.mute-bell .slash{transition:none}}
+#page-messages .page-heading h1,#messengerInbox h1{font-size:26px}
