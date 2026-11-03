@@ -262,3 +262,11 @@ html body #chatPanel #groupSettingsPanel>.group-info-popover{background:#3a3b3e!
 .held-copy{z-index:1;pointer-events:none;animation:held-in .18s ease;box-shadow:0 10px 30px #000a}@keyframes held-in{from{transform:scale(.96);opacity:.6}}
 .pin-only-me{display:inline-block;margin-top:6px;padding:2px 8px;border-radius:999px;background:#2a2b2e;color:#b0b3b8;font-size:12px}
 #chatMessages .bubble.held-source{visibility:hidden}
+#groupMembers .member-row{display:flex;align-items:center;gap:14px;width:100%;padding:9px 4px;border:0;background:none;color:#e4e6eb;text-align:left;cursor:pointer;min-height:0;border-radius:12px}
+#groupMembers .member-row:active{background:#ffffff14}#groupMembers .member-row .avatar{width:48px!important;height:48px!important;flex:none}
+.member-row-text{flex:1;min-width:0;display:flex;flex-direction:column}.member-row-text strong{font-size:16px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.member-row-text small{font-size:13px;color:#b0b3b8}
+.admin-chip{flex:none;padding:3px 10px;border-radius:999px;background:linear-gradient(90deg,#f5b400,#ff8a00);color:#2b1a00;font-size:12px;font-weight:800}
+.member-sheet-head{display:flex;flex-direction:column;align-items:center;gap:6px;margin-bottom:6px}.member-sheet-head .avatar{width:64px;height:64px}
+#groupInfoMembers>h2{display:none}
+#groupMembers .member-row .avatar,.member-sheet-head .avatar{border-radius:50%!important;overflow:hidden}#groupMembers .member-row .avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%}.member-row-text{align-items:flex-start;text-align:left}.member-row-text small{font-size:13px!important;text-align:left}
+#groupMembers .member-row-text>small,#groupMembers .member-row-text>strong{margin:0!important;align-self:flex-start;text-align:left!important}
