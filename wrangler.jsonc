@@ -25,11 +25,12 @@
   "ai": {
     "binding": "AI"
   },
-  // Demo copy for testing updates before they reach the live site.
-  // Deploy with: npx wrangler deploy --env demo
+  // WizeNex (wizenex.com): separate new site, copied from Wize Market.
+  // Own worker, database and media. The old site above is unchanged.
+  // Deploy with: npx wrangler deploy --env wizenex
   "env": {
-    "demo": {
-      "name": "wize-market-demo",
+    "wizenex": {
+      "name": "wizenex",
       "workers_dev": true,
       "d1_databases": [
         {
