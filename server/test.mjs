@@ -1261,3 +1261,10 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  const empty=a===used?b:a;assert.equal((await call('/api/groups/'+g+'/ranges/'+empty+'/delete','POST',{},'admin')).status,200);assert.ok(!(await call('/api/groups/'+g,'GET',undefined,'admin')).data.ranges.some(x=>x.id===empty));
  console.log('PASS: price ranges can be reordered and deleted when empty (group admin only).');
 }
+{
+ // Each site has its own address: WizeNex sends workers.dev to wizenex.com; "none" keeps workers.dev open.
+ const go=async site=>(await worker.fetch(new Request('https://wizenex.rahatwize.workers.dev/u/test'),{...env,SITE_HOST:site}));
+ let r=await go('wizenex.com');assert.equal(r.status,301);assert.equal(r.headers.get('location'),'https://wizenex.com/u/test');
+ r=await go('none');assert.notEqual(r.status,301);
+ console.log('PASS: per-site address (SITE_HOST) for WizeNex.');
+}
