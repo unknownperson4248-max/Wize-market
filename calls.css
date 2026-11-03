@@ -147,3 +147,34 @@ audio.call-tile-media{display:none!important}
 .group-invite-head{display:flex;flex-direction:column;align-items:center;gap:6px;margin:6px 0 10px;text-align:center}.group-invite-head .avatar{width:72px;height:72px}.group-invite-head small{color:#9fb6cc}
 .info-shortcut[hidden],.info-row[hidden]{display:none!important}
 #groupApprovalRow.group-approval-row{font-size:15px;font-weight:500;line-height:1.3;color:inherit;text-transform:none;letter-spacing:0;margin:0}#groupApprovalRow .group-approval-row span,#groupApprovalRow>span{font-size:15px;font-weight:500}#groupApprovalRow small{font-weight:400;font-size:12px}
+/* Chat info pages, Messenger style */
+#groupSettingsPanel,#peerInfoPanel{background:#000!important;color:#fff}
+#groupSettingsPanel .info-nav,#peerInfoPanel .info-nav{background:#000!important;border-bottom:0!important}
+#groupSettingsPanel .info-nav .btn,#peerInfoPanel .info-nav .btn{border:0!important;background:transparent!important;box-shadow:none!important;font-size:26px;width:44px;height:44px;min-height:0;padding:0;color:#fff}
+#groupInfoHero,.peer-info-hero{display:flex;flex-direction:column;align-items:center;gap:10px;margin:6px 0 22px;text-align:center}
+#groupInfoHero .avatar,.peer-info-hero>.avatar{width:96px!important;height:96px!important;font-size:34px}
+#groupInfoHero h2,.peer-info-hero h2{font-size:26px;font-weight:800;line-height:1.2;margin:0;overflow-wrap:anywhere}
+.peer-info-hero .muted{margin:0;color:#b0b3b8}
+#groupSettingsPanel .info-shortcuts,#peerInfoPanel .peer-info-shortcuts{display:flex!important;justify-content:center;gap:18px;flex-wrap:wrap;margin:0 0 26px;padding:0;border:0;background:none}
+#groupSettingsPanel .info-shortcut,#peerInfoPanel .peer-info-shortcuts>button{display:flex;flex-direction:column;align-items:center;gap:8px;width:72px;padding:0;border:0!important;background:none!important;box-shadow:none!important;color:#e4e6eb!important;font-size:13px;font-weight:500;min-height:0}
+#groupSettingsPanel .info-shortcut>i,#peerInfoPanel .peer-info-shortcuts>button>svg,#peerInfoPanel .peer-info-shortcuts>button>span:first-child:not(:only-child){width:48px;height:48px;border-radius:50%;background:#2a2b2e;display:grid;place-items:center;box-sizing:border-box}
+#peerInfoPanel .peer-info-shortcuts>button>svg{padding:12px;stroke:#fff}
+#groupSettingsPanel .info-shortcut>i svg{width:24px;height:24px}
+#groupSettingsPanel .info-shortcut b{font-weight:500}
+#groupSettingsPanel .info-caption,#peerInfoPanel .info-caption{font-size:15px!important;font-weight:500;letter-spacing:0!important;text-transform:none!important;color:#b0b3b8!important;margin:22px 0 6px!important}
+#groupSettingsPanel .info-row,#peerInfoPanel .info-row{display:flex!important;align-items:center;gap:18px;width:100%;padding:14px 4px!important;border:0!important;border-radius:10px!important;background:none!important;box-shadow:none!important;color:#e4e6eb!important;font-size:17px!important;font-weight:400!important;text-align:left;min-height:0;margin:0!important}
+#groupSettingsPanel .info-row:active,#peerInfoPanel .info-row:active{background:#ffffff14!important}
+#groupSettingsPanel .info-row>span:last-child:not(.x),#groupSettingsPanel .info-row>span:only-child{margin-left:auto}
+#groupSettingsPanel .info-row>i,#peerInfoPanel .info-row>i{flex:none;width:28px;display:grid;place-items:center}
+i[data-icon] svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+#groupSettingsPanel .danger-row,#peerInfoPanel .danger-row{color:#ff6b6b!important}
+#groupApprovalRow.group-approval-row span{flex:1}#groupApprovalRow.group-approval-row small{color:#b0b3b8}
+#groupRequestsCount{margin-left:auto}
+#peerInfoPanel .hint,#groupSettingsPanel .hint{color:#8a8d91}
+#chatPanel:has(#groupSettingsPanel:not([hidden])),#chatPanel:has(#peerInfoPanel:not([hidden])),#groupSettingsPanel>div{background:#000!important}
+#groupSettingsPanel .info-row,#peerInfoPanel .info-row{justify-content:flex-start!important}
+#groupSettingsPanel .secondary-shortcuts,#groupSettingsPanel .info-shortcuts[hidden],#groupSettingsPanel .info-shortcut[hidden]{display:none!important}
+#closePeerInfo,#closeGroupSettings{outline:0!important;box-shadow:none!important;border:0!important;background:none!important}
+#peerInfoPanel .peer-info-shortcuts>button svg{color:#fff;stroke:#fff}
+#groupSettingsPanel .info-row>span:not(:last-child){margin-left:0}
+html body #chatPanel #groupSettingsPanel,html body #chatPanel #peerInfoPanel{background:#000!important}
