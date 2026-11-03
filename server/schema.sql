@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS wm_roles(user_id TEXT PRIMARY KEY REFERENCES users(id), role TEXT NOT NULL CHECK(role IN ('owner','trusted')));
 CREATE TABLE IF NOT EXISTS wm_settings(key TEXT PRIMARY KEY,value TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS wm_groups(id TEXT PRIMARY KEY,owner_id TEXT NOT NULL REFERENCES users(id),name TEXT NOT NULL,price INTEGER,logo_id TEXT,created_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS wm_groups(id TEXT PRIMARY KEY,owner_id TEXT NOT NULL REFERENCES users(id),name TEXT NOT NULL,price INTEGER,logo_id TEXT,created_at INTEGER NOT NULL,join_approval INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS wm_group_members(group_id TEXT NOT NULL REFERENCES wm_groups(id),user_id TEXT NOT NULL REFERENCES users(id),PRIMARY KEY(group_id,user_id));
 CREATE TABLE IF NOT EXISTS wm_posts(id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id),group_id TEXT REFERENCES wm_groups(id),range_id TEXT,title TEXT NOT NULL,details TEXT NOT NULL,price INTEGER,kind TEXT NOT NULL,status TEXT NOT NULL CHECK(status IN ('pending','approved','rejected')),media TEXT NOT NULL DEFAULT '[]',created_at INTEGER NOT NULL,deleted_at INTEGER,updated_at INTEGER,version INTEGER NOT NULL DEFAULT 0,game_category TEXT NOT NULL DEFAULT 'free-fire',price_format TEXT NOT NULL DEFAULT 'full',custom_game_name TEXT NOT NULL DEFAULT '',post_intent TEXT NOT NULL DEFAULT 'sell' CHECK(post_intent IN ('sell','need')),description TEXT NOT NULL DEFAULT '',availability TEXT NOT NULL DEFAULT 'available' CHECK(availability IN ('available','sold')),game_uid_hash TEXT,game_uid_enc TEXT,game_uid_hint TEXT NOT NULL DEFAULT '',bumped_at INTEGER,renewed_at INTEGER,media_updated_at INTEGER);
 CREATE TABLE IF NOT EXISTS wm_uploads(id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id),type TEXT NOT NULL,size INTEGER NOT NULL,created_at INTEGER NOT NULL);
@@ -273,3 +273,6 @@ CREATE INDEX IF NOT EXISTS wm_push_subscriptions_user ON wm_push_subscriptions(u
 CREATE TABLE IF NOT EXISTS wm_push_events(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id TEXT NOT NULL REFERENCES users(id),kind TEXT NOT NULL CHECK(kind IN ('call','room','missed')),ref_id TEXT NOT NULL,title TEXT NOT NULL,body TEXT NOT NULL,url TEXT NOT NULL,created_at INTEGER NOT NULL,expires_at INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS wm_push_events_user ON wm_push_events(user_id,expires_at);
 CREATE INDEX IF NOT EXISTS wm_push_events_ref ON wm_push_events(ref_id);
+
+CREATE TABLE IF NOT EXISTS wm_group_join_requests(group_id TEXT NOT NULL REFERENCES wm_groups(id),user_id TEXT NOT NULL REFERENCES users(id),created_at INTEGER NOT NULL,PRIMARY KEY(group_id,user_id));
+CREATE INDEX IF NOT EXISTS wm_group_join_requests_group ON wm_group_join_requests(group_id,created_at);

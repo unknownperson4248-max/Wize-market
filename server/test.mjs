@@ -1112,3 +1112,30 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  assert.notEqual((await go('https://buysell.rahatwize.com/api/market-rules')).status,301);assert.notEqual((await go('https://test.local/api/market-rules')).status,301);assert.notEqual((await go('http://127.0.0.1:8787/api/market-rules')).status,301);
  console.log('PASS: one site address (http → https, workers.dev → buysell.rahatwize.com); local and test addresses untouched.');
 }
+{
+ // Group invite link with join approval: only the group admin changes settings and answers requests.
+ const g=(await call('/api/groups','POST',{name:'Approval group',logoId},'admin')).data.id;
+ assert.equal((await call('/api/groups/'+g+'/settings','POST',{joinApproval:true},'admin')).status,200);
+ assert.equal((await call('/api/groups/'+g+'/join','POST',{},'seller')).data.joined,undefined);
+ let pv=(await call('/api/groups/'+g+'/preview','GET',undefined,'seller')).data;assert.equal(pv.pending,true);assert.equal(pv.member,false);assert.equal(pv.group.joinApproval,true);
+ assert.equal((await call('/api/groups/'+g+'/messages','GET',undefined,'seller')).status,403);
+ const out=(await call('/api/groups/'+g+'/join','POST',{},'outsider')).data;assert.equal(out.pending,true);
+ assert.equal((await call('/api/groups/'+g+'/requests','GET',undefined,'seller')).status,403);
+ const detail=(await call('/api/groups/'+g,'GET',undefined,'admin')).data.group;assert.equal(detail.requests,2);assert.equal(detail.joinApproval,true);
+ const list=(await call('/api/groups/'+g+'/requests','GET',undefined,'admin')).data.requests;assert.deepEqual(list.map(x=>x.id).sort(),['outsider','seller']);
+ assert.equal((await call('/api/groups/'+g+'/requests/seller','POST',{approve:true},'admin')).status,200);
+ assert.equal((await call('/api/groups/'+g+'/requests/outsider','POST',{approve:false},'admin')).status,200);
+ assert.equal((await call('/api/groups/'+g+'/requests/outsider','POST',{approve:true},'admin')).status,404);
+ assert.equal((await call('/api/groups/'+g+'/messages','GET',undefined,'seller')).status,200);
+ assert.equal((await call('/api/groups/'+g+'/messages','GET',undefined,'outsider')).status,403);
+ // a member cannot change group settings, ranges or answer requests
+ assert.equal((await call('/api/groups/'+g+'/settings','POST',{joinApproval:false},'seller')).status,403);
+ assert.equal((await call('/api/groups/'+g+'/settings','POST',{name:'Taken over'},'seller')).status,403);
+ assert.equal((await call('/api/groups/'+g+'/ranges','POST',{label:'x',min:0,max:5},'seller')).status,403);
+ assert.equal((await call('/api/groups/'+g+'/requests/outsider','POST',{approve:true},'seller')).status,403);
+ // turning approval off lets the link join straight away again
+ assert.equal((await call('/api/groups/'+g+'/settings','POST',{joinApproval:false},'admin')).status,200);
+ assert.equal((await call('/api/groups/'+g+'/join','POST',{},'outsider')).data.joined,true);
+ assert.equal((await call('/api/groups/'+g+'/messages','GET',undefined,'outsider')).status,200);
+ console.log('PASS: group invite link joins directly or waits for admin approval; only the group admin changes settings and answers join requests.');
+}

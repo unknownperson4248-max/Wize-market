@@ -141,3 +141,9 @@ audio.call-tile-media{display:none!important}
 .call-screen.mini .call-status,.call-screen.mini .call-timer{font-size:12px}
 .call-screen.mini.remote-video .call-info{position:absolute!important;left:0!important;right:0!important;bottom:8px!important;top:auto!important}
 .call-screen:not(.room) #callCamera[aria-pressed] svg{background:#0b0e22e6;stroke:#fff}
+.group-approval-row{display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer}.group-approval-row small{display:block;font-size:12px;color:#9fb6cc;margin-top:2px}.group-approval-row input{width:44px;height:24px;flex:none;accent-color:#2a8de0}
+.group-request-count{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:#e0383e;color:#fff;font-size:12px;margin-right:4px}.group-request-count[hidden]{display:none}
+.group-request-row{display:flex;align-items:center;gap:10px;padding:10px 0}.group-request-who{flex:1;min-width:0;display:flex;flex-direction:column}.group-request-who small{color:#9fb6cc;font-size:12px}.group-request-actions{display:flex;gap:6px}.group-request-actions .btn{padding:8px 12px;min-height:0;font-size:13px}
+.group-invite-head{display:flex;flex-direction:column;align-items:center;gap:6px;margin:6px 0 10px;text-align:center}.group-invite-head .avatar{width:72px;height:72px}.group-invite-head small{color:#9fb6cc}
+.info-shortcut[hidden],.info-row[hidden]{display:none!important}
+#groupApprovalRow.group-approval-row{font-size:15px;font-weight:500;line-height:1.3;color:inherit;text-transform:none;letter-spacing:0;margin:0}#groupApprovalRow .group-approval-row span,#groupApprovalRow>span{font-size:15px;font-weight:500}#groupApprovalRow small{font-weight:400;font-size:12px}
