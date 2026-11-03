@@ -1170,3 +1170,17 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  x=(await call(pbase,'GET',undefined,'seller')).data;assert.equal(x.nicknames.seller,'Bhai');assert.equal(x.theme.emoji,'❤️');assert.equal(x.can.pin,true);
  console.log('PASS: chat nicknames, colour and emoji, pinned messages (personal: both people; group: own nickname, admin for the rest).');
 }
+{
+ // Reactions and "delete for me" on group and personal messages.
+ const g=(await call('/api/groups','POST',{name:'React group',logoId},'admin')).data.id;await call('/api/groups/'+g+'/join','POST',{},'buyer');
+ await call('/api/groups/'+g+'/messages','POST',{text:'React to me'},'buyer');const mid=(await call('/api/groups/'+g+'/messages','GET',undefined,'admin')).data.messages.find(m=>m.text==='React to me').id;const base='/api/chat-extras/group/'+g;
+ assert.equal((await call(base+'/react','POST',{messageId:mid,emoji:'❤️'},'admin')).status,200);assert.equal((await call(base+'/react','POST',{messageId:mid,emoji:'❤️'},'buyer')).status,200);
+ assert.equal((await call(base+'/react','POST',{messageId:mid,emoji:'<script>'},'buyer')).status,400);assert.equal((await call(base+'/react','POST',{messageId:mid,emoji:'👍'},'outsider')).status,403);
+ let x=(await call(base,'GET',undefined,'admin')).data;let r=x.reactions.find(z=>z.message_id===mid&&z.emoji==='❤️');assert.equal(r.total,2);assert.equal(r.mine,1);
+ assert.equal((await call(base+'/react','POST',{messageId:mid,emoji:'😆'},'buyer')).status,200);assert.equal((await call(base+'/react','POST',{messageId:mid,emoji:''},'admin')).status,200);
+ x=(await call(base,'GET',undefined,'admin')).data;assert.equal(x.reactions.filter(z=>z.message_id===mid).map(z=>z.emoji+z.total).join(),'😆1');
+ assert.equal((await call(base+'/hide','POST',{messageId:mid},'buyer')).status,200);assert.deepEqual((await call(base,'GET',undefined,'buyer')).data.hidden,[mid]);assert.deepEqual((await call(base,'GET',undefined,'admin')).data.hidden,[]);
+ assert.ok((await call('/api/groups/'+g+'/messages','GET',undefined,'admin')).data.messages.some(m=>m.id===mid));
+ assert.equal((await call(base+'/hide','POST',{messageId:999999},'buyer')).status,404);
+ console.log('PASS: message reactions (one per person, change or remove) and delete-for-me that leaves the message for everyone else.');
+}

@@ -176,3 +176,47 @@ function paintPinnedBar(){
   if(chat.kind==='group'){$('groupSettings').click();setTimeout(()=>openGroupExtras('pins'),400)}else{openPeerInfo();peerInfoView='pins';renderPeerInfo()}};
 }
 {const base=applyChatExtras;applyChatExtras=function(){base();paintPinnedBar()}}
+
+// ---- Hold a message: reactions and actions (Copy, Pin, Delete for me / everyone, Report), like Messenger ----
+const QUICK_REACTIONS=['❤️','😆','😮','😢','😡','👍'],MORE_REACTIONS=['😂','🔥','🙏','👏','💯','🎮'];let extrasLoadedAt=0;
+function messagePlainText(m){const t=String(m?.text||'');if(t.startsWith('media:'))return '';if(typeof isCallNote==='function'&&isCallNote(t))return '';return t}
+function closeMessageSheet(){$('messageSheet')?.remove();document.querySelector('.bubble.held')?.classList.remove('held')}
+function openMessageSheet(bubble){
+ closeMessageSheet();const m=bubble._message,c=bubble._chat;if(!m||!c)return;bubble.classList.add('held');navigator.vibrate?.(15);
+ const overlay=node('div',undefined,'message-sheet');overlay.id='messageSheet';overlay.onclick=e=>{if(e.target===overlay)closeMessageSheet()};
+ const canReact=['private','group'].includes(c.kind)&&!m.deleted_at;
+ if(canReact){const bar=node('div',undefined,'reaction-bar'),mine=(chatExtras.reactions||[]).find(r=>r.message_id===m.id&&r.mine)?.emoji;
+  const react=async emoji=>{closeMessageSheet();try{await api('/chat-extras/'+extrasKey(c)+'/react',{messageId:m.id,emoji:emoji===mine?'':emoji});await loadChatExtras(c);paintMessageExtras()}catch(e){toast(e.message)}};
+  for(const e of QUICK_REACTIONS){const b=button(e,()=>void react(e),'reaction-choice'+(e===mine?' active':''));b.setAttribute('aria-label','React '+e);bar.append(b)}
+  const more=button('+',()=>{more.remove();for(const e of MORE_REACTIONS){const b=button(e,()=>void react(e),'reaction-choice'+(e===mine?' active':''));bar.append(b)}},'reaction-choice more');more.setAttribute('aria-label','More reactions');bar.append(more);
+  const r=bubble.getBoundingClientRect();bar.style.top=Math.max(70,Math.min(innerHeight-260,r.top-64))+'px';overlay.append(bar)}
+ const sheet=node('div',undefined,'message-actions'),opts=bubble._options||[],find=re=>opts.find(o=>re.test(o[0]));
+ const add=(icon,label,fn,cls='')=>{const b=button('',()=>{closeMessageSheet();fn()},'message-action '+cls);b.innerHTML='<span class="ma-icon">'+icon+'</span><span>'+label+'</span>';sheet.append(b)};
+ const text=messagePlainText(m);if(text&&!m.deleted_at)add('⧉','Copy',async()=>{try{await navigator.clipboard.writeText(text);toast('Copied.')}catch{toast('Could not copy.')}});
+ const pin=find(/pin message/i);if(pin)add('📌',/unpin/i.test(pin[0])?'Unpin':'Pin',pin[1]);
+ const everyone=find(/^delete message/i),restore=find(/restore message/i);
+ if(['private','group'].includes(c.kind))add('🗑','Delete',()=>openDeleteChoice(c,m,everyone),'danger');else if(everyone)add('🗑','Delete',everyone[1],'danger');
+ if(restore)add('↺','Restore',restore[1]);const report=find(/report/i);if(report)add('⚠','Report',report[1]);
+ if(!sheet.children.length&&!canReact)return closeMessageSheet();overlay.append(sheet);document.body.append(overlay);
+}
+function openDeleteChoice(c,m,everyone){
+ const overlay=node('div',undefined,'message-sheet');overlay.id='messageSheet';overlay.onclick=e=>{if(e.target===overlay)closeMessageSheet()};const box=node('div',undefined,'delete-choice');
+ box.append(node('strong','Delete message?'));
+ box.append(button('Delete for me',async()=>{closeMessageSheet();try{await api('/chat-extras/'+extrasKey(c)+'/hide',{messageId:m.id});await loadChatExtras(c);paintMessageExtras();toast('Deleted for you.')}catch(e){toast(e.message)}},'btn secondary'));
+ if(everyone)box.append(button('Delete for everyone',async()=>{closeMessageSheet();try{await everyone[1]()}catch(e){toast(e.message)}},'btn danger-btn'));
+ box.append(button('Cancel',closeMessageSheet,'btn ghost'));overlay.append(box);document.body.append(overlay);
+}
+// Hold for half a second (or right-click on a computer) to open the menu.
+(()=>{const root=$('chatMessages');let timer=null,start=null;
+ const cancel=()=>{clearTimeout(timer);timer=null;start=null};
+ root.addEventListener('pointerdown',e=>{const b=e.target.closest('.bubble');if(!b||e.target.closest('a,button,video,audio,input,details,.listing-card,.post-card')||e.button>0)return;start={x:e.clientX,y:e.clientY};timer=setTimeout(()=>{timer=null;openMessageSheet(b)},480)});
+ root.addEventListener('pointermove',e=>{if(start&&Math.hypot(e.clientX-start.x,e.clientY-start.y)>10)cancel()});for(const t of ['pointerup','pointercancel','pointerleave'])root.addEventListener(t,cancel);root.addEventListener('scroll',cancel,{passive:true});
+ root.addEventListener('contextmenu',e=>{const b=e.target.closest('.bubble');if(!b)return;e.preventDefault();cancel();openMessageSheet(b)});
+ document.addEventListener('keydown',e=>{if(e.key==='Escape')closeMessageSheet()})})();
+// Reactions under messages, and messages I deleted for myself stay hidden.
+function paintMessageExtras(){
+ const same=chatExtras.key&&chatExtras.key===extrasKey(chat),hidden=new Set(same?chatExtras.hidden||[]:[]),by=new Map();if(same)for(const r of chatExtras.reactions||[]){if(!by.has(r.message_id))by.set(r.message_id,[]);by.get(r.message_id).push(r)}
+ for(const b of document.querySelectorAll('#chatMessages .bubble[data-message-id]')){const id=Number(b.dataset.messageId);b.hidden=hidden.has(id);b.querySelector('.reaction-pill')?.remove();const list=by.get(id);if(!list?.length)continue;
+  const pill=node('button',undefined,'reaction-pill'+(list.some(r=>r.mine)?' mine':''));pill.type='button';const total=list.reduce((n,r)=>n+r.total,0);pill.textContent=list.sort((a,z)=>z.total-a.total).slice(0,3).map(r=>r.emoji).join('')+(total>1?' '+total:'');pill.setAttribute('aria-label',total+' reactions');pill.onclick=()=>openMessageSheet(b);b.append(pill)}
+}
+{const base=refreshChat;refreshChat=async function(...args){const r=await base.apply(this,args);if(Date.now()-extrasLoadedAt>10000&&extrasKey(chat)){extrasLoadedAt=Date.now();void loadChatExtras().then(paintMessageExtras)}paintMessageExtras();return r}}
