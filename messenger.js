@@ -119,7 +119,8 @@ function sendQuickEmoji(){const input=$('messageText');if(!input||!chat)return;c
 // Names in the chat use the nickname when one is set.
 {const base=renderMessageAuthor;renderMessageAuthor=function(message,kind){const nick=nicknameFor(message.user_id,'');return base(nick?{...message,name:nick}:message,kind)}}
 {const base=openChat;openChat=async function(...args){const r=await base.apply(this,args);void loadChatExtras();return r}}
-function chatPinOption(c,m){if(!['private','group'].includes(c.kind)||m.deleted_at||!chatExtras.can?.pin||chatExtras.key!==extrasKey(c))return null;const pinned=chatExtras.pins.some(p=>p.id===m.id);
+function chatPinOption(c,m){if(!['private','group'].includes(c.kind)||m.deleted_at||!chatExtras.can?.pin||chatExtras.key!==extrasKey(c))return null;const pin=chatExtras.pins.find(p=>p.id===m.id),pinned=!!pin;
+ if(c.kind==='private'){if(pinned)return ['📌 Unpin message',async()=>{try{await api('/chat-extras/'+extrasKey(c)+'/pin',{messageId:m.id,pinned:false,...(pin.only_me?{scope:'me'}:{})});await loadChatExtras(c);toast('Message unpinned.')}catch(e){toast(e.message)}}];return ['📌 Pin message',()=>openPinChoice(c,m)]}
  return [pinned?'📌 Unpin message':'📌 Pin message',async()=>{try{await api('/chat-extras/'+extrasKey(c)+'/pin',{messageId:m.id,pinned:!pinned});await loadChatExtras(c);toast(pinned?'Message unpinned.':'📌 Message pinned. See it in chat info.')}catch(e){toast(e.message)}}]}
 // Info page views shared by group and personal chats.
 async function chatMembersForExtras(){if(chat?.kind==='private')return [{id:me.id,name:me.name,picture:me.picture},{id:privatePeer.id,name:privatePeer.name,picture:privatePeer.picture}];return (await api('/groups/'+chat.id+'/members')).members}
@@ -143,8 +144,8 @@ async function renderCustomizeView(root){
 async function renderPinsView(root){
  root.replaceChildren(node('p','Loading…','muted'));await loadChatExtras();root.replaceChildren();
  if(!chatExtras.pins.length){root.append(node('p',chatExtras.can.pin?'No pinned messages. Tap ⋮ on a message and choose Pin message.':'No pinned messages yet.','muted'));return}
- for(const p of chatExtras.pins){const row=node('div',undefined,'pinned-message'),head=node('div',undefined,'pinned-head');head.append(node('strong',nicknameFor(p.user_id,p.name||'Member')),node('small',new Date(p.created_at).toLocaleString()));const text=String(p.text||'').startsWith('media:')?(typeof inboxPreview==='function'?inboxPreview(p.text):'Photo or file'):p.text;row.append(head,node('p',text));
-  if(chatExtras.can.pin)row.append(button('Unpin',async()=>{try{await api('/chat-extras/'+extrasKey(chat)+'/pin',{messageId:p.id,pinned:false});await renderPinsView(root)}catch(e){toast(e.message)}},'btn secondary pinned-unpin'));root.append(row)}
+ for(const p of chatExtras.pins){const row=node('div',undefined,'pinned-message'),head=node('div',undefined,'pinned-head');head.append(node('strong',nicknameFor(p.user_id,p.name||'Member')),node('small',new Date(p.created_at).toLocaleString()));const text=String(p.text||'').startsWith('media:')?(typeof inboxPreview==='function'?inboxPreview(p.text):'Photo or file'):p.text;row.append(head,node('p',text));if(p.only_me)row.append(node('span','🔒 Only you','pin-only-me'));
+  if(chatExtras.can.pin)row.append(button('Unpin',async()=>{try{await api('/chat-extras/'+extrasKey(chat)+'/pin',{messageId:p.id,pinned:false,...(p.only_me?{scope:'me'}:{})});await renderPinsView(root)}catch(e){toast(e.message)}},'btn secondary pinned-unpin'));root.append(row)}
 }
 function openGroupExtras(kind){const root=$('groupInfoExtras');root.dataset.title={nicknames:'Nicknames',customize:'Customize',pins:'Pinned messages'}[kind];showGroupInfoView('extras');void (kind==='nicknames'?renderNicknamesView:kind==='customize'?renderCustomizeView:renderPinsView)(root).catch(e=>toast(e.message))}
 $('groupNicknames').onclick=()=>openGroupExtras('nicknames');$('groupCustomize').onclick=()=>openGroupExtras('customize');$('groupPinsRow').onclick=()=>openGroupExtras('pins');
@@ -184,16 +185,17 @@ function paintPinnedBar(){
 // ---- Hold a message: reactions and actions (Copy, Pin, Delete for me / everyone, Report), like Messenger ----
 const QUICK_REACTIONS=['❤️','😆','😮','😢','😡','👍'],MORE_REACTIONS=['😂','🔥','🙏','👏','💯','🎮'];let extrasLoadedAt=0;
 function messagePlainText(m){const t=String(m?.text||'');if(t.startsWith('media:'))return '';if(typeof isCallNote==='function'&&isCallNote(t))return '';return t}
-function closeMessageSheet(){$('messageSheet')?.remove();document.querySelector('.bubble.held')?.classList.remove('held')}
+function closeMessageSheet(){$('messageSheet')?.remove();for(const b of document.querySelectorAll('.bubble.held,.bubble.held-source'))b.classList.remove('held','held-source')}
 function openMessageSheet(bubble){
- closeMessageSheet();const m=bubble._message,c=bubble._chat;if(!m||!c)return;bubble.classList.add('held');navigator.vibrate?.(15);
- const overlay=node('div',undefined,'message-sheet');overlay.id='messageSheet';overlay.onclick=e=>{if(e.target===overlay)closeMessageSheet()};
+ closeMessageSheet();const m=bubble._message,c=bubble._chat;if(!m||!c)return;navigator.vibrate?.(15);
+ const overlay=node('div',undefined,'message-sheet');overlay.id='messageSheet';overlay.onclick=e=>{if(e.target===overlay||e.target.classList.contains('held-copy'))closeMessageSheet()};
+ {let r=bubble.getBoundingClientRect();const room=innerHeight-190;if(r.bottom>room||r.top<130){const box=$('chatMessages');box.scrollTop+=r.bottom>room?Math.min(r.bottom-room,r.top-130):r.top-130;r=bubble.getBoundingClientRect()}const copy=bubble.cloneNode(true);copy.classList.add('held-copy');copy.removeAttribute('hidden');copy.querySelector('.reaction-pill')?.remove();bubble.classList.add('held-source');const top=Math.max(130,Math.min(innerHeight-190-r.height,r.top));Object.assign(copy.style,{position:'fixed',left:r.left+'px',top:top+'px',width:r.width+'px',margin:'0'});overlay.append(copy);bubble._heldTop=top}
  const canReact=['private','group'].includes(c.kind)&&!m.deleted_at;
  if(canReact){const bar=node('div',undefined,'reaction-bar'),mine=(chatExtras.reactions||[]).find(r=>r.message_id===m.id&&r.mine)?.emoji;
   const react=async emoji=>{closeMessageSheet();try{await api('/chat-extras/'+extrasKey(c)+'/react',{messageId:m.id,emoji:emoji===mine?'':emoji});await loadChatExtras(c);paintMessageExtras()}catch(e){toast(e.message)}};
   for(const e of QUICK_REACTIONS){const b=button(e,()=>void react(e),'reaction-choice'+(e===mine?' active':''));b.setAttribute('aria-label','React '+e);bar.append(b)}
   const more=button('+',()=>{more.remove();for(const e of MORE_REACTIONS){const b=button(e,()=>void react(e),'reaction-choice'+(e===mine?' active':''));bar.append(b)}},'reaction-choice more');more.setAttribute('aria-label','More reactions');bar.append(more);
-  const r=bubble.getBoundingClientRect();bar.style.top=Math.max(70,Math.min(innerHeight-260,r.top-64))+'px';overlay.append(bar)}
+  bar.style.top=Math.max(64,(bubble._heldTop||bubble.getBoundingClientRect().top)-62)+'px';overlay.append(bar)}
  const sheet=node('div',undefined,'message-actions'),opts=bubble._options||[],find=re=>opts.find(o=>re.test(o[0]));
  const add=(icon,label,fn,cls='')=>{const b=button('',()=>{closeMessageSheet();fn()},'message-action '+cls);b.innerHTML='<span class="ma-icon">'+icon+'</span><span>'+label+'</span>';sheet.append(b)};
  const text=messagePlainText(m);if(text&&!m.deleted_at)add('⧉','Copy',async()=>{try{await navigator.clipboard.writeText(text);toast('Copied.')}catch{toast('Could not copy.')}});
@@ -294,3 +296,9 @@ $('groupInfoMenu').onclick=e=>{e.stopPropagation();document.querySelector('.grou
 // Only admins can send: the box says so for everyone else.
 function paintComposerPermission(){const g=groupDetail?.group,blocked=chat?.kind==='group'&&g&&g.id===chat.id&&g.adminsOnly&&!g.canManage;let note=$('adminsOnlyNote');if(!note){note=node('div','🔒 Only admins can send messages in this group.','admins-only-note');note.id='adminsOnlyNote';$('chatForm').before(note)}note.hidden=!blocked;$('chatForm').classList.toggle('composer-locked',!!blocked)}
 {const base=openChat;openChat=async function(kind,id,...rest){const r=await base.call(this,kind,id,...rest);if(kind==='group'){try{groupDetail=await api('/groups/'+id)}catch{}}paintComposerPermission();return r}}
+
+function openPinChoice(c,m){
+ const overlay=node('div',undefined,'message-sheet');overlay.id='messageSheet';overlay.onclick=e=>{if(e.target===overlay)closeMessageSheet()};const box=node('div',undefined,'delete-choice');box.append(node('strong','Pin this message'));
+ const pin=async scope=>{closeMessageSheet();try{await api('/chat-extras/'+extrasKey(c)+'/pin',{messageId:m.id,pinned:true,...(scope==='me'?{scope:'me'}:{})});await loadChatExtras(c);toast(scope==='me'?'📌 Pinned. Only you can see it.':'📌 Pinned for both of you.')}catch(e){toast(e.message)}};
+ box.append(button('👥 Pin for both of us',()=>void pin('both'),'btn'),button('🔒 Pin only for me',()=>void pin('me'),'btn secondary'),button('Cancel',closeMessageSheet,'btn ghost'));overlay.append(box);document.body.append(overlay);
+}

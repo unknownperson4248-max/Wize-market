@@ -1205,3 +1205,20 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  assert.equal((await call('/api/groups/'+g+'/settings','POST',{adminsOnly:false},'admin')).status,200);assert.equal((await call('/api/groups/'+g+'/messages','POST',{text:'hello'},'buyer')).status,201);
  console.log('PASS: group message permissions (everyone or only the group admin).');
 }
+{
+ // Group co-admins and members list; pins only I can see in personal chats.
+ const g=(await call('/api/groups','POST',{name:'Co-admin group',logoId},'admin')).data.id;for(const who of ['buyer','seller'])await call('/api/groups/'+g+'/join','POST',{},who);
+ assert.equal((await call('/api/groups/'+g+'/admins','POST',{userId:'seller',admin:true},'buyer')).status,403);
+ assert.equal((await call('/api/groups/'+g+'/admins','POST',{userId:'buyer',admin:true},'admin')).status,200);
+ let list=(await call('/api/groups/'+g+'/members','GET',undefined,'seller')).data.members;assert.equal(list[0].id,'admin');assert.equal(list[0].creator,true);assert.equal(list[1].id,'buyer');assert.equal(list[1].is_admin,true);assert.equal(list[2].is_admin,false);
+ assert.equal((await call('/api/groups/'+g+'/settings','POST',{adminsOnly:true},'buyer')).status,200);assert.equal((await call('/api/groups/'+g+'/messages','POST',{text:'co-admin talks'},'buyer')).status,201);assert.equal((await call('/api/groups/'+g+'/messages','POST',{text:'member'},'seller')).status,403);
+ assert.equal((await call('/api/groups/'+g+'/admins','POST',{userId:'buyer',admin:false},'buyer')).status,403);assert.equal((await call('/api/groups/'+g+'/admins','POST',{userId:'admin',admin:false},'buyer')).status,409);
+ assert.equal((await call('/api/groups/'+g+'/admins','POST',{userId:'buyer',admin:false},'admin')).status,200);assert.equal((await call('/api/groups/'+g+'/messages','POST',{text:'not admin now'},'buyer')).status,403);
+ const gm=(await call('/api/groups/'+g+'/messages','GET',undefined,'admin')).data.messages[0].id;assert.equal((await call('/api/chat-extras/group/'+g+'/pin','POST',{messageId:gm,pinned:true,scope:'me'},'seller')).status,403);
+ const t=(await call('/api/threads','POST',{userId:'seller'},'buyer')).data.thread.id;await call('/api/threads/'+t+'/messages','POST',{text:'pin for me'},'buyer');const pm=(await call('/api/threads/'+t+'/messages','GET',undefined,'buyer')).data.messages[0].id;
+ assert.equal((await call('/api/chat-extras/private/'+t+'/pin','POST',{messageId:pm,pinned:true,scope:'me'},'buyer')).status,200);
+ const mine=(await call('/api/chat-extras/private/'+t,'GET',undefined,'buyer')).data;assert.equal(mine.pins.length,1);assert.equal(mine.pins[0].only_me,1);assert.equal(mine.can.pinForMe,true);
+ assert.equal((await call('/api/chat-extras/private/'+t,'GET',undefined,'seller')).data.pins.length,0);
+ assert.equal((await call('/api/chat-extras/private/'+t+'/pin','POST',{messageId:pm,pinned:true},'seller')).status,200);assert.equal((await call('/api/chat-extras/private/'+t,'GET',undefined,'buyer')).data.pins.length,1);assert.equal((await call('/api/chat-extras/private/'+t,'GET',undefined,'seller')).data.pins[0].only_me,0);
+ console.log('PASS: group co-admins (add/remove, admins first in members), personal-chat pins only for me or for both.');
+}
