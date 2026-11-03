@@ -118,3 +118,6 @@ void loadPwaBranding();
  document.addEventListener('touchmove',e=>{if(!start)return;const t=e.touches[0],dx=(side==='left'?t.clientX-start.x:start.x-t.clientX),dy=Math.abs(t.clientY-start.y);if(dy>40&&dy>dx){start=null;hideCue();return}if(dx>8)showCue(dx)},{passive:true});
  document.addEventListener('touchend',e=>{if(!start)return;const t=e.changedTouches[0],dx=(side==='left'?t.clientX-start.x:start.x-t.clientX),dy=Math.abs(t.clientY-start.y);start=null;hideCue();if(dx>=GO&&dy<dx*.7)history.back()},{passive:true});
  document.addEventListener('touchcancel',()=>{start=null;hideCue()},{passive:true})})();
+
+// Keep the feed filters right under the "My feed" heading while scrolling.
+(()=>{const h=document.querySelector('#page-home .feed-heading');if(!h||!window.ResizeObserver)return;const set=()=>document.documentElement.style.setProperty('--feed-head-h',Math.round(h.getBoundingClientRect().height)+'px');new ResizeObserver(set).observe(h);set()})();

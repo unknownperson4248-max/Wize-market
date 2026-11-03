@@ -364,3 +364,6 @@ html body #chatPanel #groupSettingsPanel>.group-info-popover{background:#3a3b3e!
 .album-stage .album-prev{left:8px!important}.album-stage .album-next{right:8px!important}
 .album-stage .album-nav:active{transform:translateY(-50%) scale(.92)}
 .album-dots{display:flex;justify-content:center;gap:6px;margin:8px 0 2px}.album-dots span{width:7px;height:7px;border-radius:50%;background:#ffffff40;transition:all .2s}.album-dots span.on{width:20px;border-radius:4px;background:#5fb4ff}
+/* Filters stay under "My feed" while scrolling */
+@media(max-width:900px){.home-page #page-home .feed-compact-bar{position:sticky;top:calc(env(safe-area-inset-top,0px) + var(--feed-head-h,64px));z-index:19;margin-left:-16px!important;margin-right:-16px!important;padding:0 16px 10px;background:#071321f2;-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-radius:0!important;border-left:0!important;border-right:0!important;box-shadow:0 8px 14px -10px #000c}
+.home-page #page-home .feed-heading{margin-bottom:0!important}}
