@@ -24,5 +24,29 @@
   },
   "ai": {
     "binding": "AI"
+  },
+  // Demo copy for testing updates before they reach the live site.
+  // Deploy with: npx wrangler deploy --env demo
+  "env": {
+    "demo": {
+      "name": "wize-market-demo",
+      "workers_dev": true,
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "wize-market-demo",
+          "database_id": "b3d80ef7-d9cd-4ea4-9b12-f939f8adce35"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "MEDIA",
+          "bucket_name": "wize-market-demo-media"
+        }
+      ],
+      "ai": {
+        "binding": "AI"
+      }
+    }
   }
 }
