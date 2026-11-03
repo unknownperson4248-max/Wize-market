@@ -234,3 +234,14 @@ The duplicate Edit button below an author's post is removed; Edit remains first 
 Migration `020_message_post_references.sql` adds a nullable `wm_messages.post_id` without changing existing messages or read cursors. Reference validation retains request consent, blocks, thread membership and group-media access.
 
 Post authors can edit Public / Public + Group destinations and select joined groups. Placement and post-version changes are committed together with version guards. Existing group-only posts keep their visibility until the author explicitly changes it. Save retry reconciliation also checks destinations.
+
+## WizeNex (wizenex.com)
+
+WizeNex is a separate copy of this site with its own worker (`wizenex`), database (`wize-market-demo`) and media bucket (`wize-market-demo-media`). The top-level settings in `wrangler.jsonc` stay Wize Market's.
+
+- Deploy WizeNex: `npx wrangler deploy --env wizenex`. Deploy Wize Market: `npx wrangler deploy`.
+- The WizeNex database has every migration up to `039`. Apply each new migration to both databases.
+- Call TURN credentials are worker secrets on WizeNex (`TURN_KEY_ID`, `TURN_KEY_API_TOKEN`).
+- `SITE_HOST` is `"none"` until wizenex.com is active in Cloudflare, so `wizenex.rahatwize.workers.dev` stays open. At launch, set `SITE_HOST` to `"wizenex.com"` and add `"routes": [{"pattern":"wizenex.com","custom_domain":true},{"pattern":"www.wizenex.com","custom_domain":true}]` to `env.wizenex` in the same deploy.
+- Google login: add `https://wizenex.com` and `https://www.wizenex.com` to the OAuth client's Authorized JavaScript origins.
+- The site name, logo and app name come from the database: change them in the WizeNex Control Room (Appearance / App).

@@ -26,5 +26,34 @@
   },
   "ai": {
     "binding": "AI"
+  },
+  // WizeNex (wizenex.com): a separate site with its own worker, database and media. The settings above stay Wize Market's.
+  // Deploy with: npx wrangler deploy --env wizenex
+  // SITE_HOST: "none" keeps wizenex.rahatwize.workers.dev open. When wizenex.com is active in Cloudflare, set it to
+  // "wizenex.com" and add the custom-domain routes below in the same deploy.
+  "env": {
+    "wizenex": {
+      "name": "wizenex",
+      "workers_dev": true,
+      "vars": {
+        "SITE_HOST": "none"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "wize-market-demo",
+          "database_id": "b3d80ef7-d9cd-4ea4-9b12-f939f8adce35"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "MEDIA",
+          "bucket_name": "wize-market-demo-media"
+        }
+      ],
+      "ai": {
+        "binding": "AI"
+      }
+    }
   }
 }
