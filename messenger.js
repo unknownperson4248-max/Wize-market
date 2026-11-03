@@ -110,6 +110,7 @@ const nicknameFor=(id,name)=>chatExtras.key===extrasKey(chat)&&chatExtras.nickna
 function applyChatExtras(){
  const panel=$('chatPanel'),t=chatExtras.key&&chatExtras.key===extrasKey(chat)?chatExtras.theme:null;
  if(t){panel.style.setProperty('--chat-accent',t.color);panel.dataset.chatTheme='1'}else{panel.style.removeProperty('--chat-accent');delete panel.dataset.chatTheme}
+ const msgs=$('chatMessages');if(t?.background){msgs.style.setProperty('--chat-bg','url("'+t.background+'")');msgs.classList.add('has-chat-bg')}else{msgs.style.removeProperty('--chat-bg');msgs.classList.remove('has-chat-bg')}
  let quick=$('chatQuickEmoji');if(!quick){quick=button('',()=>sendQuickEmoji(),'composer-icon chat-quick-emoji');quick.id='chatQuickEmoji';quick.type='button';$('chatSendButton').after(quick)}
  const emoji=t?.emoji||'👍';quick.textContent=emoji;quick.setAttribute('aria-label','Send '+emoji);quick.hidden=!chatExtras.key;
  if(chat?.kind==='private'&&privatePeer){const nick=nicknameFor(privatePeer.id,'');if(nick)$('chatTitle').textContent=nick}
@@ -134,7 +135,10 @@ async function renderCustomizeView(root){
  if(!can)root.append(node('p','Only the group admin can change the colour and emoji.','hint'));
  root.append(node('p','Chat colour','info-caption'));const colors=node('div',undefined,'chat-color-grid');for(const c of CHAT_COLORS){const b=button('',()=>{pick.color=c;for(const x of colors.children)x.setAttribute('aria-pressed',String(x.dataset.color===c))},'chat-color-swatch');b.dataset.color=c;b.style.background=c;b.setAttribute('aria-label','Colour '+c);b.setAttribute('aria-pressed',String(c===current.color));b.disabled=!can;colors.append(b)}root.append(colors);
  root.append(node('p','Quick emoji','info-caption'));const emojis=node('div',undefined,'chat-emoji-grid');for(const e of CHAT_EMOJIS){const b=button(e,()=>{pick.emoji=e;for(const x of emojis.children)x.setAttribute('aria-pressed',String(x.textContent===e))},'chat-emoji-choice');b.setAttribute('aria-pressed',String(e===current.emoji));b.disabled=!can;emojis.append(b)}root.append(emojis);
- if(can)root.append(button('Save',async()=>{try{await api('/chat-extras/'+extrasKey(chat)+'/theme',pick);await loadChatExtras();toast('Chat updated.')}catch(e){toast(e.message)}},'btn chat-customize-save'));
+ root.append(node('p','Background photo','info-caption'));const bgBox=node('div',undefined,'chat-bg-preview');const paintBg=()=>{bgBox.style.backgroundImage=pick.background?'linear-gradient(#0006,#0006),url("'+pick.background+'")':'';bgBox.textContent=pick.background?'':'No background photo'};paintBg();root.append(bgBox);
+ if(can){const file=node('input');file.type='file';file.accept='image/jpeg,image/png,image/webp';file.hidden=true;file.onchange=async()=>{const f=file.files[0];if(!f)return;if(f.size>8*1024*1024)return toast('Choose a photo below 8 MB.');bgBox.textContent='Uploading…';try{const r=await fetch('/api/upload',{method:'POST',credentials:'same-origin',headers:{'content-type':f.type,'x-upload-purpose':'profile'},body:f}),d=await r.json();if(!r.ok)throw Error(d.error||'Upload failed');pick.backgroundId=d.id;pick.background=d.url||('/media/'+d.id);paintBg()}catch(e){toast(e.message);paintBg()}};
+  const row=node('div',undefined,'chat-bg-actions');row.append(button('🖼️ Choose from gallery',()=>file.click(),'btn secondary'),button('Remove',()=>{pick.backgroundId=null;pick.background='';paintBg()},'btn ghost'),file);root.append(row)}
+ if(can)root.append(button('Save',async()=>{try{const payload={color:pick.color,emoji:pick.emoji};if(pick.backgroundId!==undefined)payload.backgroundId=pick.backgroundId;await api('/chat-extras/'+extrasKey(chat)+'/theme',payload);await loadChatExtras();toast('Chat updated.')}catch(e){toast(e.message)}},'btn chat-customize-save'));
 }
 async function renderPinsView(root){
  root.replaceChildren(node('p','Loading…','muted'));await loadChatExtras();root.replaceChildren();
@@ -230,3 +234,26 @@ paintMuteButton($('muteGroup'),false,false);
 {let lastPeerMuted=null;const base=renderPeerInfo;renderPeerInfo=function(){base();const btn=[...$('peerInfoBody').querySelectorAll('.peer-info-shortcuts>button')].find(b=>/^(un)?mute$/i.test(b.textContent.trim()));if(!btn)return;const muted=/unmute/i.test(btn.textContent),changed=lastPeerMuted!==null&&lastPeerMuted!==muted;
  // draw the old state first, then animate to the new one
  paintMuteButton(btn,changed?lastPeerMuted:muted,false);if(changed)requestAnimationFrame(()=>requestAnimationFrame(()=>paintMuteButton(btn,muted,true)));lastPeerMuted=muted}}
+
+
+// ---- Sell an ID inside the group (only this group sees it): title, ID, price, photos or videos ----
+function openGroupIdPost(){
+ if(chat?.kind!=='group')return;const groupId=chat.id;closeChatTools?.();
+ openStepDialog('🏷️ Sell ID in this group',body=>{
+  body.append(node('p','Only members of this group can see this post.','hint'));
+  const title=node('input',undefined,'input');title.maxLength=100;title.placeholder='Example: All max account';field(body,'Title',title).required=true;
+  const uid=node('input',undefined,'input');uid.maxLength=20;uid.inputMode='numeric';uid.placeholder='Game ID / UID (kept private)';field(body,'ID',uid).required=true;
+  const price=node('input',undefined,'input');price.maxLength=12;price.inputMode='decimal';price.placeholder='Example: 5000 or 5k';field(body,'Price (৳)',price).required=true;
+  const files=node('input',undefined,'input');files.type='file';files.multiple=true;files.accept='image/jpeg,image/png,image/webp,video/mp4,video/webm';field(body,'Photos or video',files);
+  body.append(node('p','Up to 10 files. A video helps buyers trust the ID.','hint'));
+ },'Post in group',async body=>{
+  const [title,uid,price]=[...body.querySelectorAll('input:not([type=file])')].map(i=>i.value.trim()),list=[...body.querySelector('input[type=file]').files].slice(0,10);
+  if(!title||!uid||!price)throw Error('Fill in title, ID and price.');if(list.some(f=>f.size>(f.type.startsWith('video/')?50:8)*1024*1024))throw Error('Photos up to 8 MB and videos up to 50 MB.');
+  const status=body.closest('form').querySelector('.deal-step-status'),media=[];
+  for(const [i,f] of list.entries()){status.textContent='Uploading '+(i+1)+' of '+list.length+'…';const r=await fetch('/api/upload',{method:'POST',credentials:'same-origin',headers:{'content-type':f.type,'x-upload-purpose':'post'},body:f}),d=await r.json();if(!r.ok)throw Error(d.error||'Upload failed');media.push(d)}
+  status.textContent='Posting…';const result=await api('/posts',{title,details:title,price,kind:'Game ID',postIntent:'sell',gameCategory:'free-fire',gameUid:uid,groupId,media,clientKey:crypto.randomUUID()});
+  toast(result.status==='approved'?'✅ Posted in the group.':'⏳ Saved. It appears after the safety check.');if(chat?.id===groupId&&typeof loadGroupPosts==='function')void loadGroupPosts().catch(()=>{});
+ });
+}
+$('chatGroupPost').onclick=()=>openGroupIdPost();$('groupPostButton').onclick=()=>openGroupIdPost();
+{const base=openChat;openChat=async function(kind,...rest){$('chatGroupPost').hidden=kind!=='group';return base.call(this,kind,...rest)}}

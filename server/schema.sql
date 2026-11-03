@@ -277,7 +277,7 @@ CREATE INDEX IF NOT EXISTS wm_push_events_ref ON wm_push_events(ref_id);
 CREATE TABLE IF NOT EXISTS wm_group_join_requests(group_id TEXT NOT NULL REFERENCES wm_groups(id),user_id TEXT NOT NULL REFERENCES users(id),created_at INTEGER NOT NULL,PRIMARY KEY(group_id,user_id));
 CREATE INDEX IF NOT EXISTS wm_group_join_requests_group ON wm_group_join_requests(group_id,created_at);
 CREATE TABLE IF NOT EXISTS wm_chat_nicknames(kind TEXT NOT NULL CHECK(kind IN ('private','group')),chat_id TEXT NOT NULL,user_id TEXT NOT NULL REFERENCES users(id),nickname TEXT NOT NULL,set_by TEXT NOT NULL REFERENCES users(id),updated_at INTEGER NOT NULL,PRIMARY KEY(kind,chat_id,user_id));
-CREATE TABLE IF NOT EXISTS wm_chat_themes(kind TEXT NOT NULL CHECK(kind IN ('private','group')),chat_id TEXT NOT NULL,color TEXT NOT NULL,emoji TEXT NOT NULL,updated_by TEXT NOT NULL REFERENCES users(id),updated_at INTEGER NOT NULL,PRIMARY KEY(kind,chat_id));
+CREATE TABLE IF NOT EXISTS wm_chat_themes(kind TEXT NOT NULL CHECK(kind IN ('private','group')),chat_id TEXT NOT NULL,color TEXT NOT NULL,emoji TEXT NOT NULL,updated_by TEXT NOT NULL REFERENCES users(id),updated_at INTEGER NOT NULL,background_id TEXT,PRIMARY KEY(kind,chat_id));
 CREATE TABLE IF NOT EXISTS wm_chat_pins(kind TEXT NOT NULL CHECK(kind IN ('private','group')),chat_id TEXT NOT NULL,message_id INTEGER NOT NULL,pinned_by TEXT NOT NULL REFERENCES users(id),created_at INTEGER NOT NULL,PRIMARY KEY(kind,chat_id,message_id));
 CREATE INDEX IF NOT EXISTS wm_chat_pins_chat ON wm_chat_pins(kind,chat_id,created_at);
 CREATE TABLE IF NOT EXISTS wm_presence(user_id TEXT PRIMARY KEY REFERENCES users(id),seen_at INTEGER NOT NULL);

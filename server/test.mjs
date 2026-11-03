@@ -1157,7 +1157,7 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  assert.equal((await call(base+'/pin','POST',{messageId:mid,pinned:true},'buyer')).status,403);
  assert.equal((await call(base+'/pin','POST',{messageId:mid,pinned:true},'admin')).status,200);
  assert.equal((await call(base+'/pin','POST',{messageId:999999,pinned:true},'admin')).status,404);
- let x=(await call(base,'GET',undefined,'buyer')).data;assert.equal(x.nicknames.buyer,'Boss buyer');assert.equal(x.nicknames.admin,'Group Boss');assert.deepEqual(x.theme,{color:'#a033ff',emoji:'🔥'});assert.equal(x.pins.length,1);assert.equal(x.pins[0].text,'Pin me');assert.equal(x.can.theme,false);
+ let x=(await call(base,'GET',undefined,'buyer')).data;assert.equal(x.nicknames.buyer,'Boss buyer');assert.equal(x.nicknames.admin,'Group Boss');assert.equal(x.theme.color,'#a033ff');assert.equal(x.theme.emoji,'🔥');assert.equal(x.theme.background,'');assert.equal(x.pins.length,1);assert.equal(x.pins[0].text,'Pin me');assert.equal(x.can.theme,false);
  assert.equal((await call(base,'GET',undefined,'outsider')).status,403);
  assert.equal((await call(base+'/nickname','POST',{userId:'buyer',nickname:''},'buyer')).status,200);
  assert.equal((await call(base+'/pin','POST',{messageId:mid,pinned:false},'admin')).status,200);
@@ -1183,4 +1183,16 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  assert.ok((await call('/api/groups/'+g+'/messages','GET',undefined,'admin')).data.messages.some(m=>m.id===mid));
  assert.equal((await call(base+'/hide','POST',{messageId:999999},'buyer')).status,404);
  console.log('PASS: message reactions (one per person, change or remove) and delete-for-me that leaves the message for everyone else.');
+}
+{
+ // Chat background photo: only the people in the chat can load it.
+ const t=(await call('/api/threads','POST',{userId:'buyer'},'seller')).data.thread.id,bg=crypto.randomUUID();
+ sql.prepare('INSERT INTO wm_uploads VALUES(?,?,?,?,?)').run(bg,'seller','image/png',16,Date.now());objects.set(bg,new Uint8Array([137,80,78,71,13,10,26,10,0,0,0,0,1,2,3,4]));sql.prepare('INSERT INTO wm_media_checks VALUES(?,?,?,?)').run(bg,'safe','Test scanner passed',Date.now());
+ const base='/api/chat-extras/private/'+t;assert.equal((await call(base+'/theme','POST',{color:'#0a7cff',emoji:'👍',backgroundId:bg},'seller')).status,200);
+ assert.equal((await call(base,'GET',undefined,'buyer')).data.theme.background,'/media/'+bg);
+ const media=async who=>(await worker.fetch(new Request('https://test.local/media/'+bg,{headers:who?{cookie:'wm_session='+tokens[who]}:{}}),env)).status;
+ assert.equal(await media('buyer'),200);assert.equal(await media('outsider'),404);assert.equal(await media(),404);
+ const other=crypto.randomUUID();sql.prepare('INSERT INTO wm_uploads VALUES(?,?,?,?,?)').run(other,'outsider','image/png',16,Date.now());assert.equal((await call(base+'/theme','POST',{color:'#0a7cff',emoji:'👍',backgroundId:other},'seller')).status,404);
+ assert.equal((await call(base+'/theme','POST',{color:'#0a7cff',emoji:'👍',backgroundId:null},'buyer')).status,200);assert.equal((await call(base,'GET',undefined,'seller')).data.theme.background,'');
+ console.log('PASS: chat background photo (own safe image, visible only to the people in the chat, removable).');
 }
