@@ -367,3 +367,17 @@ html body #chatPanel #groupSettingsPanel>.group-info-popover{background:#3a3b3e!
 /* Filters stay under "My feed" while scrolling */
 @media(max-width:900px){.home-page #page-home .feed-compact-bar{position:sticky;top:calc(env(safe-area-inset-top,0px) + var(--feed-head-h,64px));z-index:19;margin-left:-16px!important;margin-right:-16px!important;padding:0 16px 10px;background:#071321f2;-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-radius:0!important;border-left:0!important;border-right:0!important;box-shadow:0 8px 14px -10px #000c}
 .home-page #page-home .feed-heading{margin-bottom:0!important}}
+/* Upgraded navigation icons */
+.nav-ico{position:relative;display:grid;place-items:center;width:26px;height:26px}.nav-ico svg{position:absolute;inset:0;width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:opacity .2s,transform .25s}
+.nav-ico .ni-fill{opacity:0;transform:scale(.7)}.nav-ico .ni-fill .fill{fill:currentColor;stroke:none}.nav-ico .ni-fill .cut{stroke:#071321;stroke-width:2}
+#mobileNav button.active .nav-ico .ni-fill,#desktopNav button.active .nav-ico .ni-fill{opacity:1;transform:scale(1)}#mobileNav button.active .nav-ico .ni-line,#desktopNav button.active .nav-ico .ni-line{opacity:0}
+#mobileNav button[data-tab]:not(.post-button)>span:first-child{position:relative;display:grid;place-items:center;width:52px;height:30px;border-radius:999px;transition:background .25s}
+#mobileNav button.active[data-tab]:not(.post-button)>span:first-child{background:linear-gradient(135deg,#2a8de033,#a033ff2a)}
+#mobileNav button.active[data-tab]{color:#7cc4ff}
+.nav-photo{width:26px;height:26px;border-radius:50%;object-fit:cover;border:2px solid transparent;box-sizing:border-box}#mobileNav button.active .nav-photo,#desktopNav button.active .nav-photo{border-color:#5fb4ff;box-shadow:0 0 0 2px #071321,0 0 10px #2a8de088}
+#mobileNav button.nav-pop>span:first-child{animation:nav-pop .35s cubic-bezier(.2,1.6,.4,1)}@keyframes nav-pop{0%{transform:scale(.8)}100%{transform:scale(1)}}
+#mobileNav .post-button>span:first-child{transition:transform .2s}#mobileNav .post-button:active>span:first-child{transform:rotate(90deg) scale(.95)}
+@media(prefers-reduced-motion:reduce){#mobileNav button.nav-pop>span:first-child{animation:none}}
+/* Friends: sections and Discover */
+.friends-section-title{font-size:17px;margin:18px 0 8px}.discover-head{margin-top:22px;padding-top:14px;border-top:1px solid #1f3346}.discover-head .hint{margin:-4px 0 8px}
+.discover-person{background:linear-gradient(90deg,#10233a,#0d1724);border-radius:16px;padding:8px;margin:6px 0}

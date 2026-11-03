@@ -111,3 +111,19 @@ $('listingAdminForm').onsubmit=async e=>{
  }catch(error){toast(error.message)}finally{b.disabled=false}
 };
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeListingAdminChoice()});
+
+// ---- Friends: "All" shows requests (if any), your friends, then Discover with new people at the end ----
+(()=>{const tabs=$('friendsTabs');if(!tabs||tabs.querySelector('[data-friend-tab="all"]'))return;const all=button('All',()=>{friendsPageTab='all';renderFriendsPage()});all.type='button';all.dataset.friendTab='all';all.setAttribute('role','tab');tabs.prepend(all);friendsPageTab='all'})();
+{const base=renderFriendsPage;renderFriendsPage=function(){
+ if(friendsPageTab!=='all')return base();if(!friendsPageData)return;const root=$('friendsPageContent'),d=friendsPageData;for(const tab of $('friendsTabs').querySelectorAll('button'))tab.setAttribute('aria-selected',String(tab.dataset.friendTab==='all'));root.replaceChildren();
+ const row=(person,mode)=>{const r=node('article',undefined,'friends-person'+(mode==='discover'?' discover-person':'')),visit=button('',()=>showProfile(person.id),'friends-avatar');visit.append(avatar(person));const copy=node('div',undefined,'friends-person-copy');copy.append(button(person.name,()=>showProfile(person.id),'friends-person-name'));if(person.username)copy.append(node('small','@'+person.username,'muted'));const actions=node('div',undefined,'friends-person-actions');
+  if(mode==='request')actions.append(button('Confirm',async()=>{await api('/friends/respond',{userId:person.id,accept:true});await loadFriendsPage()},'btn friend-confirm'),button('Remove',async()=>{await api('/friends/respond',{userId:person.id,accept:false});await loadFriendsPage()},'btn secondary'));
+  else if(mode==='friend')actions.append(button('Message',async()=>{const {thread}=await api('/threads',{userId:person.id});navigate('messages');await openChat('private',thread.id)},'btn friend-confirm'));
+  else actions.append(friendButton(person,loadFriendsPage));copy.append(actions);r.append(visit,copy);return r};
+ const section=(title,list,mode,empty)=>{if(!list.length&&!empty)return;root.append(node('h2',title+(list.length?' · '+list.length:''),'friends-section-title'));if(!list.length)root.append(node('p',empty,'hint'));for(const p of list)root.append(row(p,mode))};
+ section('Friend requests',d.incoming||[],'request');
+ section('Your friends',d.friends||[],'friend',(d.incoming||[]).length?'':'No friends yet. Find people below.');
+ section('Sent requests',d.outgoing||[],'sent');
+ const discover=node('div',undefined,'discover-head');discover.append(node('h2','✨ Discover new friends','friends-section-title'),node('p','People you may know from your groups, deals and friends of friends.','hint'));root.append(discover);
+ if(!(d.suggestions||[]).length)root.append(node('p','No new suggestions right now. Search for a member to connect.','hint'));for(const p of d.suggestions||[])root.append(row(p,'discover'));
+}}
