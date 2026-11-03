@@ -268,7 +268,8 @@ assert.equal((await call('/api/deals','POST',{postId:ownListing.data.id},'owner'
 // A single public post is placed in joined groups, preserving its Listing ID and interactions.
 await call('/api/groups/'+group+'/join','POST',{},'seller');const secondGroup=(await call('/api/groups','POST',{name:'Second market',logoId},'admin')).data.id;await call('/api/groups/'+secondGroup+'/join','POST',{},'seller');await call('/api/groups/'+secondGroup+'/join','POST',{},'buyer');
 const dual=await call('/api/posts','POST',{...post,title:'Shared ID',price:'8.5k',groupIds:[group,secondGroup]},'seller');assert.equal(dual.status,201,JSON.stringify(dual.data));const dualId=dual.data.id;
-for(const gid of [group,secondGroup]){const groupFeed=await call('/api/feed?group='+gid,'GET',undefined,'buyer');assert.equal(groupFeed.status,200);assert.equal(groupFeed.data.posts.filter(p=>p.id===dualId).length,1);const placement=sql.prepare('SELECT range_id FROM wm_post_groups WHERE post_id=? AND group_id=?').get(dualId,gid);assert.ok((await call('/api/feed?group='+gid+'&range='+placement.range_id,'GET',undefined,'buyer')).data.posts.some(p=>p.id===dualId))}
+for(const gid of [group,secondGroup]){const groupFeed=await call('/api/feed?group='+gid,'GET',undefined,'buyer');assert.equal(groupFeed.status,200);// A feed post also sent to groups stays in the feed: group lists show only IDs posted inside the group.
+assert.equal(groupFeed.data.posts.filter(p=>p.id===dualId).length,0);const placement=sql.prepare('SELECT range_id FROM wm_post_groups WHERE post_id=? AND group_id=?').get(dualId,gid);assert.ok(placement);assert.ok(!(await call('/api/feed?group='+gid+'&range='+placement.range_id,'GET',undefined,'buyer')).data.posts.some(p=>p.id===dualId))}
 assert.ok((await call('/api/feed')).data.posts.some(p=>p.id===dualId));
 assert.equal((await call('/api/posts','POST',{...post,groupIds:[group,group]},'seller')).status,400);
 assert.equal((await call('/api/posts','POST',{...post,groupIds:[group]},'outsider')).status,403);
@@ -870,7 +871,8 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  assert.equal((await call('/api/groups/'+group+'/join','POST',{},'vip')).status,200);assert.equal((await call('/api/groups/'+group+'/join','POST',{},'owner')).status,200);
  r=await call('/api/posts','POST',{...listing,title:'Group share ID',price:7000,gameUid:'21212121'},'owner');assert.equal(r.status,201);const sharedId=r.data.id;
  r=await call('/api/groups/'+group+'/share-post','POST',{postId:sharedId},'owner');assert.equal(r.status,200);assert.equal(r.data.added,true);assert.equal((await call('/api/groups/'+group+'/share-post','POST',{postId:sharedId},'owner')).data.added,false);
- assert.ok((await call('/api/feed?group='+group,'GET',undefined,'vip')).data.posts.some(p=>p.id===sharedId));
+ // Feed IDs added to a group are kept as placements but the group list shows only IDs posted inside the group.
+ assert.ok(!(await call('/api/feed?group='+group,'GET',undefined,'vip')).data.posts.some(p=>p.id===sharedId));
  assert.equal((await call('/api/groups/'+group+'/share-post','POST',{postId:sharedId},'outsider')).status>=400,true);assert.equal((await call('/api/groups/'+group+'/share-post','POST',{postId:pListing},'vip')).status,404);
  assert.equal((await call('/api/groups/'+group+'/leave','POST',{},'admin')).status,403);
  assert.equal((await call('/api/groups/'+group+'/messages','POST',{text:'before leaving'},'vip')).status,201);assert.equal((await call('/api/groups/'+group+'/leave','POST',{},'vip')).status,200);
