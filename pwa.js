@@ -88,3 +88,9 @@ async function loadFeatures(){}
 
 async function loadPwaBranding(){try{const config=await api('/pwa');document.title=config.name;document.querySelectorAll('[data-app-name],.app-wordmark,#loginBrand').forEach(element=>element.textContent=config.name);if(globalThis.wmSiteContent?.login?.brand)$('loginBrand').textContent=globalThis.wmSiteContent.login.brand;document.querySelectorAll('[data-app-description]').forEach(element=>element.textContent=config.description);let description=document.querySelector('meta[name="description"]');if(!description){description=document.createElement('meta');description.name='description';document.head.append(description)}description.content=config.description;$('appInstallBanner').setAttribute('aria-label','Install '+config.name);$('appInstallBanner').querySelector('strong').textContent=config.name;$('appInstallBanner').querySelector('img').src=config.icons[0].src;document.querySelector('link[rel="apple-touch-icon"]').href=config.icons[0].src;$('installHelpTitle').textContent='Install '+config.name;await loadAppearance()}catch{}}
 void loadPwaBranding();
+
+// Hide the bottom menu while scrolling down a page, show it again when scrolling up.
+(()=>{let lastY=window.scrollY,ticking=false;const pages=['home','profile','friends','search'];
+ const update=()=>{ticking=false;const y=Math.max(0,window.scrollY),diff=y-lastY;if(!pages.includes(typeof active==='string'?active:'')||y<60){document.body.classList.remove('nav-hidden')}else if(diff>8){document.body.classList.add('nav-hidden')}else if(diff<-8){document.body.classList.remove('nav-hidden')}if(Math.abs(diff)>8||y<60)lastY=y};
+ window.addEventListener('scroll',()=>{if(!ticking){ticking=true;requestAnimationFrame(update)}},{passive:true});
+ window.addEventListener('hashchange',()=>document.body.classList.remove('nav-hidden'))})();

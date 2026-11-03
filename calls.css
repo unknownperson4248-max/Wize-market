@@ -108,3 +108,4 @@ audio.call-tile-media{display:none!important}
 .call-alerts-card>div{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .call-alerts-card small{color:#cfe4f7}
 .call-alerts-close{padding:6px 10px;min-height:0}
+.bottom{transition:transform .25s ease,opacity .25s ease;will-change:transform}body.nav-hidden .bottom{transform:translateY(calc(100% + 24px));opacity:0;pointer-events:none}@media(max-width:900px){.home-page #page-home .feed-heading{position:sticky;top:0;z-index:20;background:#071321f2;-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);margin-left:-16px;margin-right:-16px;padding:max(10px,env(safe-area-inset-top)) 16px 12px}}@media(prefers-reduced-motion:reduce){.bottom{transition:none}}
