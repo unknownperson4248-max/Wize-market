@@ -94,3 +94,15 @@ void loadPwaBranding();
  const update=()=>{ticking=false;const y=Math.max(0,window.scrollY),diff=y-lastY;if(!pages.includes(typeof active==='string'?active:'')||y<60){document.body.classList.remove('nav-hidden')}else if(diff>8){document.body.classList.add('nav-hidden')}else if(diff<-8){document.body.classList.remove('nav-hidden')}if(Math.abs(diff)>8||y<60)lastY=y};
  window.addEventListener('scroll',()=>{if(!ticking){ticking=true;requestAnimationFrame(update)}},{passive:true});
  window.addEventListener('hashchange',()=>document.body.classList.remove('nav-hidden'))})();
+
+// Swipe from the left or right screen edge to go back (iPhone Home Screen app has no back button).
+(()=>{const standalone=matchMedia('(display-mode: standalone)').matches||navigator.standalone===true,ios=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+ if(!standalone&&!ios)return;// Android and desktop already have their own back
+ const EDGE=28,GO=72;let start=null,side=null,cue=null;
+ const blocked=t=>t.closest?.('input,textarea,select,[contenteditable],#cropPreviewFrame,.photo-editor-frame,.call-screen,.album-stage,video');
+ const showCue=(dx)=>{if(!cue){cue=document.createElement('div');cue.className='swipe-back-cue';cue.setAttribute('aria-hidden','true');cue.textContent='‹';document.body.append(cue)}cue.classList.toggle('right',side==='right');const p=Math.min(1,dx/GO);cue.style.opacity=String(.25+p*.75);cue.style.transform='translateY(-50%) translateX('+(side==='left'?1:-1)*Math.min(dx,GO)*.6+'px) scale('+(.7+p*.3)+')';cue.classList.toggle('ready',p>=1)};
+ const hideCue=()=>{cue?.remove();cue=null};
+ document.addEventListener('touchstart',e=>{if(e.touches.length!==1)return;const t=e.touches[0],w=innerWidth;side=t.clientX<=EDGE?'left':t.clientX>=w-EDGE?'right':null;if(!side||(!standalone&&side==='left')||blocked(e.target)){start=null;return}start={x:t.clientX,y:t.clientY}},{passive:true});
+ document.addEventListener('touchmove',e=>{if(!start)return;const t=e.touches[0],dx=(side==='left'?t.clientX-start.x:start.x-t.clientX),dy=Math.abs(t.clientY-start.y);if(dy>40&&dy>dx){start=null;hideCue();return}if(dx>8)showCue(dx)},{passive:true});
+ document.addEventListener('touchend',e=>{if(!start)return;const t=e.changedTouches[0],dx=(side==='left'?t.clientX-start.x:start.x-t.clientX),dy=Math.abs(t.clientY-start.y);start=null;hideCue();if(dx>=GO&&dy<dx*.7)history.back()},{passive:true});
+ document.addEventListener('touchcancel',()=>{start=null;hideCue()},{passive:true})})();
