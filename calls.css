@@ -294,3 +294,22 @@ html body #chatPanel #groupSettingsPanel>.group-info-popover{background:#3a3b3e!
 #groupApprovalRow{display:none!important}
 .group-info-menu-btn[hidden]{display:none}#groupSettingsPanel .danger-row i[data-icon]{color:#ff5a5f}
 #groupSettingsPanel #groupApprovalRow{display:none!important}
+/* Compact chat bubbles like Messenger: 8–10 messages on one screen */
+#chatMessages{gap:2px!important}
+#chatMessages>.bubble{padding:7px 12px!important;margin:1px 0!important;border-radius:18px!important;max-width:80%!important;min-height:0!important;line-height:1.32}
+#chatMessages>.bubble.mine{border-radius:18px 18px 6px 18px!important}#chatMessages>.bubble:not(.mine){border-radius:18px 18px 18px 6px!important}
+#chatMessages>.bubble.mine .message-author{display:none!important}
+#chatMessages>.bubble .message-author{gap:6px!important;margin:0 0 2px!important;font-size:12px!important;min-height:0!important}
+#chatMessages>.bubble .message-author .avatar{width:20px!important;height:20px!important;font-size:9px}
+#chatMessages>.bubble .message-author .trust-pill{display:none!important}
+#chatMessages>.bubble.cont .message-author{display:none!important}
+#chatMessages>.bubble.cont{margin-top:0!important}
+#chatMessages>.bubble .message-time{float:right;font-size:10px!important;margin:6px 0 -3px 10px!important;opacity:.65;line-height:1}
+#chatMessages>.bubble p,#chatMessages>.bubble .chat-text{margin:0!important}
+#chatMessages .chat-day-divider,#chatMessages .day-divider{margin:8px auto!important}
+.bubble .mention.everyone{font-weight:900}
+#chatMessages>.bubble.has-next .message-time{display:none!important}
+.composer-expand{display:none!important;font-size:26px!important;font-weight:300}
+#chatForm.typing .composer-expand{display:grid!important;place-items:center}
+#chatForm.typing #chatPlusButton,#chatForm.typing #chatGalleryButton,#chatForm.typing #chatMicButton,#chatForm.typing .chat-quick-emoji{display:none!important}
+#chatForm .composer-controls>*{transition:opacity .15s}
