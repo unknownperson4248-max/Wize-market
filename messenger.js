@@ -83,7 +83,7 @@ $('closePrivacyPage').onclick=()=>navigate('home');
 // ---- Group invite link, join approval and admin-only group settings ----
 function openGroupInviteDialog(g){
  openStepDialog('Join group',body=>{const head=node('div',undefined,'group-invite-head');head.append(avatar({name:g.name,picture:g.logo}),node('strong',g.name),node('small',g.members+' members'));body.append(head,node('p',g.joinApproval?'The group admin approves new members. You can chat after your request is accepted.':'You will join right away and can start chatting.','hint'))},
-  g.joinApproval?'Ask to join':'Join group',async()=>{const r=await api('/groups/'+encodeURIComponent(g.id)+'/join',{});if(r.pending){toast('✅ Request sent. The group admin will check it.');return}navigate('messages');await loadMessages();await openChat('group',g.id);toast('You joined '+g.name+'.')});
+  g.joinApproval?'Ask to join':'Join group',async()=>{const r=await api('/groups/'+encodeURIComponent(g.id)+'/join',g.code?{code:g.code}:{});if(r.pending){toast('✅ Request sent. The group admin will check it.');return}navigate('messages');await loadMessages();await openChat('group',g.id);toast('You joined '+g.name+'.')});
 }
 function paintGroupAdminRows(g){
  const admin=!!g.canManage;$('groupRequestsButton').hidden=!admin;$('groupApprovalRow').hidden=!admin;$('groupAdminTools').hidden=!admin;$('groupCustomize').hidden=!admin;decorateInfoRows($('groupInfoHome'));if(!admin)return;
@@ -91,13 +91,13 @@ function paintGroupAdminRows(g){
 }
 async function openGroupRequests(){
  if(chat?.kind!=='group')return;showGroupInfoView('requests');const root=$('groupRequestList');root.replaceChildren(node('p','Loading…','muted'));
- try{const {requests}=await api('/groups/'+chat.id+'/requests');root.replaceChildren();if(!requests.length){root.append(node('p','No one is waiting to join.','muted'));return}
+ try{const {requests}=await api('/groups/'+chat.id+'/requests');root.replaceChildren();if(!requests.length){root.append(node('p','No more requests to join.','invite-empty'));return}
   for(const r of requests){const row=node('div',undefined,'person group-request-row'),who=node('div',undefined,'group-request-who');who.append(node('span',r.name),node('small',new Date(r.created_at).toLocaleString()));const actions=node('div',undefined,'group-request-actions');
    const answer=async approve=>{for(const b of actions.querySelectorAll('button'))b.disabled=true;try{await api('/groups/'+chat.id+'/requests/'+encodeURIComponent(r.id),{approve});row.remove();toast(approve?r.name+' joined the group.':'Request declined.');if(groupDetail?.group){groupDetail.group.requests=Math.max(0,(groupDetail.group.requests||1)-1);paintGroupAdminRows(groupDetail.group)}if(!root.children.length)root.append(node('p','No one is waiting to join.','muted'))}catch(e){toast(e.message);for(const b of actions.querySelectorAll('button'))b.disabled=false}};
    actions.append(button('Approve',()=>void answer(true),'btn'),button('Decline',()=>void answer(false),'btn secondary'));row.append(avatar(r),who,actions);root.append(row)}
  }catch(e){root.replaceChildren(node('p',e.message,'muted'))}
 }
-$('groupRequestsButton').onclick=()=>void openGroupRequests();
+$('groupRequestsButton').onclick=()=>void openInvitesPage();
 $('groupApprovalToggle').onchange=async e=>{const on=e.target.checked;e.target.disabled=true;try{await api('/groups/'+chat.id+'/settings',{joinApproval:on});if(groupDetail?.group)groupDetail.group.joinApproval=on;toast(on?'New members now need your approval.':'Anyone with the invite link can join.')}catch(err){e.target.checked=!on;toast(err.message)}finally{e.target.disabled=false}};
 
 // ---- Chat extras like Messenger: nicknames, chat colour and quick emoji, pinned messages ----
@@ -357,3 +357,24 @@ function showMentionPopup(m){$('mentionPopup')?.remove();const pop=button('',asy
  pop.innerHTML='<span class="mention-popup-icon">'+(m.everyone?'📣':'@')+'</span><span class="mention-popup-copy"><b></b><small></small></span>';pop.querySelector('b').textContent=(m.everyone?m.name+' mentioned everyone':m.name+' mentioned you')+' · '+m.group_name;pop.querySelector('small').textContent=m.text||'';document.body.append(pop);navigator.vibrate?.([60,40,60]);setTimeout(()=>pop.classList.add('leaving'),6500);setTimeout(()=>pop.remove(),7000)}
 // Opened from a phone alert: /?group=…&message=…
 (()=>{const q=new URLSearchParams(location.search),g=q.get('group');if(!g)return;let tries=0;const t=setInterval(async()=>{if(++tries>40)return clearInterval(t);if(!me)return;clearInterval(t);history.replaceState(null,'',location.pathname+'#messages');try{navigate('messages');await loadMessages();await openChat('group',g);await loadChatExtras();setTimeout(()=>void jumpToMention(),600)}catch{}},500)})();
+
+
+// ---- Invite links: https://<site>/j/<code> opens the website straight into the group ----
+let pendingInviteCode=(location.pathname.match(/^\/j\/([A-Za-z0-9]{6,32})$/)||[])[1]||null;
+{const base=acceptGroupInvite;acceptGroupInvite=async function(){if(!pendingInviteCode)return base();if(!me){showLogin();return}const code=pendingInviteCode;pendingInviteCode=null;history.replaceState(null,'','/#messages');
+ try{const info=await api('/invites/'+code);if(info.member){navigate('messages');await loadMessages();await openChat('group',info.group.id);return}if(info.pending)return toast('⏳ Your request to join '+info.group.name+' is waiting for the group admin.');openGroupInviteDialog(info.group)}catch(e){toast(e.message)}}}
+async function groupInviteLink(id){return api('/groups/'+id+'/invite')}
+$('inviteGroup').onclick=async()=>{try{const inv=await groupInviteLink(chat.id),name=groupDetail?.group?.name||'Group';if(navigator.share)await navigator.share({title:name,text:'Join '+name,url:inv.url});else{await navigator.clipboard.writeText(inv.url);toast('Invite link copied.')}}catch(e){if(e.name!=='AbortError')toast(e.message||'Could not share the invite link.')}};
+async function openInvitesPage(){
+ if(chat?.kind!=='group')return;showGroupInfoView('requests');$('groupInfoTitle').textContent='Invites & requests';let box=$('groupInviteBox');if(!box){box=node('div',undefined,'invite-box');box.id='groupInviteBox';$('groupRequestList').before(box)}box.replaceChildren(node('p','Loading…','muted'));
+ try{const inv=await groupInviteLink(chat.id);box.replaceChildren();
+  const head=node('label',undefined,'invite-link-row');const copy=node('span',undefined,'invite-link-copy');copy.append(node('strong','Invite link'),node('small',inv.enabled?inv.url:'Invite link is off'));const sw=node('input');sw.type='checkbox';sw.setAttribute('role','switch');sw.checked=inv.enabled;sw.disabled=!inv.canManage;sw.className='wm-switch';head.append(copy,sw);box.append(head);
+  box.append(node('p',inv.enabled?'Anyone can open the group with this link'+(inv.joinApproval?' and ask to join. An admin approves each request.':' and join right away.'):'Nobody can join with the link while it is off.','invite-hint'));
+  sw.onchange=async()=>{try{await api('/groups/'+chat.id+'/invite',{action:sw.checked?'on':'off'});await openInvitesPage()}catch(e){toast(e.message);sw.checked=!sw.checked}};
+  const actions=node('div',undefined,'invite-actions');if(inv.enabled){actions.append(infoRowWith('copy','Copy','',async()=>{try{await navigator.clipboard.writeText(inv.url);toast('Invite link copied.')}catch{toast(inv.url)}}));if(navigator.share)actions.append(infoRowWith('share','Share','',()=>void navigator.share({title:groupDetail?.group?.name,url:inv.url}).catch(()=>{})))}
+  if(inv.canManage){actions.append(infoRowWith('reset','Reset','The old link stops working',async()=>{if(!confirm('Reset the invite link? The old link will stop working.'))return;try{await api('/groups/'+chat.id+'/invite',{action:'reset'});toast('New invite link made.');await openInvitesPage()}catch(e){toast(e.message)}}));
+   const appr=node('label',undefined,'invite-link-row');const t=node('span',undefined,'invite-link-copy');t.append(node('strong','Admin approval'),node('small','Require an admin to approve all requests to join the group.'));const s2=node('input');s2.type='checkbox';s2.setAttribute('role','switch');s2.className='wm-switch';s2.checked=inv.joinApproval;s2.onchange=async()=>{try{await api('/groups/'+chat.id+'/settings',{joinApproval:s2.checked});if(groupDetail?.group)groupDetail.group.joinApproval=s2.checked;$('groupApprovalToggle').checked=s2.checked;toast(s2.checked?'New members now need approval.':'Anyone with the link can join.')}catch(e){toast(e.message);s2.checked=!s2.checked}};appr.append(t,s2);actions.append(appr)}
+  box.append(actions);if(inv.canManage){box.append(node('p','Requests to join','info-caption'));await openGroupRequests();showGroupInfoView('requests');$('groupInfoTitle').textContent='Invites & requests'}else $('groupRequestList').replaceChildren();
+ }catch(e){box.replaceChildren(node('p',e.message,'muted'))}
+}
+INFO_ICONS.copy='<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>';INFO_ICONS.share='<circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 10.8 7.6-4.4M8.2 13.2l7.6 4.4"/>';INFO_ICONS.reset='<path d="M4 4v6h6"/><path d="M4.5 10A8 8 0 1 1 6 16.5"/>';

@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS wm_roles(user_id TEXT PRIMARY KEY REFERENCES users(id), role TEXT NOT NULL CHECK(role IN ('owner','trusted')));
 CREATE TABLE IF NOT EXISTS wm_settings(key TEXT PRIMARY KEY,value TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS wm_groups(id TEXT PRIMARY KEY,owner_id TEXT NOT NULL REFERENCES users(id),name TEXT NOT NULL,price INTEGER,logo_id TEXT,created_at INTEGER NOT NULL,join_approval INTEGER NOT NULL DEFAULT 0,admins_only INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS wm_groups(id TEXT PRIMARY KEY,owner_id TEXT NOT NULL REFERENCES users(id),name TEXT NOT NULL,price INTEGER,logo_id TEXT,created_at INTEGER NOT NULL,join_approval INTEGER NOT NULL DEFAULT 0,admins_only INTEGER NOT NULL DEFAULT 0,invite_code TEXT,invite_enabled INTEGER NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS wm_group_members(group_id TEXT NOT NULL REFERENCES wm_groups(id),user_id TEXT NOT NULL REFERENCES users(id),PRIMARY KEY(group_id,user_id));
 CREATE TABLE IF NOT EXISTS wm_posts(id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id),group_id TEXT REFERENCES wm_groups(id),range_id TEXT,title TEXT NOT NULL,details TEXT NOT NULL,price INTEGER,kind TEXT NOT NULL,status TEXT NOT NULL CHECK(status IN ('pending','approved','rejected')),media TEXT NOT NULL DEFAULT '[]',created_at INTEGER NOT NULL,deleted_at INTEGER,updated_at INTEGER,version INTEGER NOT NULL DEFAULT 0,game_category TEXT NOT NULL DEFAULT 'free-fire',price_format TEXT NOT NULL DEFAULT 'full',custom_game_name TEXT NOT NULL DEFAULT '',post_intent TEXT NOT NULL DEFAULT 'sell' CHECK(post_intent IN ('sell','need')),description TEXT NOT NULL DEFAULT '',availability TEXT NOT NULL DEFAULT 'available' CHECK(availability IN ('available','sold')),game_uid_hash TEXT,game_uid_enc TEXT,game_uid_hint TEXT NOT NULL DEFAULT '',bumped_at INTEGER,renewed_at INTEGER,media_updated_at INTEGER);
 CREATE TABLE IF NOT EXISTS wm_uploads(id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id),type TEXT NOT NULL,size INTEGER NOT NULL,created_at INTEGER NOT NULL);
@@ -21,7 +21,7 @@ CREATE INDEX IF NOT EXISTS wm_deals_users ON wm_deals(buyer_id,seller_id,status)
 CREATE UNIQUE INDEX IF NOT EXISTS wm_one_owner ON wm_roles(role) WHERE role='owner';
 CREATE UNIQUE INDEX IF NOT EXISTS wm_one_active_deal ON wm_deals(thread_id) WHERE status NOT IN ('completed','cancelled');
 
-CREATE TABLE IF NOT EXISTS wm_group_ranges(id TEXT PRIMARY KEY,group_id TEXT NOT NULL REFERENCES wm_groups(id),label TEXT NOT NULL,min_price INTEGER NOT NULL,max_price INTEGER,created_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS wm_group_ranges(id TEXT PRIMARY KEY,group_id TEXT NOT NULL REFERENCES wm_groups(id),label TEXT NOT NULL,min_price INTEGER NOT NULL,max_price INTEGER,created_at INTEGER NOT NULL,sort_order INTEGER NOT NULL DEFAULT 0);
 CREATE INDEX IF NOT EXISTS wm_group_ranges_group ON wm_group_ranges(group_id,min_price);
 CREATE TABLE IF NOT EXISTS wm_profiles(user_id TEXT PRIMARY KEY REFERENCES users(id),username TEXT UNIQUE NOT NULL COLLATE NOCASE,updated_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS wm_suspensions(user_id TEXT PRIMARY KEY REFERENCES users(id),until_at INTEGER NOT NULL,reason TEXT NOT NULL,post_id TEXT,appealed INTEGER NOT NULL DEFAULT 0);
@@ -288,3 +288,5 @@ CREATE TABLE IF NOT EXISTS wm_chat_private_pins(kind TEXT NOT NULL CHECK(kind IN
 CREATE TABLE IF NOT EXISTS wm_group_admins(group_id TEXT NOT NULL REFERENCES wm_groups(id),user_id TEXT NOT NULL REFERENCES users(id),added_by TEXT NOT NULL REFERENCES users(id),created_at INTEGER NOT NULL,PRIMARY KEY(group_id,user_id));
 CREATE TABLE IF NOT EXISTS wm_message_mentions(group_id TEXT NOT NULL REFERENCES wm_groups(id),message_id INTEGER NOT NULL,user_id TEXT NOT NULL REFERENCES users(id),actor_id TEXT NOT NULL REFERENCES users(id),everyone INTEGER NOT NULL DEFAULT 0,created_at INTEGER NOT NULL,seen_at INTEGER,PRIMARY KEY(group_id,message_id,user_id));
 CREATE INDEX IF NOT EXISTS wm_message_mentions_user ON wm_message_mentions(user_id,seen_at,created_at);
+
+CREATE UNIQUE INDEX IF NOT EXISTS wm_groups_invite_code ON wm_groups(invite_code);

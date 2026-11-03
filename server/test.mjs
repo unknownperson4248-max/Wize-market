@@ -1236,3 +1236,17 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  assert.ok(sql.prepare("SELECT count(*) n FROM wm_notifications WHERE user_id='seller' AND kind='group_mention' AND alert_enabled=1").get().n>=2);
  console.log('PASS: @mentions and @everyone (members only, @everyone by any member, alerts while muted, seen tracking).');
 }
+{
+ // Invite links: /j/<code>, off switch and reset.
+ const g=(await call('/api/groups','POST',{name:'Invite group',logoId},'admin')).data.id;
+ assert.equal((await call('/api/groups/'+g+'/invite','GET',undefined,'buyer')).status,403);// not a member
+ let inv=(await call('/api/groups/'+g+'/invite','GET',undefined,'admin')).data;assert.match(inv.code,/^[A-Za-z0-9]{10}$/);assert.equal(inv.url,'https://test.local/j/'+inv.code);assert.equal(inv.enabled,true);
+ assert.equal((await call('/api/invites/'+inv.code,'GET',undefined,'buyer')).data.group.id,g);
+ assert.equal((await call('/api/groups/'+g+'/join','POST',{code:'WRONGCODE1'},'buyer')).status,403);
+ const old=inv.code;inv=(await call('/api/groups/'+g+'/invite','POST',{action:'reset'},'admin')).data;assert.notEqual(inv.code,old);
+ assert.equal((await call('/api/invites/'+old,'GET',undefined,'buyer')).status,404);assert.equal((await call('/api/groups/'+g+'/join','POST',{code:old},'buyer')).status,403);
+ await call('/api/groups/'+g+'/invite','POST',{action:'off'},'admin');assert.equal((await call('/api/invites/'+inv.code,'GET',undefined,'buyer')).status,404);assert.equal((await call('/api/groups/'+g+'/join','POST',{code:inv.code},'buyer')).status,403);
+ await call('/api/groups/'+g+'/invite','POST',{action:'on'},'admin');assert.equal((await call('/api/groups/'+g+'/join','POST',{code:inv.code},'buyer')).data.joined,true);
+ assert.equal((await call('/api/groups/'+g+'/invite','GET',undefined,'buyer')).data.canManage,false);assert.equal((await call('/api/groups/'+g+'/invite','POST',{action:'reset'},'buyer')).status,403);
+ console.log('PASS: group invite links (/j/code, wrong or reset codes refused, link off and on).');
+}

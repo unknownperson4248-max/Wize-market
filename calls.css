@@ -287,3 +287,8 @@ html body #chatPanel #groupSettingsPanel>.group-info-popover{background:#3a3b3e!
 .mention-popup-icon{flex:none;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,#2a8de0,#a033ff);font-size:20px;font-weight:900}
 .mention-popup-copy{display:flex;flex-direction:column;min-width:0}.mention-popup-copy b{font-size:14px}.mention-popup-copy small{font-size:13px;color:#b9cde0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media(prefers-reduced-motion:reduce){.mention-popup,.mention-jump,#messengerInbox .chat-row.has-mention .chat-row-meta:before{animation:none}}
+.invite-box{margin-bottom:6px}.invite-link-row{display:flex;align-items:center;gap:14px;padding:14px 4px;cursor:pointer}.invite-link-copy{flex:1;min-width:0;display:flex;flex-direction:column}.invite-link-copy strong{font-size:17px;font-weight:500;color:#e4e6eb}.invite-link-copy small{font-size:13px;color:#b0b3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.invite-hint{color:#b0b3b8;font-size:14px;margin:0 4px 12px;padding-bottom:14px;border-bottom:1px solid #3a3b3e}
+.wm-switch{appearance:none;-webkit-appearance:none;flex:none;width:48px;height:28px;border-radius:999px;background:#3a3b3e;position:relative;cursor:pointer;transition:background .2s;margin:0}.wm-switch:after{content:'';position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:transform .2s}.wm-switch:checked{background:#2a8de0}.wm-switch:checked:after{transform:translateX(20px)}.wm-switch:disabled{opacity:.5}
+.invite-empty{text-align:center;color:#b0b3b8;margin:40px 0}
+#groupApprovalRow{display:none!important}
