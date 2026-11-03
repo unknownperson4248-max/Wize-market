@@ -1222,3 +1222,18 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  assert.equal((await call('/api/chat-extras/private/'+t+'/pin','POST',{messageId:pm,pinned:true},'seller')).status,200);assert.equal((await call('/api/chat-extras/private/'+t,'GET',undefined,'buyer')).data.pins.length,1);assert.equal((await call('/api/chat-extras/private/'+t,'GET',undefined,'seller')).data.pins[0].only_me,0);
  console.log('PASS: group co-admins (add/remove, admins first in members), personal-chat pins only for me or for both.');
 }
+{
+ // @mentions and @everyone: alerts even when muted; only admins mention everyone.
+ const g=(await call('/api/groups','POST',{name:'Mention group',logoId},'admin')).data.id;for(const who of ['buyer','seller'])await call('/api/groups/'+g+'/join','POST',{},who);
+ await call('/api/groups/'+g+'/preferences','POST',{muted:true},'seller');
+ let r=await call('/api/groups/'+g+'/messages','POST',{text:'@seller dekho',mentions:['seller','outsider','buyer']},'buyer');assert.equal(r.status,201);assert.equal(r.data.mentioned,1);
+ let u=(await call('/api/chat-unread','GET',undefined,'seller')).data;assert.equal(u.mentions.find(m=>m.group_id===g).total,1);assert.equal(u.mention_popup.group_id,g);assert.equal(u.mention_popup.text,'@seller dekho');
+ assert.equal((await call('/api/chat-unread','GET',undefined,'buyer')).data.mentions.filter(m=>m.group_id===g).length,0);
+ assert.equal((await call('/api/groups/'+g+'/messages','POST',{text:'@everyone',everyone:true},'buyer')).status,403);
+ r=await call('/api/groups/'+g+'/messages','POST',{text:'@everyone meeting',everyone:true},'admin');assert.equal(r.data.mentioned,2);
+ let x=(await call('/api/chat-extras/group/'+g,'GET',undefined,'seller')).data;assert.equal(x.mentions.length,2);
+ assert.equal((await call('/api/chat-extras/group/'+g+'/mention-seen','POST',{messageId:x.mentions[0]},'seller')).status,200);assert.equal((await call('/api/chat-extras/group/'+g,'GET',undefined,'seller')).data.mentions.length,1);
+ assert.equal((await call('/api/chat-extras/group/'+g+'/mention-seen','POST',{},'seller')).status,200);assert.equal((await call('/api/chat-unread','GET',undefined,'seller')).data.mentions.length,0);
+ assert.ok(sql.prepare("SELECT count(*) n FROM wm_notifications WHERE user_id='seller' AND kind='group_mention' AND alert_enabled=1").get().n>=2);
+ console.log('PASS: @mentions and @everyone (members only, admins for everyone, alerts while muted, seen tracking).');
+}
