@@ -1196,3 +1196,12 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  assert.equal((await call(base+'/theme','POST',{color:'#0a7cff',emoji:'👍',backgroundId:null},'buyer')).status,200);assert.equal((await call(base,'GET',undefined,'seller')).data.theme.background,'');
  console.log('PASS: chat background photo (own safe image, visible only to the people in the chat, removable).');
 }
+{
+ // Message permissions: only admins can send when the admin turns it on.
+ const g=(await call('/api/groups','POST',{name:'Admins only',logoId},'admin')).data.id;await call('/api/groups/'+g+'/join','POST',{},'buyer');
+ assert.equal((await call('/api/groups/'+g+'/settings','POST',{adminsOnly:true},'buyer')).status,403);
+ assert.equal((await call('/api/groups/'+g+'/settings','POST',{adminsOnly:true},'admin')).status,200);assert.equal((await call('/api/groups/'+g,'GET',undefined,'buyer')).data.group.adminsOnly,true);
+ assert.equal((await call('/api/groups/'+g+'/messages','POST',{text:'hello'},'buyer')).status,403);assert.equal((await call('/api/groups/'+g+'/messages','POST',{text:'Rules'},'admin')).status,201);
+ assert.equal((await call('/api/groups/'+g+'/settings','POST',{adminsOnly:false},'admin')).status,200);assert.equal((await call('/api/groups/'+g+'/messages','POST',{text:'hello'},'buyer')).status,201);
+ console.log('PASS: group message permissions (everyone or only the group admin).');
+}

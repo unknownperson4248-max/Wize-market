@@ -245,3 +245,16 @@ html body #chatPanel #groupSettingsPanel,html body #chatPanel #peerInfoPanel{bac
 .chat-bg-preview{height:120px;border-radius:14px;background:#1c1d20 center/cover no-repeat;display:grid;place-items:center;color:#8a8d91;font-size:13px;border:1px dashed #3a3b3e}
 .chat-bg-actions{display:flex;gap:8px;margin-top:8px}.chat-bg-actions .btn{flex:1;min-height:0;padding:10px}
 .chat-group-post-tool[hidden]{display:none}
+.group-info-menu-btn{margin-left:auto;width:40px;height:40px;padding:0;border:0;background:none;color:#fff;font-size:24px;line-height:1;cursor:pointer}
+.group-info-popover{position:absolute;top:56px;right:14px;z-index:20;min-width:230px;padding:6px 0;border-radius:14px;background:#3a3b3e;box-shadow:0 12px 30px #000c;animation:pop-menu .16s ease}@keyframes pop-menu{from{opacity:0;transform:scale(.95) translateY(-6px)}}
+.group-info-popover button{display:block;width:100%;padding:13px 18px;border:0;background:none;color:#e4e6eb;text-align:left;font-size:16px;cursor:pointer;min-height:0}.group-info-popover button:active{background:#ffffff14}
+.info-row-text{display:flex;flex-direction:column;min-width:0}.info-row-text small{font-size:13px;color:#b0b3b8;margin-top:1px}
+.ellipsis-row .info-row-text span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.admins-only-note{padding:12px 16px;text-align:center;font-size:14px;color:#b9cde0;background:#0b1b2b;border-top:1px solid #1f3a52}.admins-only-note[hidden]{display:none}
+#chatForm.composer-locked{display:none!important}
+#groupSettingsPanel{position:relative}
+.group-info-popover button{border:0!important;border-radius:0!important;background:none!important;box-shadow:none!important;color:#e4e6eb!important;font-weight:400!important;justify-content:flex-start!important;margin:0!important;height:auto!important}
+#groupSettingsPanel .info-row-text,#peerInfoPanel .info-row-text{flex:1;align-items:flex-start;text-align:left}
+#groupSettingsPanel .info-row-text>span,#peerInfoPanel .info-row-text>span{font-size:17px!important;font-weight:400!important;color:#e4e6eb!important;text-align:left;max-width:100%}
+#groupSettingsPanel .danger-row .info-row-text>span{color:#ff6b6b!important}
+html body #chatPanel #groupSettingsPanel>.group-info-popover{background:#3a3b3e!important}

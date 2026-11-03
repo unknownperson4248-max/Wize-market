@@ -229,7 +229,7 @@ function paintMessageExtras(){
 const MUTE_BELL='<svg viewBox="0 0 24 24" class="mute-bell" aria-hidden="true"><g class="bell"><path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15Z"/><path d="M10 21h4"/></g><path class="slash" d="M4 4l16 16"/></svg>';
 function paintMuteButton(btn,muted,animate){if(!btn)return;let i=btn.querySelector('i.mute-wrap');if(!i){const old=btn.querySelector('i[data-icon],svg');i=document.createElement('i');i.className='mute-wrap';i.innerHTML=MUTE_BELL;if(old)old.replaceWith(i);else btn.prepend(i)}
  const was=btn.classList.contains('is-muted');btn.classList.toggle('is-muted',!!muted);if(animate&&was!==!!muted){btn.classList.remove('bell-ring');void btn.offsetWidth;btn.classList.add('bell-ring')}}
-new MutationObserver(()=>paintMuteButton($('muteGroup'),/unmute/i.test($('muteGroupLabel').textContent),!$('groupSettingsPanel').hidden)).observe($('muteGroupLabel'),{childList:true,characterData:true,subtree:true});
+new MutationObserver(()=>{paintMuteButton($('muteGroup'),/unmute/i.test($('muteGroupLabel').textContent),!$('groupSettingsPanel').hidden);if(groupDetail?.group&&!$('groupSettingsPanel').hidden)renderGroupConversationActions(groupDetail.group)}).observe($('muteGroupLabel'),{childList:true,characterData:true,subtree:true});
 paintMuteButton($('muteGroup'),false,false);
 {let lastPeerMuted=null;const base=renderPeerInfo;renderPeerInfo=function(){base();const btn=[...$('peerInfoBody').querySelectorAll('.peer-info-shortcuts>button')].find(b=>/^(un)?mute$/i.test(b.textContent.trim()));if(!btn)return;const muted=/unmute/i.test(btn.textContent),changed=lastPeerMuted!==null&&lastPeerMuted!==muted;
  // draw the old state first, then animate to the new one
@@ -257,3 +257,40 @@ function openGroupIdPost(){
 }
 $('chatGroupPost').onclick=()=>openGroupIdPost();$('groupPostButton').onclick=()=>openGroupIdPost();
 {const base=openChat;openChat=async function(kind,...rest){$('chatGroupPost').hidden=kind!=='group';return base.call(this,kind,...rest)}}
+
+// ---- Group info like Messenger: ⋮ menu, Invites & requests next to members, Actions and Privacy & support ----
+INFO_ICONS.userCheck='<path d="m2.5 12 2.5 2.5 4.5-5"/><circle cx="15" cy="8" r="3.4"/><path d="M9.5 19.5c.6-3.5 2.9-5.3 5.5-5.3s4.9 1.8 5.5 5.3"/>';
+INFO_ICONS.speaker='<path d="M4 9v6h4l5 4V5L8 9H4Z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/>';
+INFO_ICONS.shieldStar='<path d="M12 3 5 6v5.5c0 4.5 3 7.7 7 9.5 4-1.8 7-5 7-9.5V6Z"/><path d="m12 8.5 1.1 2.3 2.5.3-1.8 1.7.5 2.5-2.3-1.2-2.3 1.2.5-2.5-1.8-1.7 2.5-.3Z"/>';
+INFO_ICONS.minus='<circle cx="12" cy="12" r="8.5"/><path d="M8 12h8"/>';INFO_ICONS.warn='<path d="M12 3.5 2.5 20h19Z"/><path d="M12 10v4.5"/><circle cx="12" cy="17.2" r=".6"/>';
+$('infoMembersRow').after($('groupRequestsButton'));$('groupRequestsButton').querySelector('i').innerHTML='';decorateInfoRows($('groupInfoHome'));
+function infoRowWith(icon,label,sub,fn,cls=''){const b=button('',fn,'info-row '+cls);const i=document.createElement('i');i.dataset.icon=icon;i.innerHTML=infoIcon(icon);const t=node('span',undefined,'info-row-text');t.append(node('span',label));if(sub)t.append(node('small',sub));b.append(i,t);return b}
+renderGroupConversationActions=function(group){
+ const root=$('groupConversationActions');if(!root)return;root.replaceChildren();const data=groups.find(g=>g.id===group.id)||group,admin=group.owner_id===me.id,canManage=!!group.canManage,archived=!!data.chat_archived,item={kind:'group',id:group.id,name:group.name,admin,archived};
+ root.append(node('p','Actions','info-caption'));
+ root.append(infoRowWith('bellOff',(groupMuted?'Unmute ':'Mute ')+group.name,'',()=>$('muteGroup').click(),'ellipsis-row'));
+ root.append(infoRowWith('speaker','Notifications & sounds',groupMuted?'Muted until you change it':'On',()=>$('muteGroup').click()));
+ root.append(infoRowWith('archive',archived?'Unarchive chat':'Archive chat','',()=>conversationAction(item,archived?'unarchive':'archive')));
+ root.append(node('p','Privacy & support','info-caption'));
+ root.append(infoRowWith('shieldStar','Message permissions',group.adminsOnly?'Only admins can send messages':'Everyone can send messages',()=>{if(!canManage)return toast(group.adminsOnly?'Only the group admin can send messages here.':'Everyone in this group can send messages.');openStepDialog('Message permissions',body=>{for(const [v,l] of [['all','Everyone can send messages'],['admins','Only admins can send messages']]){const lab=node('label',undefined,'report-reason'),r=node('input');r.type='radio';r.name='msg-perm';r.value=v;r.checked=(v==='admins')===!!group.adminsOnly;lab.append(r,node('span',l));body.append(lab)}},'Save',async body=>{const on=body.querySelector('input:checked')?.value==='admins';await api('/groups/'+group.id+'/settings',{adminsOnly:on});group.adminsOnly=on;if(groupDetail?.group)groupDetail.group.adminsOnly=on;renderGroupConversationActions(group);paintComposerPermission();toast(on?'Only admins can send messages now.':'Everyone can send messages now.')})}));
+ root.append(infoRowWith('minus','Block a member','',()=>void openBlockMemberList(group)));
+ root.append(infoRowWith('warn','Report','Give feedback and report conversation',()=>{openReport(null,'other');$('reportContext').textContent='Report the group “'+group.name+'”. Only the website owner sees your report.';$('reportDetails')&&($('reportDetails').value='Group: '+group.name+' ('+group.id+')\n')}));
+ if(!admin)root.append(infoRowWith('leave','Leave chat','',async()=>{if(!confirm('Leave this group? Your messages here will be cleared and you will not get new messages from this group.'))return;await api('/groups/'+item.id+'/leave',{});toast('You left the group.');closeConversation();navigate('messages');await loadMessages()},'danger-row'));
+ if(!admin)root.append(infoRowWith('block','Block group','',()=>conversationAction(item,'block')));
+ root.append(infoRowWith('trash','Delete chat','Clears your copy of the messages',()=>conversationAction(item,'delete')));
+};
+async function openBlockMemberList(group){
+ const root=$('groupInfoExtras');root.dataset.title='Block a member';showGroupInfoView('extras');root.replaceChildren(node('p','Loading…','muted'));
+ try{const {members}=await api('/groups/'+group.id+'/members');root.replaceChildren(node('p','Blocked people cannot message you privately, and you do not see their messages.','hint'));
+  for(const m of members.filter(x=>x.id!==me.id)){const row=button('',async()=>{if(!confirm('Block '+m.name+'?'))return;try{await blockMember({id:m.id,name:m.name},true)}catch(e){toast(e.message)}},'info-row nickname-row');row.append(avatar(m),node('span',m.name));root.append(row)}
+  if(root.children.length===1)root.append(node('p','No other members yet.','muted'))}catch(e){root.replaceChildren(node('p',e.message,'muted'))}
+}
+// ⋮ menu at the top of group info
+$('groupInfoMenu').onclick=e=>{e.stopPropagation();document.querySelector('.group-info-popover')?.remove();const g=groupDetail?.group;if(!g)return;const menu=node('div',undefined,'group-info-popover');menu.setAttribute('role','menu');const add=(label,fn)=>{const b=button(label,()=>{menu.remove();fn()});b.setAttribute('role','menuitem');menu.append(b)};
+ if(g.canManage){add('Change group photo',()=>{$('editGroupButton').click();setTimeout(()=>$('editGroupLogo')?.click(),200)});add('Change name',()=>{$('editGroupButton').click();setTimeout(()=>$('editGroupName')?.focus(),200)})}
+ add('Delete conversation',()=>conversationAction({kind:'group',id:g.id,name:g.name,admin:g.owner_id===me.id},'delete'));
+ if(g.owner_id!==me.id)add('Leave group',async()=>{if(!confirm('Leave this group?'))return;await api('/groups/'+g.id+'/leave',{});toast('You left the group.');closeConversation();navigate('messages');await loadMessages()});
+ add('Report technical problem',()=>openReport(null,'website-issue'));$('groupSettingsPanel').append(menu);setTimeout(()=>document.addEventListener('click',()=>menu.remove(),{once:true}),0)};
+// Only admins can send: the box says so for everyone else.
+function paintComposerPermission(){const g=groupDetail?.group,blocked=chat?.kind==='group'&&g&&g.id===chat.id&&g.adminsOnly&&!g.canManage;let note=$('adminsOnlyNote');if(!note){note=node('div','🔒 Only admins can send messages in this group.','admins-only-note');note.id='adminsOnlyNote';$('chatForm').before(note)}note.hidden=!blocked;$('chatForm').classList.toggle('composer-locked',!!blocked)}
+{const base=openChat;openChat=async function(kind,id,...rest){const r=await base.call(this,kind,id,...rest);if(kind==='group'){try{groupDetail=await api('/groups/'+id)}catch{}}paintComposerPermission();return r}}
