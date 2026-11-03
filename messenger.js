@@ -397,3 +397,28 @@ function renderRangeEditor(root,group,ranges){
   const edit=button('✎',()=>fillRangeForm(r),'range-tool');edit.setAttribute('aria-label','Edit '+r.label);const del=button('🗑',async()=>{if(!confirm('Delete the range “'+r.label+'”?'))return;try{await api('/groups/'+group.id+'/ranges/'+r.id+'/delete',{});groupDetail=await api('/groups/'+group.id);renderGroupTools();void paintGroupRangeLabel();toast('Range deleted.')}catch(e){toast(e.message)}},'range-tool danger');del.setAttribute('aria-label','Delete '+r.label);
   tools.append(up,down,edit,del);row.append(copy,tools);root.append(row)});
 }
+
+// ---- ID posts inside a group: a compact card (no likes or comments). Swipe it right to reply in the chat ----
+const groupPostsByCode=new Map();let replyToPost=null;
+function renderGroupIdCard(p,root){
+ groupPostsByCode.set(p.listing_code,p);const card=node('article',undefined,'gid-card'+(p.availability==='sold'?' sold':''));card.dataset.postId=p.id;
+ const head=node('div',undefined,'gid-head'),who=node('div',undefined,'gid-who');who.append(node('strong',nicknameFor(p.user_id,p.name)),node('small',(p.listing_code||'ID')+' · '+ago(p.created_at)));head.append(avatar(p),who);
+ const price=node('div',undefined,'gid-price');price.append(node('strong',shortTaka(p.price)),node('small',p.availability==='sold'?'SOLD':'BDT'));head.append(price);card.append(head);
+ const media=(p.media||[]).filter(m=>m&&m.url);if(media.length){const strip=node('div',undefined,'gid-media'+(media.length===1?' single':''));media.slice(0,4).forEach((m,i)=>{const cell=button('',()=>openGallery(p,i),'gid-thumb');cell.setAttribute('aria-label','Open photo '+(i+1));if(m.type?.startsWith('video/')){cell.append(node('span','▶','gid-play'));const v=node('video');v.src=m.url+'#t=0.5';v.muted=true;v.preload='metadata';v.playsInline=true;cell.prepend(v)}else{const img=node('img');img.alt='';img.loading='lazy';setMediaImage(img,m.url);cell.append(img)}if(i===3&&media.length>4)cell.append(node('span','+'+(media.length-4),'gid-more'));strip.append(cell)});card.append(strip)}
+ const details=node('p',p.details||p.title,'gid-details');card.append(details);
+ const actions=node('div',undefined,'gid-actions');if(p.user_id!==me?.id)actions.append(button('💬 Message',()=>contactListing(p),'gid-btn primary'),button('🤝 Deal',()=>contactListing(p,true),'gid-btn'));actions.append(button('↩ Reply',()=>startPostReply(p),'gid-btn'),button('⋯',()=>void openListing(p.id).catch(e=>toast(e.message)),'gid-btn more'));card.append(actions);
+ // swipe right to reply
+ let sx=null,sy=null,dx=0;card.addEventListener('touchstart',e=>{const t=e.touches[0];sx=t.clientX;sy=t.clientY;dx=0},{passive:true});
+ card.addEventListener('touchmove',e=>{if(sx===null)return;const t=e.touches[0];dx=t.clientX-sx;if(Math.abs(t.clientY-sy)>Math.abs(dx)){sx=null;card.style.transform='';return}if(dx>0){card.style.transform='translateX('+Math.min(dx,90)+'px)';card.classList.toggle('reply-ready',dx>70)}},{passive:true});
+ card.addEventListener('touchend',()=>{if(sx!==null&&dx>70)startPostReply(p);sx=null;card.style.transform='';card.classList.remove('reply-ready')},{passive:true});
+ root.append(card);
+}
+function startPostReply(p){replyToPost=p;let bar=$('postReplyBar');if(!bar){bar=node('div',undefined,'post-reply-bar');bar.id='postReplyBar';$('chatForm').before(bar)}bar.replaceChildren();const copy=node('div',undefined,'post-reply-copy');copy.append(node('strong','↩ Replying to '+(p.listing_code||'ID')),node('small',(p.title||'')+' · '+shortTaka(p.price)));bar.append(copy,button('✕',()=>clearPostReply(),'post-reply-close'));bar.hidden=false;
+ if(selectedGroupRange!=='chat'){selectedGroupRange='chat';$('groupTools').hidden=true;$('groupListings').hidden=true;renderGroupTools?.()}$('messageText').focus();navigator.vibrate?.(10)}
+function clearPostReply(){replyToPost=null;$('postReplyBar')?.remove()}
+{const base=api;api=async function(path,data,method){if(replyToPost&&data&&typeof data.text==='string'&&/^\/groups\/[^/]+\/messages$/.test(path)&&!data.text.startsWith('media:')){const p=replyToPost;data={...data,text:'↩ '+(p.listing_code||'ID')+' · '+String(p.title||'').slice(0,60)+' · '+shortTaka(p.price)+'\n'+data.text};clearPostReply()}return base(path,data,method)}}
+{const base=openChat;openChat=async function(...a){clearPostReply();return base.apply(this,a)}}
+// Replies show the quoted ID on top; tap it to open the ID.
+function paintPostQuotes(){for(const b of document.querySelectorAll('#chatMessages .bubble[data-message-id]')){if(b.dataset.quoteDone)continue;b.dataset.quoteDone='1';const text=b._message?.text||'';if(!text.startsWith('↩ '))continue;const first=text.split('\n')[0],code=(first.match(/^↩ (ID No - \d+)/)||[])[1];
+  const walker=document.createTreeWalker(b,NodeFilter.SHOW_TEXT);let n;while((n=walker.nextNode())){if(n.nodeValue.includes(first)){const quote=button(first.slice(2),()=>{const p=groupPostsByCode.get(code);if(p)void openListing(p.id).catch(e=>toast(e.message));else toast('Open ID ranges to see this ID.')},'post-quote');n.nodeValue=n.nodeValue.replace(first+'\n','').replace(first,'');n.parentElement.before(quote);break}}}}
+{const base=paintMessageExtras;paintMessageExtras=function(){base();paintPostQuotes()}}
