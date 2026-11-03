@@ -313,3 +313,7 @@ html body #chatPanel #groupSettingsPanel>.group-info-popover{background:#3a3b3e!
 #chatForm.typing .composer-expand{display:grid!important;place-items:center}
 #chatForm.typing #chatPlusButton,#chatForm.typing #chatGalleryButton,#chatForm.typing #chatMicButton,#chatForm.typing .chat-quick-emoji{display:none!important}
 #chatForm .composer-controls>*{transition:opacity .15s}
+.range-card{display:flex;align-items:center;gap:10px;padding:12px;margin:8px 0;border-radius:14px;background:#14161a;border:1px solid #2a2d33}
+.range-card-copy{flex:1;min-width:0;display:flex;flex-direction:column}.range-card-copy strong{font-size:16px}.range-card-copy small{font-size:13px;color:#8fb7d8}
+.range-card-tools{display:flex;gap:6px}.range-tool{width:36px;height:36px;padding:0;min-height:0;border-radius:10px;border:1px solid #2f3540;background:#1d2128;color:#e4e6eb;font-size:16px;cursor:pointer}.range-tool:disabled{opacity:.3}.range-tool.danger{color:#ff6b6b}
+#idRangeToggle.chat-range-chip{white-space:nowrap;max-width:100%;overflow:hidden}#idRangeToggle.chat-range-chip span{white-space:nowrap}

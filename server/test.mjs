@@ -1250,3 +1250,14 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  assert.equal((await call('/api/groups/'+g+'/invite','GET',undefined,'buyer')).data.canManage,false);assert.equal((await call('/api/groups/'+g+'/invite','POST',{action:'reset'},'buyer')).status,403);
  console.log('PASS: group invite links (/j/code, wrong or reset codes refused, link off and on).');
 }
+{
+ // Price ranges: change order, delete only when empty.
+ const g=(await call('/api/groups','POST',{name:'Range group',logoId},'admin')).data.id;const a=(await call('/api/groups/'+g+'/ranges','POST',{label:'A',min:0,max:5000},'admin')).data.id,b=(await call('/api/groups/'+g+'/ranges','POST',{label:'B',min:5001,max:null},'admin')).data.id;
+ let list=(await call('/api/groups/'+g,'GET',undefined,'admin')).data.ranges.map(r=>r.id);assert.ok(list.indexOf(a)<list.indexOf(b));
+ assert.equal((await call('/api/groups/'+g+'/ranges/order','POST',{ids:[b,a,...list.filter(x=>x!==a&&x!==b)]},'admin')).status,200);list=(await call('/api/groups/'+g,'GET',undefined,'admin')).data.ranges.map(r=>r.id);assert.equal(list[0],b);
+ await call('/api/groups/'+g+'/join','POST',{},'buyer');assert.equal((await call('/api/groups/'+g+'/ranges/order','POST',{ids:[a,b]},'buyer')).status,403);
+ const r=await call('/api/posts','POST',{title:'Range ID',details:'Range ID details',price:9000,kind:'Game ID',media:[],groupId:g},'admin');assert.equal(r.status,201);
+ const used=sql.prepare('SELECT range_id FROM wm_posts WHERE id=?').get(r.data.id).range_id;assert.ok(used);assert.equal((await call('/api/groups/'+g+'/ranges/'+used+'/delete','POST',{},'admin')).status,409);assert.equal((await call('/api/groups/'+g+'/ranges/'+a+'/delete','POST',{},'buyer')).status,403);
+ const empty=a===used?b:a;assert.equal((await call('/api/groups/'+g+'/ranges/'+empty+'/delete','POST',{},'admin')).status,200);assert.ok(!(await call('/api/groups/'+g,'GET',undefined,'admin')).data.ranges.some(x=>x.id===empty));
+ console.log('PASS: price ranges can be reordered and deleted when empty (group admin only).');
+}

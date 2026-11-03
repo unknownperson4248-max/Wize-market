@@ -386,3 +386,14 @@ root.append(infoRowWith('shieldStar','Message permissions',group.adminsOnly?'Onl
 (()=>{const form=$('chatForm'),input=$('messageText');if(!form||!input)return;const expand=button('›',()=>{form.classList.remove('typing');form.classList.add('tools-open');input.focus()},'composer-icon composer-expand');expand.type='button';expand.setAttribute('aria-label','Show chat tools');$('chatPlusButton').before(expand);
  const sync=()=>{const typing=input.value.trim().length>0;if(!typing)form.classList.remove('tools-open');form.classList.toggle('typing',typing&&!form.classList.contains('tools-open'))};
  input.addEventListener('input',sync);form.addEventListener('submit',()=>setTimeout(sync,0));new MutationObserver(sync).observe(input,{attributes:true,attributeFilter:['value']});setInterval(()=>{if(!input.value&&form.classList.contains('typing'))sync()},800)})();
+
+// ---- Price ranges editor: price under each name, move up/down, edit, delete ----
+const rangeText=r=>shortTaka(r.min_price||0)+(r.max_price===null||r.max_price===undefined?' and up':' – '+shortTaka(r.max_price));
+function renderRangeEditor(root,group,ranges){
+ root.replaceChildren();if(!ranges.length){root.append(node('p','No price ranges yet. Add one above.','muted'));return}root.append(node('p','Your ranges · '+ranges.length,'info-caption'));
+ const move=async(i,dir)=>{const ids=ranges.map(r=>r.id),j=i+dir;if(j<0||j>=ids.length)return;[ids[i],ids[j]]=[ids[j],ids[i]];try{await api('/groups/'+group.id+'/ranges/order',{ids});groupDetail=await api('/groups/'+group.id);renderGroupTools();void paintGroupRangeLabel()}catch(e){toast(e.message)}};
+ ranges.forEach((r,i)=>{const row=node('div',undefined,'range-card'),copy=node('div',undefined,'range-card-copy');copy.append(node('strong',r.label),node('small',rangeText(r)));
+  const tools=node('div',undefined,'range-card-tools');const up=button('↑',()=>void move(i,-1),'range-tool');up.disabled=i===0;up.setAttribute('aria-label','Move '+r.label+' up');const down=button('↓',()=>void move(i,1),'range-tool');down.disabled=i===ranges.length-1;down.setAttribute('aria-label','Move '+r.label+' down');
+  const edit=button('✎',()=>fillRangeForm(r),'range-tool');edit.setAttribute('aria-label','Edit '+r.label);const del=button('🗑',async()=>{if(!confirm('Delete the range “'+r.label+'”?'))return;try{await api('/groups/'+group.id+'/ranges/'+r.id+'/delete',{});groupDetail=await api('/groups/'+group.id);renderGroupTools();void paintGroupRangeLabel();toast('Range deleted.')}catch(e){toast(e.message)}},'range-tool danger');del.setAttribute('aria-label','Delete '+r.label);
+  tools.append(up,down,edit,del);row.append(copy,tools);root.append(row)});
+}
