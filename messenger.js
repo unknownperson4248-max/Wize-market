@@ -273,12 +273,12 @@ renderGroupConversationActions=function(group){
  root.append(infoRowWith('speaker','Notifications & sounds',groupMuted?'Muted until you change it':'On',()=>$('muteGroup').click()));
  root.append(infoRowWith('archive',archived?'Unarchive chat':'Archive chat','',()=>conversationAction(item,archived?'unarchive':'archive')));
  root.append(node('p','Privacy & support','info-caption'));
- root.append(infoRowWith('shieldStar','Message permissions',group.adminsOnly?'Only admins can send messages':'Everyone can send messages',()=>{if(!canManage)return toast(group.adminsOnly?'Only the group admin can send messages here.':'Everyone in this group can send messages.');openStepDialog('Message permissions',body=>{for(const [v,l] of [['all','Everyone can send messages'],['admins','Only admins can send messages']]){const lab=node('label',undefined,'report-reason'),r=node('input');r.type='radio';r.name='msg-perm';r.value=v;r.checked=(v==='admins')===!!group.adminsOnly;lab.append(r,node('span',l));body.append(lab)}},'Save',async body=>{const on=body.querySelector('input:checked')?.value==='admins';await api('/groups/'+group.id+'/settings',{adminsOnly:on});group.adminsOnly=on;if(groupDetail?.group)groupDetail.group.adminsOnly=on;renderGroupConversationActions(group);paintComposerPermission();toast(on?'Only admins can send messages now.':'Everyone can send messages now.')})}));
  root.append(infoRowWith('minus','Block a member','',()=>void openBlockMemberList(group)));
+ paintPermissionRow(group);
  root.append(infoRowWith('warn','Report','Give feedback and report conversation',()=>{openReport(null,'other');$('reportContext').textContent='Report the group “'+group.name+'”. Only the website owner sees your report.';$('reportDetails')&&($('reportDetails').value='Group: '+group.name+' ('+group.id+')\n')}));
- if(!admin)root.append(infoRowWith('leave','Leave chat','',async()=>{if(!confirm('Leave this group? Your messages here will be cleared and you will not get new messages from this group.'))return;await api('/groups/'+item.id+'/leave',{});toast('You left the group.');closeConversation();navigate('messages');await loadMessages()},'danger-row'));
  if(!admin)root.append(infoRowWith('block','Block group','',()=>conversationAction(item,'block')));
  root.append(infoRowWith('trash','Delete chat','Clears your copy of the messages',()=>conversationAction(item,'delete')));
+ if(!admin)root.append(infoRowWith('leave','Leave group','',async()=>{if(!confirm('Leave this group? Your messages here will be cleared and you will not get new messages from this group.'))return;await api('/groups/'+item.id+'/leave',{});toast('You left the group.');closeConversation();navigate('messages');await loadMessages()},'danger-row'));
 };
 async function openBlockMemberList(group){
  const root=$('groupInfoExtras');root.dataset.title='Block a member';showGroupInfoView('extras');root.replaceChildren(node('p','Loading…','muted'));
@@ -317,8 +317,6 @@ function openMemberAdminSheet(m,g){
  box.append(button('Cancel',closeMessageSheet,'btn ghost'));overlay.append(box);document.body.append(overlay);
 }
 async function setGroupAdmin(m,g,admin){closeMessageSheet();try{await api('/groups/'+g.id+'/admins',{userId:m.id,admin});toast(admin?m.name+' is now an admin.':m.name+' is no longer an admin.');const {members}=await api('/groups/'+g.id+'/members');renderGroupMembersList(members,g)}catch(e){toast(e.message)}}
-// Quick switch in the ⋮ menu: only admins can send messages
-{const base=$('groupInfoMenu').onclick;$('groupInfoMenu').onclick=e=>{base(e);const g=groupDetail?.group,menu=document.querySelector('.group-info-popover');if(!g||!menu||!g.canManage)return;const b=button(g.adminsOnly?'✅ Only admins can send (turn off)':'🔒 Only admins can send',async()=>{menu.remove();try{await api('/groups/'+g.id+'/settings',{adminsOnly:!g.adminsOnly});g.adminsOnly=!g.adminsOnly;renderGroupConversationActions(g);paintComposerPermission();toast(g.adminsOnly?'Only admins can send messages now.':'Everyone can send messages now.')}catch(err){toast(err.message)}});b.setAttribute('role','menuitem');menu.prepend(b)}}
 
 // ---- @mentions: type @ for the member list, @everyone for admins, @ badges, jump button and popup ----
 let mentionMembers=null,mentionMembersFor='',pendingMentions=new Map(),mentionEveryone=false,mentionGroups=new Map();
@@ -378,3 +376,8 @@ async function openInvitesPage(){
  }catch(e){box.replaceChildren(node('p',e.message,'muted'))}
 }
 INFO_ICONS.copy='<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>';INFO_ICONS.share='<circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 10.8 7.6-4.4M8.2 13.2l7.6 4.4"/>';INFO_ICONS.reset='<path d="M4 4v6h6"/><path d="M4.5 10A8 8 0 1 1 6 16.5"/>';
+
+// Message permissions live in Admin tools (admins only).
+function paintPermissionRow(group){$('groupPermissionRow')?.remove();if(!group.canManage)return;const canManage=true,root={append:el=>{el.id='groupPermissionRow';$('groupAdminTools').append(el)}};
+root.append(infoRowWith('shieldStar','Message permissions',group.adminsOnly?'Only admins can send messages':'Everyone can send messages',()=>{if(!canManage)return toast(group.adminsOnly?'Only the group admin can send messages here.':'Everyone in this group can send messages.');openStepDialog('Message permissions',body=>{for(const [v,l] of [['all','Everyone can send messages'],['admins','Only admins can send messages']]){const lab=node('label',undefined,'report-reason'),r=node('input');r.type='radio';r.name='msg-perm';r.value=v;r.checked=(v==='admins')===!!group.adminsOnly;lab.append(r,node('span',l));body.append(lab)}},'Save',async body=>{const on=body.querySelector('input:checked')?.value==='admins';await api('/groups/'+group.id+'/settings',{adminsOnly:on});group.adminsOnly=on;if(groupDetail?.group)groupDetail.group.adminsOnly=on;renderGroupConversationActions(group);paintComposerPermission();toast(on?'Only admins can send messages now.':'Everyone can send messages now.')})}));}
+{const base=showGroupInfoView;showGroupInfoView=function(view){base(view);$('groupInfoMenu').hidden=view!=='home';document.querySelector('.group-info-popover')?.remove()}}

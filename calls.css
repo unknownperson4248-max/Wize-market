@@ -292,3 +292,5 @@ html body #chatPanel #groupSettingsPanel>.group-info-popover{background:#3a3b3e!
 .wm-switch{appearance:none;-webkit-appearance:none;flex:none;width:48px;height:28px;border-radius:999px;background:#3a3b3e;position:relative;cursor:pointer;transition:background .2s;margin:0}.wm-switch:after{content:'';position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:transform .2s}.wm-switch:checked{background:#2a8de0}.wm-switch:checked:after{transform:translateX(20px)}.wm-switch:disabled{opacity:.5}
 .invite-empty{text-align:center;color:#b0b3b8;margin:40px 0}
 #groupApprovalRow{display:none!important}
+.group-info-menu-btn[hidden]{display:none}#groupSettingsPanel .danger-row i[data-icon]{color:#ff5a5f}
+#groupSettingsPanel #groupApprovalRow{display:none!important}
