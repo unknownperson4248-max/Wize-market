@@ -191,3 +191,23 @@ html body #chatPanel #groupSettingsPanel,html body #chatPanel #peerInfoPanel{bac
 .chat-color-swatch:disabled,.chat-emoji-choice:disabled{opacity:.6;cursor:default}.chat-customize-save{width:100%;margin-top:16px}
 .pinned-message{padding:12px;border-radius:14px;background:#1c1d20;margin:8px 0}.pinned-head{display:flex;justify-content:space-between;gap:8px}.pinned-head small{color:#8a8d91;font-size:12px}.pinned-message p{margin:6px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}.pinned-unpin{margin-top:8px;padding:6px 12px;min-height:0;font-size:13px}
 #peerInfoBody>h2{font-size:20px;margin:6px 0 12px}
+/* Chat header: (i) button, price range chip, active status, pinned bar */
+.chat-info-btn{flex:none;width:40px;height:40px;padding:0;border:0;background:none;color:#84cfff;display:grid;place-items:center;cursor:pointer;border-radius:50%}.chat-info-btn[hidden]{display:none}
+.chat-info-btn svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}.chat-info-btn .dot{fill:currentColor;stroke:none}
+#idRangeToggle.chat-range-chip{display:inline-flex;align-items:center;gap:5px;margin-top:3px;padding:2px 9px 2px 3px;min-height:0;height:22px;border-radius:999px;border:1px solid #2d5878;background:linear-gradient(90deg,#103452,#0c2337);color:#cfe9ff;font-size:12px;font-weight:700;letter-spacing:.2px}
+#idRangeToggle.chat-range-chip[hidden]{display:none}
+#idRangeToggle .range-coin{width:16px;height:16px;border-radius:50%;display:grid;place-items:center;background:#f5b400;color:#3b2a00;font-size:10px;font-weight:900}
+#idRangeToggle .range-caret{opacity:.7;font-size:10px}
+.chat-presence{display:block;font-size:12px;color:#9fb6cc;line-height:1.2}.chat-presence[hidden]{display:none}.chat-presence.online{color:#31d36b}
+.chat-presence.online:before{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;background:#31d36b;margin-right:5px;vertical-align:1px}
+#chatHeaderAvatar{position:relative}#chatHeaderAvatar.is-online:after{content:'';position:absolute;right:-1px;bottom:-1px;width:12px;height:12px;border-radius:50%;background:#31d36b;border:2px solid #071321}
+.chat-pinned-bar{display:flex;align-items:center;gap:10px;width:100%;padding:8px 14px;border:0;border-bottom:1px solid #1f3a52;background:#0b1b2bf2;color:#e4eef8;text-align:left;cursor:pointer;min-height:0;border-radius:0}.chat-pinned-bar[hidden]{display:none}
+.chat-pinned-bar:before{content:'';align-self:stretch;width:3px;border-radius:3px;background:var(--chat-accent,#2a8de0)}
+.chat-pinned-icon{font-size:16px}.chat-pinned-copy{flex:1;min-width:0;display:flex;flex-direction:column}.chat-pinned-copy b{font-size:13px;color:var(--chat-accent,#5fb4ff)}.chat-pinned-copy span{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#b9cde0}
+.chat-pinned-count{font-size:12px;color:#9fb6cc}
+#chatMessages .bubble.flash{animation:msg-flash 1.4s ease}@keyframes msg-flash{0%,100%{box-shadow:none}25%,60%{box-shadow:0 0 0 3px var(--chat-accent,#2a8de0)}}
+.chat-heading-copy{min-width:0;flex:1}.chat-heading-copy .chat-title-trigger{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chat-presence{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#chatSubtitle .trust-pill.plain{display:none}
+@media(max-width:520px){#chatStartDeal.chat-start-deal{width:38px;height:38px;min-height:0;padding:0;border-radius:50%;font-size:0;display:grid;place-items:center}#chatStartDeal.chat-start-deal:before{content:'🤝';font-size:19px}#chatStartDeal[hidden]{display:none}}
+.chat-heading-copy{display:flex;flex-direction:column;justify-content:center}.chat-heading-copy>#chatSubtitle{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}

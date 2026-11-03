@@ -154,3 +154,25 @@ decorateInfoRows($('groupInfoHome'));
  const media=[...root.querySelectorAll('.info-row')].find(b=>/media/i.test(b.textContent));const pins=button('Pinned messages',go('pins'),'info-row');media?.after(pins);decorateInfoRows(root);
  const title=root.querySelector('.peer-info-name h2'),nickname=nicknameFor(privatePeer.id,'');if(title&&nickname){title.textContent=nickname;title.after(node('small',privatePeer.name,'muted'))}
 }}
+
+// ---- Chat header: active status, price range under the group name, pinned message bar ----
+function presenceText(seen){if(!seen)return '';const m=Math.floor((Date.now()-seen)/60000);if(m<3)return 'Active now';if(m<60)return 'Active '+m+'m ago';const h=Math.floor(m/60);if(h<24)return 'Active '+h+'h ago';return ''}
+function onChatData(c,data){
+ if(c.kind!=='private')return;const text=presenceText(data.peer_seen_at),online=text==='Active now';let el=$('chatPresence');
+ if(!el){el=node('span',undefined,'chat-presence');el.id='chatPresence';$('chatSubtitle').after(el)}el.textContent=text;el.hidden=!text;el.classList.toggle('online',online);$('chatHeaderAvatar').classList.toggle('is-online',online);
+}
+const shortTaka=n=>n===null||n===undefined?'':'৳'+(n>=1000?(Math.round(n/100)/10).toString().replace(/\.0$/,'')+'k':String(n));
+async function paintGroupRangeLabel(c=chat){
+ if(c?.kind!=='group')return;try{const d=await api('/groups/'+c.id);if(chat?.id!==c.id)return;const ranges=d.ranges||[],b=$('idRangeToggle');
+  let label='All prices';if(ranges.length){const min=Math.min(...ranges.map(r=>r.min_price||0)),open=ranges.some(r=>r.max_price===null),max=Math.max(...ranges.map(r=>r.max_price||0));label=shortTaka(min)+' – '+(open?shortTaka(Math.max(max,min))+'+':shortTaka(max))}
+  b.innerHTML='<span class="range-coin" aria-hidden="true">৳</span><span>'+label.replace(/[<>&]/g,'')+'</span><span class="range-caret" aria-hidden="true">▾</span>';b.classList.add('chat-range-chip');b.setAttribute('aria-label','Price range '+label+'. Show ID ranges');
+ }catch{}
+}
+{const base=openChat;openChat=async function(...args){const r=await base.apply(this,args);void paintGroupRangeLabel();return r}}
+function paintPinnedBar(){
+ const bar=$('chatPinnedBar');if(!bar)return;const pins=chatExtras.key&&chatExtras.key===extrasKey(chat)?chatExtras.pins:[];bar.hidden=!pins.length;if(!pins.length)return;
+ const p=pins[0],text=String(p.text||'').startsWith('media:')?'📷 Photo or file':String(p.text||'');$('chatPinnedText').textContent=nicknameFor(p.user_id,p.name||'')+': '+text;$('chatPinnedCount').textContent=pins.length>1?String(pins.length):'';
+ bar.onclick=()=>{const bubble=document.querySelector('#chatMessages .bubble[data-message-id="'+p.id+'"]');if(bubble){bubble.scrollIntoView({block:'center',behavior:'smooth'});bubble.classList.remove('flash');void bubble.offsetWidth;bubble.classList.add('flash');return}
+  if(chat.kind==='group'){$('groupSettings').click();setTimeout(()=>openGroupExtras('pins'),400)}else{openPeerInfo();peerInfoView='pins';renderPeerInfo()}};
+}
+{const base=applyChatExtras;applyChatExtras=function(){base();paintPinnedBar()}}

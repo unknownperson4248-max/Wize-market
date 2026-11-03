@@ -280,3 +280,4 @@ CREATE TABLE IF NOT EXISTS wm_chat_nicknames(kind TEXT NOT NULL CHECK(kind IN ('
 CREATE TABLE IF NOT EXISTS wm_chat_themes(kind TEXT NOT NULL CHECK(kind IN ('private','group')),chat_id TEXT NOT NULL,color TEXT NOT NULL,emoji TEXT NOT NULL,updated_by TEXT NOT NULL REFERENCES users(id),updated_at INTEGER NOT NULL,PRIMARY KEY(kind,chat_id));
 CREATE TABLE IF NOT EXISTS wm_chat_pins(kind TEXT NOT NULL CHECK(kind IN ('private','group')),chat_id TEXT NOT NULL,message_id INTEGER NOT NULL,pinned_by TEXT NOT NULL REFERENCES users(id),created_at INTEGER NOT NULL,PRIMARY KEY(kind,chat_id,message_id));
 CREATE INDEX IF NOT EXISTS wm_chat_pins_chat ON wm_chat_pins(kind,chat_id,created_at);
+CREATE TABLE IF NOT EXISTS wm_presence(user_id TEXT PRIMARY KEY REFERENCES users(id),seen_at INTEGER NOT NULL);
