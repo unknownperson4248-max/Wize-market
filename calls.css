@@ -381,3 +381,20 @@ html body #chatPanel #groupSettingsPanel>.group-info-popover{background:#3a3b3e!
 /* Friends: sections and Discover */
 .friends-section-title{font-size:17px;margin:18px 0 8px}.discover-head{margin-top:22px;padding-top:14px;border-top:1px solid #1f3346}.discover-head .hint{margin:-4px 0 8px}
 .discover-person{background:linear-gradient(90deg,#10233a,#0d1724);border-radius:16px;padding:8px;margin:6px 0}
+/* Friends page like Facebook */
+.fb-chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 12px;margin-bottom:6px;border-bottom:1px solid #1f3346;scrollbar-width:none}
+.fb-chip{flex:none;display:flex;align-items:center;gap:8px;padding:10px 16px;min-height:0;border-radius:999px;border:0;background:#1b2a3b;color:#e4e6eb;font-size:15px;font-weight:600;cursor:pointer}.fb-chip.active{background:#2a8de0;color:#fff}
+.fb-dot{width:10px;height:10px;border-radius:50%;background:#31d36b;display:inline-block}
+.fb-section{display:flex;align-items:baseline;justify-content:space-between;margin:14px 0 6px}.fb-section h2{font-size:21px;margin:0}.fb-red{color:#ff6b6b;margin-left:4px}
+.fb-link{border:0;background:none;color:#5fb4ff;font-size:15px;padding:4px 0;min-height:0;cursor:pointer}.fb-sent{display:block;margin:6px 0}
+.fb-card{display:flex;gap:14px;align-items:center;padding:10px 0}.fb-copy{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.fb-name{border:0;background:none;color:#e4e6eb;font-size:17px;font-weight:600;text-align:left;padding:0;min-height:0;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fb-copy small{color:#b0b3b8;font-size:14px}
+.fb-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}
+.fb-btn{min-height:0!important;height:38px;padding:0 10px!important;border-radius:8px!important;border:0!important;background:#3a3b3e!important;color:#e4e6eb!important;font-size:15px!important;font-weight:600!important;cursor:pointer;box-shadow:none!important}.fb-btn.primary{background:#1877f2!important;color:#fff!important}.fb-btn:disabled{opacity:.5}
+.fb-face{position:relative;flex:none;width:var(--s);height:var(--s);padding:0;border:0;background:none;border-radius:50%;cursor:pointer;min-height:0}.fb-face .avatar{width:100%!important;height:100%!important;border-radius:50%;overflow:hidden;font-size:calc(var(--s)/3)}.fb-face .avatar img{width:100%;height:100%;object-fit:cover}
+.fb-face.online:after{content:'';position:absolute;right:2px;bottom:2px;width:calc(var(--s)/5);height:calc(var(--s)/5);border-radius:50%;background:#31d36b;border:3px solid #071321}
+.fb-hr{border:0;border-top:1px solid #1f3346;margin:12px 0}
+.fb-subhead{display:flex;align-items:center;gap:12px;margin:0 0 10px}.fb-subhead strong{font-size:21px}.fb-back{border:0;background:none;color:#e4e6eb;font-size:30px;padding:0 6px;min-height:0;cursor:pointer}
+.fb-search{border-radius:999px!important;margin-bottom:12px}.fb-count{display:flex;flex-direction:column;margin:4px 0 8px}.fb-count strong{font-size:19px}.fb-count small{color:#b0b3b8}
+.fb-friend-row{display:flex;align-items:center;gap:14px;padding:8px 0}.fb-more{border:0;background:none;color:#e4e6eb;font-size:24px;width:40px;height:40px;min-height:0;padding:0;cursor:pointer;border-radius:50%}

@@ -112,18 +112,36 @@ $('listingAdminForm').onsubmit=async e=>{
 };
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeListingAdminChoice()});
 
-// ---- Friends: "All" shows requests (if any), your friends, then Discover with new people at the end ----
-(()=>{const tabs=$('friendsTabs');if(!tabs||tabs.querySelector('[data-friend-tab="all"]'))return;const all=button('All',()=>{friendsPageTab='all';renderFriendsPage()});all.type='button';all.dataset.friendTab='all';all.setAttribute('role','tab');tabs.prepend(all);friendsPageTab='all'})();
-{const base=renderFriendsPage;renderFriendsPage=function(){
- if(friendsPageTab!=='all')return base();if(!friendsPageData)return;const root=$('friendsPageContent'),d=friendsPageData;for(const tab of $('friendsTabs').querySelectorAll('button'))tab.setAttribute('aria-selected',String(tab.dataset.friendTab==='all'));root.replaceChildren();
- const row=(person,mode)=>{const r=node('article',undefined,'friends-person'+(mode==='discover'?' discover-person':'')),visit=button('',()=>showProfile(person.id),'friends-avatar');visit.append(avatar(person));const copy=node('div',undefined,'friends-person-copy');copy.append(button(person.name,()=>showProfile(person.id),'friends-person-name'));if(person.username)copy.append(node('small','@'+person.username,'muted'));const actions=node('div',undefined,'friends-person-actions');
-  if(mode==='request')actions.append(button('Confirm',async()=>{await api('/friends/respond',{userId:person.id,accept:true});await loadFriendsPage()},'btn friend-confirm'),button('Remove',async()=>{await api('/friends/respond',{userId:person.id,accept:false});await loadFriendsPage()},'btn secondary'));
-  else if(mode==='friend')actions.append(button('Message',async()=>{const {thread}=await api('/threads',{userId:person.id});navigate('messages');await openChat('private',thread.id)},'btn friend-confirm'));
-  else actions.append(friendButton(person,loadFriendsPage));copy.append(actions);r.append(visit,copy);return r};
- const section=(title,list,mode,empty)=>{if(!list.length&&!empty)return;root.append(node('h2',title+(list.length?' · '+list.length:''),'friends-section-title'));if(!list.length)root.append(node('p',empty,'hint'));for(const p of list)root.append(row(p,mode))};
- section('Friend requests',d.incoming||[],'request');
- section('Your friends',d.friends||[],'friend',(d.incoming||[]).length?'':'No friends yet. Find people below.');
- section('Sent requests',d.outgoing||[],'sent');
- const discover=node('div',undefined,'discover-head');discover.append(node('h2','✨ Discover new friends','friends-section-title'),node('p','People you may know from your groups, deals and friends of friends.','hint'));root.append(discover);
- if(!(d.suggestions||[]).length)root.append(node('p','No new suggestions right now. Search for a member to connect.','hint'));for(const p of d.suggestions||[])root.append(row(p,'discover'));
-}}
+// ---- Friends page like Facebook: chips (online, Suggestions, Your friends), requests with Confirm / Remove, People you may know ----
+let friendsView='home',friendsQuery='',friendsSeeAll=false;
+const friendOnline=p=>p.seen_at&&Date.now()-p.seen_at<180000;
+const dismissedSuggestions=()=>{try{return JSON.parse(localStorage.getItem('wm_hidden_suggestions')||'[]')}catch{return []}};
+function shortAgo(t){if(!t)return '';const m=Math.max(1,Math.round((Date.now()-t)/60000));if(m<60)return m+'m';const h=Math.round(m/60);if(h<24)return h+'h';const d=Math.round(h/24);if(d<7)return d+'d';const w=Math.round(d/7);return w<52?w+'w':Math.round(w/52)+'y'}
+function fbFace(p,size){const b=button('',()=>showProfile(p.id),'fb-face'+(friendOnline(p)?' online':''));b.style.setProperty('--s',size+'px');b.append(avatar(p));b.setAttribute('aria-label',p.name);return b}
+function fbSub(p,extra){const parts=[];if(p.mutual)parts.push(p.mutual+' mutual friend'+(p.mutual>1?'s':''));else if(p.username)parts.push('@'+p.username);if(extra)parts.push(extra);return parts.join(' · ')}
+renderFriendsPage=function(){
+ if(!friendsPageData)return;const d=friendsPageData,root=$('friendsPageContent'),tabs=$('friendsTabs');tabs.hidden=true;root.replaceChildren();
+ const friends=d.friends||[],online=friends.filter(friendOnline),hidden=dismissedSuggestions(),sugg=(d.suggestions||[]).filter(p=>!hidden.includes(p.id));
+ if(friendsView==='friends'||friendsView==='online'){
+  const head=node('div',undefined,'fb-subhead');head.append(button('‹',()=>{friendsView='home';renderFriendsPage()},'fb-back'),node('strong',friendsView==='online'?'Online friends':'Your friends'));root.append(head);
+  const search=node('input',undefined,'input fb-search');search.type='search';search.placeholder='🔍 Search friends';search.value=friendsQuery;search.oninput=()=>{friendsQuery=search.value;renderList()};root.append(search);
+  const count=node('div',undefined,'fb-count');count.append(node('strong',friends.length.toLocaleString()+' friend'+(friends.length===1?'':'s')),node('small',online.length+' online'));root.append(count);const list=node('div');root.append(list);
+  function renderList(){const q=friendsQuery.trim().toLowerCase();list.replaceChildren();const base=friendsView==='online'?online:friends;const shown=base.filter(p=>!q||(p.name+' '+(p.username||'')).toLowerCase().includes(q));if(!shown.length)list.append(node('p',friends.length?'No one matches.':'No friends yet. Add people from Suggestions.','hint'));
+   for(const p of shown){const row=node('div',undefined,'fb-friend-row');const copy=node('div',undefined,'fb-copy');copy.append(button(p.name,()=>showProfile(p.id),'fb-name'),node('small',fbSub(p,friendOnline(p)?'Active now':(p.seen_at&&Date.now()-p.seen_at<86400000?'Active '+shortAgo(p.seen_at)+' ago':''))));
+    const more=button('⋯',()=>openFriendSheet(p),'fb-more');more.setAttribute('aria-label','More for '+p.name);row.append(fbFace(p,60),copy,more);list.append(row)}}
+  renderList();setTimeout(()=>search.focus({preventScroll:true}),0);return}
+ const chips=node('div',undefined,'fb-chips');const chip=(label,view,cls='')=>{const b=button('',()=>{friendsView=view;friendsSeeAll=false;renderFriendsPage()},'fb-chip'+cls+(friendsView===view?' active':''));b.innerHTML=label;return b};
+ chips.append(chip('<span class="fb-dot"></span>'+online.length+' online','online'),chip('Suggestions','suggestions'),chip('Your friends','friends'));root.append(chips);
+ const actions=(p,mode)=>{const box=node('div',undefined,'fb-actions');if(mode==='request'){box.append(button('Confirm',async e=>{e.currentTarget.disabled=true;await api('/friends/respond',{userId:p.id,accept:true});toast('You are now friends with '+p.name+'.');await loadFriendsPage()},'fb-btn primary'),button('Remove',async e=>{e.currentTarget.disabled=true;await api('/friends/respond',{userId:p.id,accept:false});await loadFriendsPage()},'fb-btn'))}
+  else{const add=friendButton(p,loadFriendsPage);add.classList.add('fb-btn','primary');box.append(add,button('Remove',()=>{const h=dismissedSuggestions();try{localStorage.setItem('wm_hidden_suggestions',JSON.stringify([...h,p.id].slice(-300)))}catch{}renderFriendsPage()},'fb-btn'))}return box};
+ const card=(p,mode,extra)=>{const row=node('div',undefined,'fb-card');const copy=node('div',undefined,'fb-copy');copy.append(button(p.name,()=>showProfile(p.id),'fb-name'));const sub=fbSub(p,extra);if(sub)copy.append(node('small',sub));copy.append(actions(p,mode));row.append(fbFace(p,84),copy);return row};
+ if(friendsView!=='suggestions'){const reqs=d.incoming||[];const head=node('div',undefined,'fb-section');const title=node('h2');title.append(document.createTextNode('Friend requests '),node('span',String(reqs.length),'fb-red'));head.append(title);if(reqs.length>5)head.append(button(friendsSeeAll?'Show less':'See all',()=>{friendsSeeAll=!friendsSeeAll;renderFriendsPage()},'fb-link'));root.append(head);
+  if(!reqs.length)root.append(node('p','No new friend requests.','hint'));for(const p of (friendsSeeAll?reqs:reqs.slice(0,5)))root.append(card(p,'request',shortAgo(p.requested_at)));
+  if((d.outgoing||[]).length)root.append(button('Sent requests · '+d.outgoing.length+' ›',()=>{friendsPageTab='sent';friendsView='sent';tabs.hidden=false;origRenderFriends()},'fb-link fb-sent'));root.append(node('hr',undefined,'fb-hr'))}
+ const sh=node('div',undefined,'fb-section');sh.append(node('h2','People you may know'));root.append(sh);if(!sugg.length)root.append(node('p','No new suggestions right now. Search for a member to connect.','hint'));for(const p of sugg)root.append(card(p,'suggestion'));
+};
+const origRenderFriends=(()=>{const tabs=$('friendsTabs');return ()=>{tabs.hidden=false;const root=$('friendsPageContent');const key={requests:'incoming',sent:'outgoing',friends:'friends',suggestions:'suggestions'}[friendsPageTab]||'outgoing',people=friendsPageData[key]||[];root.replaceChildren(button('‹ Back',()=>{friendsView='home';renderFriendsPage()},'fb-link'),node('h2','Sent requests · '+people.length));for(const p of people){const row=node('div',undefined,'fb-friend-row');const copy=node('div',undefined,'fb-copy');copy.append(button(p.name,()=>showProfile(p.id),'fb-name'));const a=friendButton(p,loadFriendsPage);a.classList.add('fb-btn');row.append(fbFace(p,60),copy,a);root.append(row)}}})();
+function openFriendSheet(p){closeMessageSheet?.();const overlay=node('div',undefined,'message-sheet');overlay.id='messageSheet';overlay.onclick=e=>{if(e.target===overlay)closeMessageSheet()};const sheet=node('div',undefined,'chat-sheet');sheet.append(node('span',undefined,'chat-sheet-grip'));const head=node('div',undefined,'chat-sheet-head');head.append(avatar(p),node('strong',p.name));sheet.append(head);
+ const add=(label,fn,danger)=>{const b=button(label,()=>{closeMessageSheet();void fn()},'chat-sheet-row'+(danger?' danger':''));sheet.append(b)};
+ add('💬  Message '+p.name.split(' ')[0],async()=>{const {thread}=await api('/threads',{userId:p.id});navigate('messages');await openChat('private',thread.id)});add('👤  View profile',()=>showProfile(p.id));
+ overlay.append(sheet);document.body.append(overlay)}
