@@ -243,16 +243,24 @@ function openGroupIdPost(){
  if(chat?.kind!=='group')return;const groupId=chat.id;closeChatTools?.();
  openStepDialog('🏷️ Sell ID in this group',body=>{
   body.append(node('p','Only members of this group can see this post.','hint'));
+  // Game: Free Fire, eFootball or your own game name (Custom). Free Fire can also say Male or Female.
+  const game=node('select',undefined,'input');game.dataset.role='game';for(const [v,l]of [['free-fire','Free Fire'],['efootball','eFootball'],['custom','Custom game (type the name)']])game.append(new Option(l,v));field(body,'Game',game);
+  const custom=node('input',undefined,'input');custom.dataset.role='custom-game';custom.maxLength=60;custom.placeholder='Game name, for example PUBG Mobile';field(body,'Game name',custom);
+  const gender=node('div',undefined,'id-gender-box');gender.innerHTML='<span class="id-gender-label">ID type <small>(optional)</small></span><div class="id-gender-chips"><button type="button" class="id-gender-chip" data-gender="male" aria-pressed="false">👦 Male</button><button type="button" class="id-gender-chip" data-gender="female" aria-pressed="false">👧 Female</button></div>';body.append(gender);
+  gender.addEventListener('click',e=>{const b=e.target.closest('[data-gender]');if(!b)return;const on=b.getAttribute('aria-pressed')!=='true';for(const x of gender.querySelectorAll('[data-gender]'))x.setAttribute('aria-pressed',String(on&&x===b))});
+  const syncGame=()=>{const c=game.value==='custom';custom.required=c;for(const el of [custom,custom.previousElementSibling])if(el)el.style.display=c?'':'none';gender.style.display=game.value==='free-fire'?'':'none'};game.onchange=syncGame;syncGame();
   const details=node('textarea',undefined,'input');details.rows=4;details.maxLength=2000;details.placeholder='ID details: level, rank, skins, guns, evo items…';field(body,'ID details',details).required=true;
   const price=node('input',undefined,'input');price.maxLength=12;price.inputMode='decimal';price.placeholder='Example: 5000 or 5k';field(body,'Price (৳)',price).required=true;
   const files=node('input',undefined,'input');files.type='file';files.multiple=true;files.accept='image/jpeg,image/png,image/webp,video/mp4,video/webm';field(body,'Photos or video',files);
  },'Post',async body=>{
   const details=body.querySelector('textarea').value.trim(),price=body.querySelector('input[inputmode=decimal]').value.trim(),list=[...body.querySelector('input[type=file]').files].slice(0,10);
   if(!details||!price)throw Error('Write the ID details and the price.');if(list.some(f=>f.size>(f.type.startsWith('video/')?50:8)*1024*1024))throw Error('Photos up to 8 MB and videos up to 50 MB.');
-  const title=(details.split('\n').map(x=>x.trim()).find(Boolean)||'Free Fire ID').slice(0,100);
+  const gameValue=body.querySelector('[data-role=game]')?.value||'free-fire',customName=(body.querySelector('[data-role=custom-game]')?.value||'').trim(),idGender=gameValue==='free-fire'?body.querySelector('.id-gender-chip[aria-pressed="true"]')?.dataset.gender||null:null;
+  if(gameValue==='custom'&&!customName)throw Error('Write the game name.');
+  const title=(details.split('\n').map(x=>x.trim()).find(Boolean)||(gameValue==='custom'?customName:gameValue==='efootball'?'eFootball':'Free Fire')+' ID').slice(0,100);
   const status=body.closest('form').querySelector('.deal-step-status'),media=[];
   for(const [i,f] of list.entries()){status.textContent='Uploading '+(i+1)+' of '+list.length+'…';const r=await fetch('/api/upload',{method:'POST',credentials:'same-origin',headers:{'content-type':f.type,'x-upload-purpose':'post'},body:f}),d=await r.json();if(!r.ok)throw Error(d.error||'Upload failed');media.push(d)}
-  status.textContent='Posting…';const result=await api('/posts',{title,details,price,kind:'Game ID',postIntent:'sell',gameCategory:'free-fire',groupId,media,clientKey:crypto.randomUUID()});
+  status.textContent='Posting…';const result=await api('/posts',{title,details,price,kind:'Game ID',postIntent:'sell',gameCategory:gameValue,customGameName:gameValue==='custom'?customName:'',idGender,groupId,media,clientKey:crypto.randomUUID()});
   toast(result.status==='approved'?'✅ Posted in the group.':'⏳ Saved. It appears after the safety check.');if(chat?.id===groupId&&typeof loadGroupPosts==='function')void loadGroupPosts().catch(()=>{});
  });
 }

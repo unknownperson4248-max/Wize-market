@@ -1391,3 +1391,17 @@ assert.equal(pk.owner.id,'owner');
  assert.equal((await call('/api/owner-badge','POST',{show:true},'owner')).status,200);assert.equal(sql.prepare("SELECT value FROM wm_settings WHERE key='owner_badge_hidden'").get().value,'0');
  console.log('PASS: owner can hide or show the Owner badge; nobody else can.');
 }
+{
+ // My feed price buttons: default list, owner can change them, reset to default.
+ let d=(await call('/api/feed-presets')).data;assert.equal(d.presets.length,4);assert.equal(d.presets[0].max,5000);
+ assert.equal((await call('/api/admin/feed-presets','POST',{presets:[{min:1000,max:3000}]},'admin')).status,403);
+ assert.equal((await call('/api/admin/feed-presets','POST',{presets:[{min:5000,max:1000}]},'owner')).status,400);
+ assert.equal((await call('/api/admin/feed-presets','POST',{presets:[{min:null,max:null}]},'owner')).status,400);
+ assert.equal((await call('/api/admin/feed-presets','POST',{presets:[{min:null,max:2000},{min:2000,max:8000},{min:100000,max:null}]},'owner')).status,200);
+ d=(await call('/api/feed-presets')).data;assert.deepEqual(d.presets,[{min:null,max:2000},{min:2000,max:8000},{min:100000,max:null}]);
+ assert.equal((await call('/api/admin/feed-presets','POST',{reset:true},'owner')).status,200);assert.equal((await call('/api/feed-presets')).data.presets.length,4);
+ // Group Sell ID with a custom game name.
+ const g=sql.prepare('SELECT id FROM wm_groups LIMIT 1').get();assert.ok(g);
+ if(g){sql.prepare('INSERT INTO wm_group_ranges(id,group_id,label,min_price,max_price,created_at) VALUES(?,?,?,?,?,?)').run(crypto.randomUUID(),g.id,'Any',0,null,Date.now());sql.prepare('INSERT OR IGNORE INTO wm_group_members(group_id,user_id) VALUES(?,?)').run(g.id,'owner');const r=await call('/api/posts','POST',{title:'Custom game ID',details:'Lvl max',price:3000,kind:'Game ID',postIntent:'sell',gameCategory:'custom',customGameName:'Blood Strike',groupId:g.id,media:[]},'owner');assert.equal(r.status,201,JSON.stringify(r.data));assert.equal(sql.prepare('SELECT custom_game_name FROM wm_posts WHERE id=?').get(r.data.id).custom_game_name,'Blood Strike')}
+ console.log('PASS: My feed price buttons (default, owner edits, reset) and group Sell ID with a custom game name.');
+}
