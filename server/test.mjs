@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {readFileSync} from 'node:fs';
-import worker,{api,verifyGoogle,listingPrice,hasExternalContact,brandedPage,previewPage,normalizeGameUid,nameProblem,nameSkeleton,cleanAccountName,signInName,loginId} from './worker.mjs';
+import worker,{seoPage,api,verifyGoogle,listingPrice,hasExternalContact,brandedPage,previewPage,normalizeGameUid,nameProblem,nameSkeleton,cleanAccountName,signInName,loginId} from './worker.mjs';
 const sql=new DatabaseSync(':memory:');sql.exec('PRAGMA foreign_keys=ON; CREATE TABLE users(id TEXT PRIMARY KEY,google_sub TEXT UNIQUE,email TEXT,name TEXT,picture TEXT,created_at INTEGER,updated_at INTEGER);CREATE TABLE sessions(token_hash TEXT PRIMARY KEY,user_id TEXT REFERENCES users(id),expires_at INTEGER,created_at INTEGER);');sql.exec(readFileSync(new URL('./schema.sql',import.meta.url),'utf8'));
 const prepare=q=>({values:[],bind(...v){this.values=v;return this},async first(){return sql.prepare(q).get(...this.values)||null},async all(){return {results:sql.prepare(q).all(...this.values)}},async run(){const r=sql.prepare(q).run(...this.values);return {meta:{changes:Number(r.changes)}}}});const db={prepare,async batch(stmts){sql.exec('BEGIN');try{const r=[];for(const s of stmts)r.push(await s.run());sql.exec('COMMIT');return r}catch(e){sql.exec('ROLLBACK');throw e}}};const objects=new Map();const env={DB:db,MEDIA:{put:async(k,v)=>objects.set(k,v),get:async k=>objects.has(k)?{body:objects.get(k),size:objects.get(k).length}:null}};
 const hash=async x=>Buffer.from(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(x))).toString('hex');const tokens={};for(const id of ['owner','admin','buyer','seller','outsider']){sql.prepare('INSERT INTO users VALUES(?,?,?,?,?,?,?)').run(id,id,id+'@example.com',id,'',Date.now(),Date.now());const token=Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('hex');tokens[id]=token;sql.prepare('INSERT INTO sessions VALUES(?,?,?,?)').run(await hash(token),id,Date.now()+1000000,Date.now())}sql.exec("INSERT INTO wm_roles VALUES('owner','owner'),('admin','trusted')");const legacyRules={protectedDeals:false,holdHours:24,autoConfirmHours:72,requireGameUid:false,relistCooldownHours:0,dailyPostsUnverified:1000,activePostsUnverified:1000,dailyPostsVerified:1000,activePostsVerified:5000,dailyNeedPosts:1000,dailyNormalPosts:1000,bumpHours:24,expireDays:0,hideSold:false,nameRules:false,chatWarnings:true,blockDuplicates:false};sql.prepare("INSERT INTO wm_settings(key,value) VALUES('market_rules',?)").run(JSON.stringify(legacyRules));const logoId=crypto.randomUUID();sql.prepare('INSERT INTO wm_uploads VALUES(?,?,?,?,?)').run(logoId,'admin','image/png',16,Date.now());objects.set(logoId,new Uint8Array([137,80,78,71,13,10,26,10,0,0,0,0,1,2,3,4]));
@@ -1352,4 +1352,18 @@ assert.equal(pk.owner.id,'owner');
  assert.deepEqual(await order(viewers[0]),[a.id,b.id]);
  const own=(await call('/api/posts/signals','POST',{items:[{id:a.id,kind:'open'}]},a.user_id));assert.equal(own.status,200);assert.equal(sql.prepare('SELECT count(*) n FROM wm_post_signals WHERE post_id=?').get(a.id).n,0);
  console.log('PASS: smart feed (popular posts first, already-opened posts lower for that person, no points for your own post).');
+}
+{
+ // SEO: only the main site (SEO_INDEX=on) is listed on Google; robots.txt, sitemap, canonical address, www goes to the main address.
+ const main={...env,SITE_HOST:'wizenex.com',SEO_INDEX:'on'},test={...env,SITE_HOST:'buysell.rahatwize.com'};
+ const get=async(url,e)=>worker.fetch(new Request(url),e);
+ let r=await get('https://www.wizenex.com/post/abc?x=1',main);assert.equal(r.status,301);assert.equal(r.headers.get('location'),'https://wizenex.com/post/abc?x=1');
+ let txt=await (await get('https://wizenex.com/robots.txt',main)).text();assert.match(txt,/Sitemap: https:\/\/wizenex\.com\/sitemap\.xml/);assert.match(txt,/Disallow: \/api\//);
+ txt=await (await get('https://buysell.rahatwize.com/robots.txt',test)).text();assert.match(txt,/Disallow: \/\n/);
+ assert.equal((await get('https://buysell.rahatwize.com/sitemap.xml',test)).status,404);
+ const map=await get('https://wizenex.com/sitemap.xml',main);assert.equal(map.status,200);const xml=await map.text();assert.match(xml,/<loc>https:\/\/wizenex\.com\/<\/loc>/);assert.match(xml,/<loc>https:\/\/wizenex\.com\/post\/[a-f0-9-]{36}<\/loc>/);
+ const page='<html><head><title>WizeNex</title></head><body class="x"></body></html>',cfg={name:'WizeNex',description:'Safe game ID marketplace'};
+ const home=seoPage(main,new Request('https://wizenex.com/'),'/',page,cfg);assert.match(home,/<body class="x"><noscript><h1>WizeNex<\/h1>/);assert.match(home,/"Wize Nex"/);assert.match(home,/<meta name="robots" content="index,follow/);assert.match(home,/<link rel="canonical" href="https:\/\/wizenex\.com\/">/);assert.match(home,/application\/ld\+json/);assert.match(home,/og:image/);
+ const testHome=seoPage(test,new Request('https://buysell.rahatwize.com/'),'/',page,cfg);assert.match(testHome,/noindex,nofollow/);assert.doesNotMatch(testHome,/ld\+json/);
+ console.log('PASS: SEO (robots.txt, sitemap, canonical, structured data, www to main address; test site not indexed).');
 }

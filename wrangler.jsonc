@@ -36,7 +36,9 @@
       "name": "wizenex",
       "workers_dev": true,
       "vars": {
-        "SITE_HOST": "wizenex.com"
+        "SITE_HOST": "wizenex.com",
+        // Only WizeNex is listed on Google; the test site says noindex.
+        "SEO_INDEX": "on"
       },
       "routes": [
         { "pattern": "wizenex.com/*", "zone_name": "wizenex.com" },
