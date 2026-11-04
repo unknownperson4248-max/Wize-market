@@ -86,18 +86,20 @@ async function openListingAdminChoice({postId,deal}={}){
   const ownerPerson=data.owner||(data.allAdmins||[]).find(a=>a.role==='owner'),isOwner=a=>a.role==='owner'||a.id===ownerPerson?.id;
   const shown=new Set(),add=(list,title,note,box=root)=>{const items=(list||[]).filter(a=>a&&!shown.has(a.id));if(!items.length)return 0;box.append(section(title));for(const a of items){shown.add(a.id);box.append(choice(a,typeof note==='function'?note(a):note));options++}return items.length};
   const other=data.iAm==='seller'?'the buyer':'the seller';
-  const relatedNote=a=>a.mine&&a.theirs?'Admin of groups you and '+other+' joined'+(a.my_groups?' · '+a.my_groups:''):a.mine?'Admin of your group'+(a.my_groups?' · '+a.my_groups:''):'Admin of '+other+'’s group';
+  const relatedNoteBase=a=>a.mine&&a.theirs?'Admin of groups you and '+other+' joined'+(a.my_groups?' · '+a.my_groups:''):a.mine?'Admin of your group'+(a.my_groups?' · '+a.my_groups:''):'Admin of '+other+'’s group';
   const search=node('input',undefined,'input admin-search');search.type='search';search.placeholder='🔎 Search Admin by name';search.setAttribute('aria-label','Search Admins by name');
   const emptyNote=node('p','No Admin found with that name.','hint admin-search-empty');emptyNote.hidden=true;root.append(search,emptyNote);
-  const related=add((data.relatedAdmins||[]).filter(a=>!isOwner(a)),'👥 Admins from your groups',relatedNote);
+  // The website Owner is always first and can handle any amount.
+  let ownerRow=null;if(ownerPerson){root.append(section('👑 Website owner'));ownerRow=choice(ownerPerson,'Website owner · any amount');ownerRow.classList.add('admin-owner-row');shown.add(ownerPerson.id);options++;root.append(ownerRow)}
+  const limitNote=a=>a.deal_limit?' · up to ৳'+Number(a.deal_limit).toLocaleString('en-US'):'';
+  const relatedNote=a=>relatedNoteBase(a)+limitNote(a);const related=add((data.relatedAdmins||[]).filter(a=>!isOwner(a)),'👥 Admins from your groups',relatedNote);
   const others=[...(data.allAdmins||[]),...(data.fallback||[])].filter((a,i,list)=>a&&!isOwner(a)&&!shown.has(a.id)&&list.findIndex(b=>b.id===a.id)===i);
-  const discover=node('div',undefined,'admin-discover');add(others,'🧭 Discover Admins · most deals first','Admin',discover);
-  const nobodyElse=!related&&!others.length;let ownerRow=null;
-  if(ownerPerson&&!shown.has(ownerPerson.id)){ownerRow=choice(ownerPerson,'Website owner');ownerRow.classList.add('admin-owner-row');ownerRow.hidden=!nobodyElse;shown.add(ownerPerson.id);options++}
+  const discover=node('div',undefined,'admin-discover');add(others,'🧭 Discover Admins · most deals first',a=>'Admin'+limitNote(a),discover);
+  const nobodyElse=!related&&!others.length;
   if(related&&others.length){discover.hidden=true;const open=node('button','🧭 Discover more Admins ('+others.length+')','btn secondary admin-discover-toggle');open.type='button';open.onclick=()=>{discover.hidden=false;open.hidden=true;discover.scrollIntoView({block:'start',behavior:'smooth'})};root.append(open)}
-  root.append(discover);if(ownerRow)root.append(ownerRow);
+  root.append(discover);
   preselect=!!related||nobodyElse;
-  search.oninput=()=>{const q=search.value.trim().toLowerCase();if(q){discover.hidden=false;root.querySelector('.admin-discover-toggle')?.setAttribute('hidden','')}let found=0;for(const row of root.querySelectorAll('.admin-choice')){const match=!q||row.dataset.name.includes(q),show=row===ownerRow?nobodyElse||(!!q&&match):match;row.hidden=!show;if(show)found++}for(const h of root.querySelectorAll('.admin-choice-section'))h.hidden=!!q;emptyNote.hidden=found>0};
+  search.oninput=()=>{const q=search.value.trim().toLowerCase();if(q){discover.hidden=false;root.querySelector('.admin-discover-toggle')?.setAttribute('hidden','')}let found=0;for(const row of root.querySelectorAll('.admin-choice')){const match=!q||row.dataset.name.includes(q),show=match;row.hidden=!show;if(show)found++}for(const h of root.querySelectorAll('.admin-choice-section'))h.hidden=!!q;emptyNote.hidden=found>0};
   $('listingAdminHelp').textContent=related?'Admins from your groups or '+other+'’s groups. Tap “Discover more Admins” or search a name to choose someone else.':nobodyElse?'Only the website owner can handle this deal right now.':'You and '+other+' have no group Admin. Choose an Admin from Discover, or search a name.';
  }
  if(first&&preselect){first.checked=true;listingAdminDraft.selected=first.value}
