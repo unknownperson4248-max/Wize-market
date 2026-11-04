@@ -113,7 +113,10 @@ async function dealAdminRecommendations(db,buyerId,sellerId){
 async function requestListingDeal(db,input,u){
  const post=await visiblePost(db,input.postId,u);need(post.post_intent!=='need','Start this deal as the seller from the private chat',403);await allowContact(db,u.id,post.user_id);need(post.user_id!==u.id,'You cannot buy your own listing');need(post.price>0&&post.kind!=='Community post','Choose a priced marketplace listing');
  const sellerRole=await one(db,"SELECT role FROM wm_roles WHERE user_id=? AND role IN ('owner','trusted')",post.user_id),mode=sellerRole?'direct':'mediated';let adminId=post.user_id;
- if(mode==='mediated'&&input.adminId!==undefined){need(typeof input.adminId==='string'&&input.adminId!==u.id&&input.adminId!==post.user_id&&await one(db,"SELECT user_id FROM wm_roles WHERE user_id=? AND role IN ('owner','trusted')",input.adminId),'Select an independent trusted admin');await needAdminLimit(db,input.adminId,post.price);adminId=input.adminId}else if(mode==='mediated'){const admin=await one(db,"SELECT r.user_id FROM wm_roles r WHERE r.role IN ('owner','trusted') AND r.user_id NOT IN (?,?) ORDER BY CASE WHEN r.role='owner' THEN 0 WHEN r.user_id=(SELECT owner_id FROM wm_groups WHERE id=?) THEN 1 ELSE 2 END,r.user_id LIMIT 1",u.id,post.user_id,post.group_id);need(admin,'No independent trusted admin is available',409);adminId=admin.user_id}
+ // An Admin (or the Owner) who starts a deal looks after it themselves: no Admin to choose or wait for. The seller still agrees first.
+ const selfAdmin=mode==='mediated'&&['owner','trusted'].includes(u.role)&&(input.adminId===undefined||input.adminId===u.id);
+ if(selfAdmin)adminId=u.id;
+ else if(mode==='mediated'&&input.adminId!==undefined){need(typeof input.adminId==='string'&&input.adminId!==u.id&&input.adminId!==post.user_id&&await one(db,"SELECT user_id FROM wm_roles WHERE user_id=? AND role IN ('owner','trusted')",input.adminId),'Select an independent trusted admin');await needAdminLimit(db,input.adminId,post.price);adminId=input.adminId}else if(mode==='mediated'){const admin=await one(db,"SELECT r.user_id FROM wm_roles r WHERE r.role IN ('owner','trusted') AND r.user_id NOT IN (?,?) ORDER BY CASE WHEN r.role='owner' THEN 0 WHEN r.user_id=(SELECT owner_id FROM wm_groups WHERE id=?) THEN 1 ELSE 2 END,r.user_id LIMIT 1",u.id,post.user_id,post.group_id);need(admin,'No independent trusted admin is available',409);adminId=admin.user_id}
  const pair='deal:'+u.id+':'+post.id,time=now(),threadId=uuid(),id=uuid();
  await db.batch([stmt(db,"INSERT OR IGNORE INTO wm_threads(id,buyer_id,seller_id,post_id,pair_key,status,created_at,is_deal) VALUES(?,?,?,?,?,'accepted',?,1)",threadId,u.id,post.user_id,post.id,pair,time),stmt(db,"INSERT OR IGNORE INTO wm_deals(id,thread_id,buyer_id,seller_id,admin_id,price,fee,buyer_ok,status,created_at,post_id,mode,account_name,flow) SELECT ?,t.id,?,?,?,?,0,1,?,?,?,?,?,? FROM wm_threads t WHERE t.pair_key=? AND NOT EXISTS(SELECT 1 FROM wm_deals d WHERE d.thread_id=t.id AND d.status NOT IN ('completed','cancelled'))",id,u.id,post.user_id,adminId,post.price,mode==='direct'?'awaiting_admin':'awaiting_seller',time,post.id,mode,post.title,(await marketRules(db)).protectedDeals?1:0,pair),stmt(db,"INSERT INTO wm_deal_events(deal_id,user_id,action,created_at) SELECT id,?,'requested',? FROM wm_deals WHERE id=?",u.id,time,id)]);
  const result=await one(db,dealSelect+" WHERE d.thread_id=(SELECT id FROM wm_threads WHERE pair_key=?) AND d.status NOT IN ('completed','cancelled') ORDER BY d.created_at DESC LIMIT 1",pair);return result;
@@ -153,7 +156,7 @@ async function dealAction(db,d,u,input){
   update="admin_id=?,status='proposed',buyer_ok=?,seller_ok=?";updateArgs=[input.adminId,buyer?1:0,seller?1:0];event='admin_changed';
  }else if(input.action==='confirm'){
   need(party,'Only buyer or seller can agree to terms',403);
-  if(d.status==='awaiting_seller'){need(seller,'Waiting for seller consent',403);update="seller_ok=1,status='awaiting_admin'"}
+  if(d.status==='awaiting_seller'){need(seller,'Waiting for seller consent',403);update=d.admin_id===d.buyer_id?"seller_ok=1,status='active'":"seller_ok=1,status='awaiting_admin'"}
   else {need(d.status==='proposed','Cannot confirm now',403);update=(buyer?'buyer_ok':'seller_ok')+'=1'}
  }else if(['accept','activate'].includes(input.action)){
   need(isAdmin,'Only the assigned trusted admin can accept',403);
@@ -1123,6 +1126,7 @@ if(p==='/api/deal-admins'&&method==='GET'){
  if(post.post_intent==='need'){need(post.user_id!==u.id,'Only the seller can propose a Need Post deal',403);buyerId=post.user_id;sellerId=u.id}else{sellerId=post.user_id;buyerId=u.id===sellerId?peerId:u.id;need(buyerId,'Choose a buyer conversation first')}
  await allowContact(db,buyerId,sellerId);}
  const picks=await dealAdminRecommendations(db,buyerId,sellerId);
+ if(picks.mode==='mediated'&&u.id===buyerId&&['owner','trusted'].includes(u.role)&&!dealId)return reply({postId:post.id,title:post.title,mode:'self'});
  if(picks.mode==='mediated'){
   const done="(SELECT count(*) FROM wm_deals dd WHERE dd.admin_id=u.id AND dd.status='completed') deals_done";
   picks.myGroupAdmins=await rows(db,"SELECT DISTINCT u.id,u.name,u.picture,u.verified,r.role,"+done+" FROM wm_group_members m JOIN wm_groups g ON g.id=m.group_id JOIN wm_roles r ON r.user_id=g.owner_id AND r.role IN ('owner','trusted') JOIN wm_public_users u ON u.id=r.user_id WHERE m.user_id=? AND u.id NOT IN (?,?) LIMIT 30",u.id,buyerId,sellerId);

@@ -73,6 +73,9 @@ $('chatSendButton').innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path
 let listingAdminDraft=null,listingAdminRequest=0;
 async function openListingAdminChoice({postId,deal}={}){
  const request=++listingAdminRequest;const data=await api('/deal-admins?'+(deal?'dealId='+encodeURIComponent(deal.id):'postId='+encodeURIComponent(postId)));if(request!==listingAdminRequest)return;
+ if(data.mode==='self'){// You are an Admin: you look after this deal yourself. The seller agrees, then it starts at once.
+  if(!confirm('You are an Admin, so you will look after this deal yourself.\nSend the deal to the seller? It starts as soon as they agree.'))return;
+  try{const result=await api('/deals',{postId:postId||data.postId});$('listingModal').hidden=true;manageDeals=false;dealStatus='current';$('dealSearch').value='';navigate('deals');await loadMessages();await loadDeals();toast(result.deal?.status==='active'?'✅ Deal started.':'✅ Deal sent. It starts as soon as the seller agrees.')}catch(error){toast(error.message)}return}
  listingAdminDraft={postId:postId||data.postId,deal:deal||null,selected:null,data};const root=$('listingAdminChoices');root.replaceChildren();$('listingAdminTitle').textContent=deal?'Change Admin':'Choose an Admin for this deal';$('listingAdminContext').textContent=data.title||'Marketplace deal';$('submitListingAdmin').textContent=deal?'Send Admin change':'Send deal request';
  const doneCount=new Map((data.allAdmins||[]).map(a=>[a.id,a.deals_done]));let first=null,preselect=true;
  const choice=(person,note)=>{const label=node('label',undefined,'admin-choice'),input=node('input');input.type='radio';input.name='listing-admin';input.value=person.id;input.onchange=()=>{listingAdminDraft.selected=person.id};if(!first)first=input;

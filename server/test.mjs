@@ -288,7 +288,8 @@ const dualBefore=(await call('/api/posts/'+dualId,'GET',undefined,'seller')).dat
 assert.equal((await call('/api/posts/'+dualId+'/edit','POST',{...post,title:'Shared ID updated',price:12000,groupIds:[group,secondGroup],version:dualBefore.version},'seller')).status,200);
 for(const gid of [group,secondGroup]){const range=sql.prepare('SELECT r.min_price,r.max_price FROM wm_post_groups pg JOIN wm_group_ranges r ON r.id=pg.range_id WHERE pg.post_id=? AND pg.group_id=?').get(dualId,gid);assert.ok(range.min_price<=12000&&(range.max_price===null||range.max_price>=12000))}
 assert.equal((await call('/api/deals/'+mediatedId,'GET',undefined,'buyer')).data.deal.price,8500);assert.equal((await call('/api/listing/'+dualId)).data.post.listing_code,mediated.data.deal.listing_code);
-const decline=await call('/api/deals','POST',{postId:dualId},'admin');assert.equal(decline.status,201);assert.equal((await call('/api/deals/'+decline.data.id+'/action','POST',{action:'decline',version:0},'owner')).status,200);assert.equal((await call('/api/deals/'+decline.data.id,'GET',undefined,'admin')).data.deal.status,'cancelled');
+const decline=await call('/api/deals','POST',{postId:dualId},'admin');assert.equal(decline.status,201);assert.equal(decline.data.deal.admin_id,'admin');// an Admin who buys looks after the deal
+assert.equal((await call('/api/deals/'+decline.data.id+'/action','POST',{action:'decline',version:0},'admin')).status,200);assert.equal((await call('/api/deals/'+decline.data.id,'GET',undefined,'admin')).data.deal.status,'cancelled');
 // Group-only listing can also start a deal; nonmembers are blocked.
 const restricted=await call('/api/posts','POST',{...post,groupId:secondGroup},'seller');assert.equal(restricted.status,201);assert.equal((await call('/api/deals','POST',{postId:restricted.data.id},'outsider')).status,403);assert.equal((await call('/api/deals','POST',{postId:restricted.data.id},'buyer')).status,201);
 // Friend sender follows immediately; accepting adds to friends and exposes no pending request to visitors.
@@ -1474,4 +1475,15 @@ assert.equal(pk.owner.id,'owner');
  assert.equal((await call('/api/admin/verify','POST',{userId:'outsider',verified:false},'owner')).status,200);
  assert.ok(!(await call('/api/me','GET',undefined,'outsider')).data.user.verified);
  console.log('PASS: owner gives or removes the blue tick by hand, with a notice to the member.');
+}
+{
+ // An Admin who starts a deal looks after it: no Admin picker; the deal starts as soon as the seller agrees.
+ sql.exec('DELETE FROM wm_limits');const sellerId='selfsell';sql.prepare('INSERT OR IGNORE INTO users VALUES(?,?,?,?,?,?,?)').run(sellerId,sellerId,sellerId+'@example.com',sellerId,'',Date.now(),Date.now());tokens[sellerId]=Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('hex');sql.prepare('INSERT INTO sessions VALUES(?,?,?,?)').run(await hash(tokens[sellerId]),sellerId,Date.now()+1000000,Date.now());env.AI={run:async()=>({response:{decision:'safe',category:'none',confidence:.99}})};
+ const made=await call('/api/posts','POST',{title:'Self admin test ID',details:'Level 50',price:2500,kind:'Game ID',media:[],gameCategory:'efootball'},sellerId);assert.equal(made.status,201,JSON.stringify(made.data));
+ sql.prepare("DELETE FROM wm_user_blocks WHERE user_id IN ('owner','selfsell') AND target_id IN ('owner','selfsell')").run();
+ const picks=(await call('/api/deal-admins?postId='+made.data.id,'GET',undefined,'owner')).data;assert.equal(picks.mode,'self');
+ const r=await call('/api/deals','POST',{postId:made.data.id},'owner');assert.equal(r.status,201,JSON.stringify(r.data));const deal=sql.prepare('SELECT * FROM wm_deals WHERE id=?').get(r.data.id);assert.equal(deal.admin_id,'owner');assert.equal(deal.status,'awaiting_seller');
+ const ok=await call('/api/deals/'+deal.id+'/action','POST',{action:'confirm',version:deal.version},sellerId);assert.equal(ok.status,200,JSON.stringify(ok.data));
+ assert.equal(sql.prepare('SELECT status FROM wm_deals WHERE id=?').get(deal.id).status,'active');
+ console.log('PASS: an Admin who starts a deal looks after it; it starts as soon as the seller agrees.');
 }
