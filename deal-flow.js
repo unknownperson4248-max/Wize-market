@@ -383,7 +383,7 @@ Object.assign(socialGlyphs,{download:'<path d="M12 3v12M7 10l5 5 5-5"/><path d="
  file:'<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/>'
 });
 function profileMenuItems(){
- const admin=['owner','trusted'].includes(me?.role),items=[['Friends','users',()=>navigate('friends')],['Saved posts','bookmark',async()=>{if(active!=='profile'||profileViewId)await showProfile(me.id);await loadProfileTab('saved')}],['My deals','deals',()=>navigate('deals')]];
+ const admin=['owner','trusted'].includes(me?.role),items=[...(me?.role==='owner'?[['Admin panel','shield',openOwnerAdminPanel]]:[]),['Friends','users',()=>navigate('friends')],['Saved posts','bookmark',async()=>{if(active!=='profile'||profileViewId)await showProfile(me.id);await loadProfileTab('saved')}],['My deals','deals',()=>navigate('deals')]];
  if(!me?.verified&&!admin)items.push(['Get verified (blue tick)','verified',()=>openVerificationRequest('seller')]);
  if(!admin)items.push(['Become an Admin','shield',()=>openVerificationRequest('trusted')]);
  items.push(['Call alerts','bell',()=>enableCallAlerts()]);
@@ -419,3 +419,6 @@ $('authShowPassword').onclick=()=>{const input=$('authPassword'),show=input.type
 
 // Profile menu: open the Terms or the Privacy Policy (both live on the same page).
 function openLegal(which){navigate('privacy');requestAnimationFrame(()=>{const el=document.getElementById(which==='terms'?'termsNotice':'privacyNotice');if(el)el.scrollIntoView({behavior:'smooth',block:'start'})})}
+
+// Owner only: open the admin panel straight away (signed in with the owner account, so no extra login).
+async function openOwnerAdminPanel(){if(me?.role!=='owner')return;const r=await fetch('/api/control/owner-access',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:'{}'});const d=await r.json().catch(()=>({}));if(!r.ok)return toast(d.error||'Could not open the admin panel.');location.href='/admin'}
