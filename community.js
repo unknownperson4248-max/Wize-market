@@ -50,7 +50,7 @@ async function toggleVoice(){
 $('chatMicButton').onclick=()=>void toggleVoice();for(const b of document.querySelectorAll('[data-chat-tool]'))b.onclick=()=>{const tool=b.dataset.chatTool;if(tool==='emoji')toggleEmoji();else if(tool==='mic')void toggleVoice();else{closeChatTools();$(tool==='camera'?'chatCamera':'chatAttachment').click()}};
 $('chatForm').onsubmit=async e=>{
  e.preventDefault();if(!chat||composerSending)return;if(voiceRecorder)return toast('Stop recording, review your voice message, then tap Send.');const context=composerContext();let message=$('messageText').value.trim();if(!message&&!composerFiles.length){if(!chatPostContext)return;message=chatPostContext.post_intent==='need'?'I have an offer for this Need Post.':'I’m interested in this listing.';}composerSending=true;$('chatSendButton').disabled=true;closeChatTools();const path=(context.kind==='private'?'/threads/':context.kind==='group'?'/groups/':'/deals/')+context.id+'/messages';
- try{for(const item of [...composerFiles]){if(!sameComposer(context))return;if(!item.server){const response=await fetch('/api/upload',{method:'POST',credentials:'same-origin',headers:{'content-type':item.type},body:item.file}),data=await response.json();if(!response.ok)throw Error(data.error);item.server=data}if(!sameComposer(context))return;await sendChatWithPost(path,'media:'+item.server.type+':'+item.server.url,context);if(!sameComposer(context))return;composerFiles=composerFiles.filter(x=>x!==item);URL.revokeObjectURL(item.url);renderComposerPreview()}
+ try{await uploadComposerFiles(context);for(const item of [...composerFiles]){if(!sameComposer(context))return;if(!item.server){const response=await fetch('/api/upload',{method:'POST',credentials:'same-origin',headers:{'content-type':item.type},body:item.file}),data=await response.json();if(!response.ok)throw Error(data.error);item.server=data}if(!sameComposer(context))return;await sendChatWithPost(path,'media:'+item.server.type+':'+item.server.url,context);if(!sameComposer(context))return;composerFiles=composerFiles.filter(x=>x!==item);URL.revokeObjectURL(item.url);renderComposerPreview()}
  if(message&&sameComposer(context)){await sendChatWithPost(path,message,context);if(sameComposer(context)&&$('messageText').value.trim()===message)$('messageText').value=''}if(sameComposer(context))await refreshChat();
  }catch(error){toast(error.message);if(sameComposer(context))void refreshChat().catch(()=>{})}finally{composerSending=false;$('chatSendButton').disabled=false}
 };
@@ -148,3 +148,49 @@ function openFriendSheet(p){closeMessageSheet?.();const overlay=node('div',undef
  const add=(label,fn,danger)=>{const b=button(label,()=>{closeMessageSheet();void fn()},'chat-sheet-row'+(danger?' danger':''));sheet.append(b)};
  add('💬  Message '+p.name.split(' ')[0],async()=>{const {thread}=await api('/threads',{userId:p.id});navigate('messages');await openChat('private',thread.id)});add('👤  View profile',()=>showProfile(p.id));
  overlay.append(sheet);document.body.append(overlay)}
+
+// ---- Faster photo sending: photos become WebP on the phone (smaller, same look), and up to 3 upload at the same time.
+// The messages are still sent in the order the photos were picked.
+async function toWebp(file){
+ if(!/^image\/(jpeg|png)$/.test(file.type)||!window.createImageBitmap)return file;
+ try{const bmp=await createImageBitmap(file);const max=2048,scale=Math.min(1,max/Math.max(bmp.width,bmp.height)),w=Math.round(bmp.width*scale),h=Math.round(bmp.height*scale);
+  const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;canvas.getContext('2d').drawImage(bmp,0,0,w,h);bmp.close?.();
+  const blob=await new Promise(r=>canvas.toBlob(r,'image/webp',.86));if(!blob||blob.type!=='image/webp'||blob.size>=file.size)return file;
+  return new File([blob],file.name.replace(/\.[^.]+$/,'')+'.webp',{type:'image/webp'})}catch{return file}}
+async function uploadComposerFiles(context){
+ const todo=composerFiles.filter(x=>!x.server);let next=0,done=0;const status=()=>{const b=$('chatSendButton');if(b)b.title=todo.length>1?'Sending photos '+done+'/'+todo.length:''};
+ const worker=async()=>{while(next<todo.length){const item=todo[next++];if(!sameComposer(context))return;const file=await toWebp(item.file);const response=await fetch('/api/upload',{method:'POST',credentials:'same-origin',headers:{'content-type':file.type},body:file}),data=await response.json();if(!response.ok)throw Error(data.error);item.server=data;done++;status()}};
+ await Promise.all(Array.from({length:Math.min(3,todo.length)},worker));
+}
+
+// ---- Photo stacks (like Messenger): photos sent one after another by the same person show as one pile. Tap to see them all.
+const STACK_GAP=3*60*1000;
+function photoOnly(b){if(!b?.classList?.contains('bubble'))return null;const imgs=b.querySelectorAll(':scope>img.chat-media');if(imgs.length!==1||b.querySelector(':scope>p,:scope>video,:scope>audio,.chat-post-card'))return null;return imgs[0]}
+function stackChatPhotos(){
+ const root=$('chatMessages');if(!root)return;
+ const bubbles=[...root.children].filter(el=>el.classList?.contains('bubble'));let run=[];
+ const flush=()=>{if(run.length>=2)makeStack(run);run=[]};
+ for(const b of bubbles){if(b.dataset.stacked)continue;const img=photoOnly(b);if(!img){flush();continue}const last=run[run.length-1];
+  if(last&&(last.dataset.userId!==b.dataset.userId||Math.abs(new Date(b.dataset.at)-new Date(last.dataset.at))>STACK_GAP||last.nextElementSibling!==b))flush();run.push(b)}
+ flush();
+}
+function makeStack(run){
+ const first=run[0],urls=run.map(b=>photoOnly(b).getAttribute('src'));
+ const stack=node('button',undefined,'chat-stack');stack.type='button';stack.setAttribute('aria-label','Open '+urls.length+' photos');
+ for(const [i,url] of urls.slice(0,3).reverse().entries()){const img=node('img');img.src=url;img.alt='';img.loading='lazy';img.decoding='async';img.className='chat-stack-photo layer-'+(Math.min(3,urls.length)-1-i);stack.append(img)}
+ stack.append(node('span',urls.length+' photos','chat-stack-count'));
+ stack.onclick=e=>{e.stopPropagation();openChatAlbum(urls,0)};
+ photoOnly(first).replaceWith(stack);first.dataset.stacked='1';first.classList.add('has-stack');
+ for(const b of run.slice(1)){b.dataset.stacked='1';b.classList.add('stacked-away')}
+}
+function openChatAlbum(urls,start){
+ const box=node('div',undefined,'chat-album');box.setAttribute('role','dialog');box.setAttribute('aria-label','Photos');
+ const track=node('div',undefined,'chat-album-track'),count=node('span','','chat-album-count'),close=node('button','×','chat-album-close');close.type='button';close.setAttribute('aria-label','Close photos');
+ for(const url of urls){const f=node('figure');const img=node('img');img.src=url.includes('?')?url:url+'?full=1';img.alt='';img.decoding='async';f.append(img);track.append(f)}
+ const paint=()=>{const i=Math.round(track.scrollLeft/Math.max(1,track.clientWidth));count.textContent=(i+1)+' / '+urls.length};
+ track.addEventListener('scroll',()=>requestAnimationFrame(paint),{passive:true});
+ const shut=()=>{box.remove();document.removeEventListener('keydown',key)};const key=e=>{if(e.key==='Escape')shut();if(e.key==='ArrowRight')track.scrollBy({left:track.clientWidth,behavior:'smooth'});if(e.key==='ArrowLeft')track.scrollBy({left:-track.clientWidth,behavior:'smooth'})};
+ close.onclick=shut;document.addEventListener('keydown',key);box.append(track,count,close);document.body.append(box);
+ requestAnimationFrame(()=>{track.scrollLeft=start*track.clientWidth;paint()});
+}
+{const base=refreshChat;refreshChat=async function(...a){const r=await base.apply(this,a);try{stackChatPhotos()}catch{}return r}}
