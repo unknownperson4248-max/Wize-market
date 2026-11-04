@@ -1297,7 +1297,14 @@ assert.equal(pk.owner.id,'owner');
  assert.equal((await call('/api/groups/'+g+'/messages','POST',{text:'hello group'},friend)).status,201);assert.equal((await call('/api/groups/'+g+'/messages','GET',undefined,friend)).status,200);
  assert.equal((await call('/api/groups/'+g+'/join','POST',{},stranger)).status,403);
  const inv=(await call('/api/groups/'+g+'/invite','GET',undefined,maker)).data;assert.equal((await call('/api/groups/'+g+'/join','POST',{code:inv.code},stranger)).data.joined,true);
- console.log('PASS: member chat groups (create, add friends or chat contacts, join only with the invite link).');
+ // Kick: only group admins; not yourself, not the creator; messages stay.
+ assert.equal((await call('/api/groups/'+g+'/members/remove','POST',{userId:stranger},friend)).status,403);
+ assert.equal((await call('/api/groups/'+g+'/members/remove','POST',{userId:maker},maker)).status,400);
+ assert.equal((await call('/api/groups/'+g+'/members/remove','POST',{userId:stranger},maker)).status,200);
+ assert.equal(sql.prepare('SELECT count(*) n FROM wm_group_members WHERE group_id=? AND user_id=?').get(g,stranger).n,0);
+ assert.equal((await call('/api/groups/'+g+'/members/remove','POST',{userId:stranger},maker)).status,404);
+ assert.equal((await call('/api/groups/'+g+'/members/remove','POST',{userId:friend},maker)).status,200);assert.equal(sql.prepare("SELECT count(*) n FROM wm_group_messages WHERE group_id=? AND text='hello group'").get(g).n,1);
+ console.log('PASS: member chat groups (create, add friends or chat contacts, join only with the invite link; admins can remove members, messages stay).');
 }
 {
  // Videos longer than 2 minutes are refused.

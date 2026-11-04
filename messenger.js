@@ -312,18 +312,26 @@ function openPinChoice(c,m){
 
 // ---- Members list: admins first, then members, with photos; admins can make others admin ----
 function renderGroupMembersList(members,g){
- const root=$('groupMembers');root.replaceChildren();const admins=members.filter(m=>m.is_admin||m.id===g.owner_id),rest=members.filter(m=>!(m.is_admin||m.id===g.owner_id));
+ const root=$('groupMembers');const prevQ=root.querySelector('.member-search input')?.value||'';root.replaceChildren();
+ const search=node('label',undefined,'member-search');const q=node('input',undefined,'input');q.type='search';q.placeholder='Search members by name';q.setAttribute('aria-label','Search members');q.value=prevQ;search.append(node('span','🔍','member-search-icon'),q);root.append(search);
+ const list=node('div',undefined,'member-search-results');root.append(list);
+ const paint=()=>{const term=q.value.trim().toLowerCase();const match=m=>!term||[m.name,nicknameFor(m.id,m.name)].some(x=>String(x||'').toLowerCase().includes(term));const shown=members.filter(match);renderMemberGroups(list,shown,g,term)};q.oninput=paint;paint();
+}
+function renderMemberGroups(root,members,g,term){
+ root.replaceChildren();const admins=members.filter(m=>m.is_admin||m.id===g.owner_id),rest=members.filter(m=>!(m.is_admin||m.id===g.owner_id));
+ if(term&&!members.length){root.append(node('p','No member named "'+term+'".','muted'));return}
  const row=m=>{const b=button('',()=>openMemberAdminSheet(m,g),'member-row');const who=node('span',undefined,'member-row-text');const name=node('strong',nicknameFor(m.id,m.name));who.append(name,node('small',m.id===g.owner_id?'Group creator · Admin':m.is_admin?'Admin':m.role==='owner'?'Website owner':m.role==='trusted'?'Trusted admin':'Member'));b.append(avatar(m),who);if(m.is_admin||m.id===g.owner_id)b.append(node('span','Admin','admin-chip'));return b};
  root.append(node('p','Admins · '+admins.length,'info-caption'));for(const m of admins)root.append(row(m));
- root.append(node('p','Members · '+rest.length,'info-caption'));for(const m of rest)root.append(row(m));if(!rest.length)root.append(node('p','No other members yet.','muted'));
+ root.append(node('p','Members · '+rest.length,'info-caption'));for(const m of rest)root.append(row(m));if(!rest.length&&!term)root.append(node('p','No other members yet.','muted'));
 }
 function openMemberAdminSheet(m,g){
  const overlay=node('div',undefined,'message-sheet');overlay.id='messageSheet';overlay.onclick=e=>{if(e.target===overlay)closeMessageSheet()};const box=node('div',undefined,'delete-choice');const head=node('div',undefined,'member-sheet-head');head.append(avatar(m),node('strong',m.name));box.append(head);
  box.append(button('👤 View profile',()=>{closeMessageSheet();showProfile(m.id)},'btn secondary'));
  const canManage=!!g.canManage,creator=g.owner_id===me.id||me.role==='owner';
- if(canManage&&m.id!==g.owner_id&&m.id!==me.id){if(!m.is_admin)box.append(button('⭐ Make admin',()=>void setGroupAdmin(m,g,true),'btn'));else if(creator)box.append(button('Remove as admin',()=>void setGroupAdmin(m,g,false),'btn danger-btn'))}
+ if(canManage&&m.id!==g.owner_id&&m.id!==me.id){if(!m.is_admin)box.append(button('⭐ Make admin',()=>void setGroupAdmin(m,g,true),'btn'));else if(creator)box.append(button('Remove as admin',()=>void setGroupAdmin(m,g,false),'btn danger-btn'));if(m.role!=='owner'&&(!m.is_admin||creator))box.append(button('🚫 Remove from group',()=>void kickGroupMember(m,g),'btn danger-btn kick-btn'))}
  box.append(button('Cancel',closeMessageSheet,'btn ghost'));overlay.append(box);document.body.append(overlay);
 }
+async function kickGroupMember(m,g){if(!confirm('Remove '+m.name+' from '+(g.name||'this group')+'? They can only come back with an invite link.'))return;closeMessageSheet();try{await api('/groups/'+g.id+'/members/remove',{userId:m.id});toast(m.name+' was removed from the group.');const {members}=await api('/groups/'+g.id+'/members');renderGroupMembersList(members,g)}catch(e){toast(e.message)}}
 async function setGroupAdmin(m,g,admin){closeMessageSheet();try{await api('/groups/'+g.id+'/admins',{userId:m.id,admin});toast(admin?m.name+' is now an admin.':m.name+' is no longer an admin.');const {members}=await api('/groups/'+g.id+'/members');renderGroupMembersList(members,g)}catch(e){toast(e.message)}}
 
 // ---- @mentions: type @ for the member list, @everyone for admins, @ badges, jump button and popup ----

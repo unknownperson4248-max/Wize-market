@@ -440,3 +440,5 @@ html body #chatPanel #groupSettingsPanel>.group-info-popover{background:#3a3b3e!
 .chat-album-track img{max-width:100%;max-height:100%;object-fit:contain}
 .chat-album-count{position:absolute;left:50%;transform:translateX(-50%);top:calc(14px + env(safe-area-inset-top));color:#fff;font-weight:700;background:#0008;padding:4px 12px;border-radius:999px}
 .chat-album-close{position:absolute;right:14px;top:calc(10px + env(safe-area-inset-top));width:42px;height:42px;border-radius:50%;border:0;background:#fff2;color:#fff;font-size:26px;line-height:1;cursor:pointer}
+.member-search{display:flex;align-items:center;gap:8px;margin:4px 0 10px;padding:0 12px;border:1px solid var(--line,#263247);border-radius:999px;background:#111a2a}.member-search .input{border:0;background:transparent;padding:11px 0;margin:0;box-shadow:none}.member-search-icon{opacity:.7}
+.kick-btn{background:#73323f!important;border-color:#9b4a57!important;color:#fff!important}
