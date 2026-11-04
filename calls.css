@@ -413,12 +413,13 @@ html body #chatPanel #groupSettingsPanel>.group-info-popover{background:#3a3b3e!
 .app-splash{display:none}
 @media (display-mode:standalone){.app-splash{display:flex;position:fixed;inset:0;z-index:100000;flex-direction:column;align-items:center;justify-content:center;gap:22px;background:#0a0412;transition:opacity .4s ease,visibility .4s}}
 .app-splash.done{opacity:0;visibility:hidden}
-.app-splash-logo{position:relative;width:min(70vw,320px);aspect-ratio:1000/712;animation:splashIn .7s cubic-bezier(.2,.9,.25,1.15) both}
+.app-splash-logo{position:relative;width:min(70vw,320px);aspect-ratio:1000/712;animation:splashGrow .75s cubic-bezier(.22,.8,.25,1) both}
 .app-splash-logo img{display:block;width:100%;height:100%;object-fit:contain;image-rendering:auto;filter:drop-shadow(0 0 10px #a855f740)}
 .app-splash-shine{position:absolute;inset:0;-webkit-mask:url(/icons/splash-logo.webp) center/contain no-repeat;mask:url(/icons/splash-logo.webp) center/contain no-repeat;background:linear-gradient(110deg,transparent 40%,#ffffffb3 50%,transparent 60%) -150% 0/250% 100% no-repeat;animation:splashShine 1s ease-in-out .5s both}
-.app-splash-name{font-weight:800;font-size:20px;letter-spacing:.22em;color:#f3ecff;animation:splashName .6s ease-out .45s both}
-@keyframes splashIn{0%{opacity:0;transform:scale(.8)}100%{opacity:1;transform:none}}
+.app-splash-name{position:absolute;left:0;right:0;top:calc(50% + min(35vw,160px)*.712 + 18px);text-align:center;font-weight:800;font-size:20px;letter-spacing:.22em;color:#f3ecff;animation:splashName .5s ease-out .55s both}
+/* Starts at the size of the phone's own launch logo, then grows: no jump between the two screens */
+@keyframes splashGrow{0%{transform:scale(.5)}100%{transform:none}}
 @keyframes splashShine{to{background-position:150% 0}}
-@keyframes splashName{0%{opacity:0;transform:translateY(8px)}100%{opacity:1;transform:none}}
+@keyframes splashName{0%{opacity:0}100%{opacity:1}}
 @media (prefers-reduced-motion:reduce){.app-splash-logo,.app-splash-shine,.app-splash-name{animation:none}}
 .auth-logo-img{border-radius:0!important;box-shadow:none!important;object-fit:contain;filter:drop-shadow(0 6px 18px #a855f766)}

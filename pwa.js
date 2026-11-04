@@ -158,6 +158,8 @@ void loadPwaBranding();
 
 // Hide the launch animation once the app is ready (at least 1.3 s so it can play, at most 3.5 s).
 (()=>{const splash=document.getElementById('appSplash');if(!splash)return;if(!matchMedia('(display-mode: standalone)').matches){splash.remove();return}
- const started=performance.now();let gone=false;const hide=()=>{if(gone)return;gone=true;setTimeout(()=>{splash.classList.add('done');setTimeout(()=>splash.remove(),600)},Math.max(0,1300-(performance.now()-started)))};
+ // Status bar in the same colour as the launch screen while it shows, so the top does not change colour.
+ const theme=document.querySelector('meta[name="theme-color"]'),oldTheme=theme?.content;if(theme)theme.content='#0a0412';
+ const started=performance.now();let gone=false;const hide=()=>{if(gone)return;gone=true;setTimeout(()=>{splash.classList.add('done');if(theme&&oldTheme)theme.content=oldTheme;setTimeout(()=>splash.remove(),600)},Math.max(0,1300-(performance.now()-started)))};
  const ready=()=>!document.body.classList.contains('auth-pending');if(ready())hide();else{const watch=new MutationObserver(()=>{if(ready()){watch.disconnect();hide()}});watch.observe(document.body,{attributes:true,attributeFilter:['class']})}
  setTimeout(hide,3500)})();
