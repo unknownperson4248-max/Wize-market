@@ -42,7 +42,7 @@
       },
       "routes": [
         { "pattern": "wizenex.com/*", "zone_name": "wizenex.com" },
-        { "pattern": "www.wizenex.com/*", "zone_name": "wizenex.com" }
+        { "pattern": "www.wizenex.com", "custom_domain": true }
       ],
       "d1_databases": [
         {
