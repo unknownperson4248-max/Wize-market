@@ -947,9 +947,11 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  sql.prepare("UPDATE wm_posts SET created_at=created_at-86400000-60000 WHERE user_id='vip'").run();sql.prepare("DELETE FROM wm_limits WHERE key='publish:vip'").run();r=await call('/api/posts','POST',{...listing,title:'Picker check ID',details:'For the Admin picker',price:6100,gameUid:'73737311'},'vip');assert.equal(r.status,201);const pickerPost=r.data.id;
  // Deal box: only Admins of groups the buyer or the seller joined (seller-only groups are not named); with none, the client shows only the Owner.
  const expectRelated=sql.prepare("SELECT DISTINCT g.owner_id id FROM wm_group_members m JOIN wm_groups g ON g.id=m.group_id JOIN wm_roles r ON r.user_id=g.owner_id AND r.role IN ('owner','trusted') WHERE m.user_id IN ('pbuyer','vip') AND g.owner_id NOT IN ('pbuyer','vip') ORDER BY 1").all().map(x=>x.id);
- let pk=(await call('/api/deal-admins?postId='+pickerPost,'GET',undefined,'pbuyer')).data;assert.equal(pk.mode,'mediated');assert.equal(pk.iAm,'buyer');assert.equal(pk.owner.id,'owner');assert.deepEqual(pk.relatedAdmins.map(a=>a.id).sort(),expectRelated);assert.ok(expectRelated.includes('admin'));
+ let pk=(await call('/api/deal-admins?postId='+pickerPost,'GET',undefined,'pbuyer')).data;assert.equal(pk.mode,'mediated');assert.equal(pk.iAm,'buyer');assert.equal(pk.owner.id,'owner');// The Owner is always shown first, then the group Admins.
+assert.equal(pk.relatedAdmins[0].id,'owner');assert.deepEqual(pk.relatedAdmins.map(a=>a.id).sort(),[...new Set([...expectRelated,'owner'])].sort());assert.ok(expectRelated.includes('admin'));
  const sellerSide=pk.relatedAdmins.find(a=>a.id==='admin');assert.equal(sellerSide.theirs,1);if(!sellerSide.mine)assert.equal(sellerSide.my_groups,null);assert.ok(Number.isInteger(sellerSide.deals_done));
- sql.prepare("DELETE FROM wm_group_members WHERE user_id IN ('pbuyer','vip')").run();pk=(await call('/api/deal-admins?postId='+pickerPost,'GET',undefined,'pbuyer')).data;assert.deepEqual(pk.relatedAdmins,[]);assert.equal(pk.owner.id,'owner');
+ sql.prepare("DELETE FROM wm_group_members WHERE user_id IN ('pbuyer','vip')").run();pk=(await call('/api/deal-admins?postId='+pickerPost,'GET',undefined,'pbuyer')).data;assert.deepEqual(pk.relatedAdmins.map(a=>a.id),['owner']);// new members see only the Owner
+assert.equal(pk.owner.id,'owner');
  // Maintenance: Owner-only switch; while on, visitors get a sorry page and members get 503 from the API; the Owner and the Admin Panel keep working.
  assert.equal((await call('/api/admin/maintenance','POST',{on:true},'admin')).status,403);assert.equal((await call('/api/admin/maintenance','POST',{on:'yes'},'owner')).status,400);
  r=await call('/api/admin/maintenance','POST',{on:true,message:'Back at 10 PM <b>soon</b>'},'owner');assert.equal(r.status,200);assert.equal(r.data.on,true);
@@ -1267,4 +1269,18 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  let r=await go('wizenex.com');assert.equal(r.status,301);assert.equal(r.headers.get('location'),'https://wizenex.com/u/test');
  r=await go('none');assert.notEqual(r.status,301);
  console.log('PASS: per-site address (SITE_HOST) for WizeNex.');
+}
+{
+ // Admin deal limits: the Owner sets the most taka a trusted Admin can handle; the Owner is always first and has no limit.
+ assert.equal((await call('/api/admin/deal-limit','POST',{userId:'admin',maxAmount:5000},'admin')).status,403);
+ assert.equal((await call('/api/admin/deal-limit','POST',{userId:'buyer',maxAmount:5000},'owner')).status,409);
+ assert.equal((await call('/api/admin/deal-limit','POST',{userId:'admin',maxAmount:'5k'},'owner')).data.maxAmount,5000);
+ const list=(await call('/api/admin/users?q=','GET',undefined,'owner')).data.users;assert.equal(list.find(x=>x.id==='admin').deal_limit,5000);
+ sql.prepare("DELETE FROM wm_limits").run();sql.prepare("UPDATE wm_posts SET availability='sold',created_at=created_at-3*86400000 WHERE user_id='seller'").run();
+ const pr=await call('/api/posts','POST',{title:'Limit ID',details:'Limit ID details',price:9000,kind:'Game ID',media:[]},'seller');assert.equal(pr.status,201,JSON.stringify(pr.data));
+ const picks=(await call('/api/deal-admins?postId='+pr.data.id,'GET',undefined,'buyer')).data;
+ if(picks.mode==='mediated'){assert.equal(picks.allAdmins[0].role,'owner');assert.ok(!picks.allAdmins.some(a=>a.id==='admin'));assert.equal(picks.relatedAdmins[0].role,'owner')}
+ const r=await call('/api/deals','POST',{postId:pr.data.id,adminId:'admin'},'buyer');assert.equal(r.status,409);assert.match(r.data.error,/up to ৳5,000/);
+ assert.equal((await call('/api/admin/deal-limit','POST',{userId:'admin',maxAmount:null},'owner')).data.maxAmount,null);
+ console.log('PASS: Admin deal limits (Owner only, Owner first in every Admin list, limits enforced when choosing an Admin).');
 }

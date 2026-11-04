@@ -290,3 +290,4 @@ CREATE TABLE IF NOT EXISTS wm_message_mentions(group_id TEXT NOT NULL REFERENCES
 CREATE INDEX IF NOT EXISTS wm_message_mentions_user ON wm_message_mentions(user_id,seen_at,created_at);
 
 CREATE UNIQUE INDEX IF NOT EXISTS wm_groups_invite_code ON wm_groups(invite_code);
+CREATE TABLE IF NOT EXISTS wm_admin_deal_limits(user_id TEXT PRIMARY KEY REFERENCES users(id),max_amount INTEGER,updated_by TEXT NOT NULL REFERENCES users(id),updated_at INTEGER NOT NULL);
