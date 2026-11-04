@@ -1297,3 +1297,11 @@ assert.equal(pk.owner.id,'owner');
  const inv=(await call('/api/groups/'+g+'/invite','GET',undefined,maker)).data;assert.equal((await call('/api/groups/'+g+'/join','POST',{code:inv.code},stranger)).data.joined,true);
  console.log('PASS: member chat groups (create, add friends or chat contacts, join only with the invite link).');
 }
+{
+ // Videos longer than 2 minutes are refused.
+ const box=(type,body)=>{const b=new Uint8Array(8+body.length);new DataView(b.buffer).setUint32(0,b.length);b.set(new TextEncoder().encode(type),4);b.set(body,8);return b};
+ const mp4=secs=>{const mv=new Uint8Array(100);const dv=new DataView(mv.buffer);dv.setUint32(12,1000);dv.setUint32(16,secs*1000);const ftyp=box('ftyp',new TextEncoder().encode('isom0000isom')),moov=box('moov',box('mvhd',mv)),all=new Uint8Array(ftyp.length+moov.length+64);all.set(ftyp);all.set(moov,ftyp.length);return all};
+ const send=async bytes=>(await worker.fetch(new Request('https://test.local/api/upload',{method:'POST',headers:{origin:'https://test.local','content-type':'video/mp4',cookie:'wm_session='+tokens.buyer},body:bytes}),env)).status;
+ assert.equal(await send(mp4(150)),413);assert.equal(await send(mp4(60)),201);assert.equal(await send(mp4(120)),201);
+ console.log('PASS: videos are limited to 2 minutes (MP4 length read from the header).');
+}

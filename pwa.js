@@ -121,3 +121,10 @@ void loadPwaBranding();
 
 // Keep the feed filters right under the "My feed" heading while scrolling.
 (()=>{const h=document.querySelector('#page-home .feed-heading');if(!h||!window.ResizeObserver)return;const set=()=>document.documentElement.style.setProperty('--feed-head-h',Math.round(h.getBoundingClientRect().height)+'px');new ResizeObserver(set).observe(h);set()})();
+
+// Videos can be at most 2 minutes: checked as soon as a video is picked, before any upload starts.
+(()=>{const MAX=120;const length=f=>new Promise(res=>{const v=document.createElement('video');v.preload='metadata';v.muted=true;const url=URL.createObjectURL(f);const done=d=>{URL.revokeObjectURL(url);res(d)};v.onloadedmetadata=()=>done(isFinite(v.duration)?v.duration:null);v.onerror=()=>done(null);setTimeout(()=>done(null),8000);v.src=url});
+ document.addEventListener('change',async e=>{const input=e.target;if(!(input instanceof HTMLInputElement)||input.type!=='file'||input.dataset.videoChecked==='1')return;const vids=[...(input.files||[])].filter(f=>f.type.startsWith('video/'));if(!vids.length)return;
+  e.stopImmediatePropagation();const lens=await Promise.all(vids.map(length)),tooLong=lens.findIndex(d=>d!==null&&d>MAX+1);
+  if(tooLong>=0){const m=Math.floor(lens[tooLong]/60),s=String(Math.round(lens[tooLong]%60)).padStart(2,'0');toast('🎬 Video is '+m+':'+s+' long. Videos can be at most 2 minutes — trim it and try again.');input.value='';return}
+  input.dataset.videoChecked='1';input.dispatchEvent(new Event('change',{bubbles:true}));delete input.dataset.videoChecked},true)})();
