@@ -1,14 +1,14 @@
 {
   "id": "/",
-  "name": "WIZE MARKET",
-  "short_name": "WIZE MARKET",
+  "name": "WizeNex",
+  "short_name": "WizeNex",
   "description": "Your gaming community marketplace. Connect, post and trade with trusted admins.",
   "lang": "en",
   "start_url": "/?source=pwa#home",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#070e1b",
-  "theme_color": "#090e19",
+  "background_color": "#0a0412",
+  "theme_color": "#0a0412",
   "icons": [
     {
       "src": "/icons/app-192.png",

@@ -147,7 +147,7 @@ const prettyLogin=login=>/^8801\d{9}$/.test(login)?'0'+login.slice(3):login;
 async function refreshResetCount(){try{const {requests}=await api('reset-requests');$('resetsNav').textContent='🔑 Forgot password'+(requests.length?' ('+requests.length+')':'');return requests}catch{return []}}
 function resetShare(box,data){
  box.replaceChildren();const link=node('input',undefined,'input');link.value=data.link;link.readOnly=true;link.onclick=()=>link.select();
- const where=data.kind==='phone'?'WhatsApp '+prettyLogin(data.login):data.login,text='Hello '+data.name+', here is your Wize Market password reset link. It works once, for 24 hours: '+data.link;
+ const where=data.kind==='phone'?'WhatsApp '+prettyLogin(data.login):data.login,text='Hello '+data.name+', here is your '+(document.title.split(' — ')[0]||'WizeNex')+' password reset link. It works once, for 24 hours: '+data.link;
  box.append(node('p','✅ Link ready for '+data.name+'. Send it only to '+where+'.','muted'),link);const row=node('div',undefined,'reset-share');
  if(data.kind==='phone'){const wa=node('a','🟢 Send on WhatsApp','btn');wa.href='https://wa.me/'+data.login+'?text='+encodeURIComponent(text);wa.target='_blank';wa.rel='noopener';row.append(wa)}
  else{const mail=node('a','✉️ Send by email','btn');mail.href='mailto:'+data.login+'?subject='+encodeURIComponent('Your password reset link')+'&body='+encodeURIComponent(text);row.append(mail)}

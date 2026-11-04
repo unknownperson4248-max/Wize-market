@@ -152,7 +152,7 @@ function openTrustCard(userId){
   body.replaceChildren();const head=node('div',undefined,'trust-head');head.append(avatar(t),node('strong',t.name));body.append(head);
   const badge=t.role==='owner'?'Owner':t.role==='trusted'?'Admin':t.verified?'Verified member':'Not verified yet';
   const list=node('dl',undefined,'deal-facts');
-  for(const [k,v]of [['Badge',badge],['Verified by Wize Market',t.role==='owner'?'Owner account':t.verified_at?new Date(t.verified_at).toLocaleDateString():'Not verified'],['Member since',new Date(t.created_at).toLocaleDateString()],['Completed deals',String(t.completed_party)],...(t.role!=='member'?[['Deals handled as Admin',String(t.completed_admin)]]:[]),['Deals with a problem',t.total?t.disputed+' of '+t.total:'0']])list.append(node('dt',k),node('dd',v));
+  for(const [k,v]of [['Badge',badge],['Verified by '+(document.title.split(' — ')[0]||'WizeNex'),t.role==='owner'?'Owner account':t.verified_at?new Date(t.verified_at).toLocaleDateString():'Not verified'],['Member since',new Date(t.created_at).toLocaleDateString()],['Completed deals',String(t.completed_party)],...(t.role!=='member'?[['Deals handled as Admin',String(t.completed_admin)]]:[]),['Deals with a problem',t.total?t.disputed+' of '+t.total:'0']])list.append(node('dt',k),node('dd',v));
   body.append(list,node('p','Only the Owner gives badges. Nobody can buy them or type them into a name.','hint'));
  }).catch(e=>{body.replaceChildren(node('p',e.message,'hint'))})},'Close',null);
 }
