@@ -5,7 +5,7 @@ let profileViewId=null,profileTab='posts',profileData=null,profileLoad=0,activeC
 let postIntent='sell';let editingPost=null,deletePending=null;
 let wantsAdminAccess=new URLSearchParams(location.search).get('admin_access')==='1',wantsAdminRecovery=new URLSearchParams(location.search).get('admin_recovery')==='1';
 const $=id=>document.getElementById(id),CID='773335158244-nk231eeff13mklslfaeb8450u6645fvj.apps.googleusercontent.com';
-let pendingProfile=location.pathname.startsWith('/u/')?location.pathname.split('/')[2]:null;
+let pendingProfile=location.pathname.startsWith('/u/')?location.pathname.split('/')[2]:location.pathname.startsWith('/id/')?'id/'+location.pathname.split('/')[2]:null;
 let messengerMode="all",adminView="posts";
 let me=null,active='home',feed=[],uploads=[],threads=[],groups=[],admins=[],deals=[],dealInbox=[],chat=null,polling=false,searchTimer,toastTimer,googleInitialized=false;
 let groupMuted=false;let pendingInvite=new URLSearchParams(location.hash.slice(1)).get('join');
@@ -108,7 +108,7 @@ $('closeGroupPost').onclick=closeGroupPost;
 
 async function loadSiteIdentity(){const d=await api('/site');globalThis.wmSiteWelcome=d.welcome;if(!globalThis.wmSiteContent?.login?.title&&authMode==='signin')$('loginTitle').textContent=d.welcome;}void loadSiteIdentity().catch(()=>{});
 
-async function openSharedProfile(){if(pendingPost){const id=pendingPost;pendingPost=null;await openListing(id)}if(!me){if(pendingProfileId||pendingProfile){afterLoginTab='profile';showLogin()}return}if(pendingProfileId){const id=pendingProfileId;pendingProfileId=null;await showProfile(id);return}if(!pendingProfile)return;const name=pendingProfile;pendingProfile=null;try{const d=await api('/people/'+encodeURIComponent(name));navigate('profile');await showProfile(d.userId)}catch(e){toast(e.message)}}
+async function openSharedProfile(){if(pendingPost){const id=pendingPost;pendingPost=null;await openListing(id)}if(!me){if(pendingProfileId||pendingProfile){afterLoginTab='profile';showLogin()}return}if(pendingProfileId){const id=pendingProfileId;pendingProfileId=null;await showProfile(id);return}if(!pendingProfile)return;const name=pendingProfile;pendingProfile=null;try{const d=await api('/people/'+(name.startsWith('id/')?'id/'+encodeURIComponent(name.slice(3)):encodeURIComponent(name)));navigate('profile');await showProfile(d.userId)}catch(e){toast(e.message)}}
 $('closeAdminSetup').onclick=()=>{$('adminSetupModal').hidden=true;wantsAdminRecovery=false};
 $('adminSetupForm').onsubmit=async e=>{e.preventDefault();const b=e.submitter;b.disabled=true;try{await api('/admin/setup',{username:$('setupAdminId').value,password:$('setupAdminPassword').value,currentPassword:$('setupCurrentPassword').value,recover:$('setupRecovery').checked});e.target.reset();$('adminSetupModal').hidden=true;wantsAdminRecovery=false;toast('Admin login saved. Open the separate control room to sign in.')}catch(e){toast(e.message)}finally{b.disabled=false}};
 

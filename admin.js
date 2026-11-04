@@ -36,7 +36,7 @@ async function loadVerificationApplications(root){
   const requests=(await api('verifications')).requests.filter(r=>r.kind===verifyKind);
   if(!requests.length)section.append(node('p','No verification applications yet.','muted'));
   for(const r of requests){
-   const card=node('article',undefined,'card report-card');card.append(node('h3',r.applicant_name+' · '+(r.kind==='seller'?'Seller verification':'Trusted Admin application')),node('p','Account ID: '+shortId(r.user_id)+' · Sent '+new Date(r.created_at).toLocaleString(),'small muted'),node('p',r.status==='pending'?'⏳ Waiting for you':r.status==='approved'?'✅ Approved':'❌ Rejected','pill'),...(r.contact?[node('p','Contact (owner only): '+r.contact,'small')]:[]));
+   const card=node('article',undefined,'card report-card');card.append(node('h3',r.applicant_name+' · '+(r.kind==='seller'?'Seller verification':'Trusted Admin application')),idLine(r.user_id,' · Sent '+new Date(r.created_at).toLocaleString()),node('p',r.status==='pending'?'⏳ Waiting for you':r.status==='approved'?'✅ Approved':'❌ Rejected','pill'),...(r.contact?[node('p','Contact (owner only): '+r.contact,'small')]:[]));
    if(r.whatsapp){const wa=node('a','🟢 WhatsApp 0'+r.whatsapp.slice(3),'btn');wa.href='https://wa.me/'+r.whatsapp;wa.target='_blank';wa.rel='noopener';card.append(wa)}
    if(Number.isFinite(r.location_lat)){const map=node('a','📍 See location on map (about '+Math.round(r.location_accuracy||0)+' m)','btn');map.href='https://maps.google.com/?q='+r.location_lat+','+r.location_lng;map.target='_blank';map.rel='noopener';card.append(map,node('p','Location shared '+new Date(r.location_at).toLocaleString(),'small muted'))}
    const answers=(()=>{try{return JSON.parse(r.answers||'[]')}catch{return []}})();if(answers.length){const list=node('dl',undefined,'verification-answers');for(const x of answers)list.append(node('dt',x.q),node('dd',x.a||'—'));card.append(list)}
@@ -291,7 +291,10 @@ $('feedPresetsForm').onsubmit=async e=>{e.preventDefault();const list=readFeedPr
 
 // Short account ID (first 8 characters), like a Deal ID. The full ID is still used inside the panel.
 function shortId(id){return '#'+String(id||'').slice(0,8).toUpperCase()}
+function profileUrl(id){return location.origin+'/id/'+String(id||'').slice(0,8).toLowerCase()}
 
 // Faster panel: the side counters (password resets, verifications, maintenance, chat reports) refresh at most every 30 seconds,
 // not on every page switch. Saving or answering something still updates the page you are on right away.
 for(const name of ['refreshResetCount','refreshVerificationCount','refreshMaintenance','refreshChatReportCount']){const base=globalThis[name];if(typeof base!=='function')continue;let last=0,running=null;globalThis[name]=function(force){const now=Date.now();if(!force&&now-last<30000)return running||Promise.resolve();last=now;running=Promise.resolve(base.apply(this,arguments)).finally(()=>{running=null});return running}}
+
+function idLine(id,rest){const line=node('p',undefined,'small muted');const a=node('a',shortId(id));a.href=profileUrl(id);a.target='_blank';a.rel='noopener';a.title='Open this member’s profile';line.append('Account ID: ',a,rest);return line}

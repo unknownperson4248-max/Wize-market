@@ -1440,3 +1440,12 @@ assert.equal(pk.owner.id,'owner');
  sql.exec('DELETE FROM wm_limits');const p2=await shot(who);assert.equal((await call('/api/verification','POST',{kind:'trusted',whatsapp:'01811112222',answers:['https://facebook.com/test','yes','yes','yes','yes'],docType:'passport',documentId:p2},who)).status,201);
  console.log('PASS: verification document types with live front/back photos (back needed for NID and driving licence).');
 }
+{
+ // Short account IDs: /id/<first 8> opens the profile; the owner can search members by it.
+ const id=sql.prepare("SELECT id FROM users WHERE id='buyer'").get().id;sql.prepare("INSERT OR IGNORE INTO users VALUES(?,?,?,?,?,?,?)").run('5126fe11-c297-4633-9416-e59b0b068e24',null,'joy@example.com','Joy','',Date.now(),Date.now());
+ let r=await call('/api/people/id/5126FE11','GET',undefined,'owner');assert.equal(r.status,200);assert.equal(r.data.userId,'5126fe11-c297-4633-9416-e59b0b068e24');
+ assert.equal((await call('/api/people/id/zzzzzzzz','GET',undefined,'owner')).status,404);
+ r=await call('/api/admin/users?q=%235126fe11','GET',undefined,'owner');assert.equal(r.status,200);assert.ok(r.data.users.some(x=>x.id==='5126fe11-c297-4633-9416-e59b0b068e24'));
+ r=await call('/api/admin/users?q=buyer','GET',undefined,'owner');assert.ok(r.data.users.some(x=>x.id===id));
+ console.log('PASS: short account IDs open profiles (/id/XXXXXXXX) and work in the owner member search.');
+}

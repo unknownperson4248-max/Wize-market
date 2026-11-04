@@ -412,3 +412,7 @@ body.create-menu-open::after{content:'';position:fixed;inset:0;z-index:140;backg
 .add-banner-button:hover{background:#1a2440cc}.add-banner-button:active{transform:scale(.97)}
 .add-banner-plus{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:#a891ff;color:#0b1424;font-size:16px;line-height:1}
 #authStatus .auth-create-link{display:inline-flex;margin-top:8px;padding:8px 16px;min-height:0;font-size:14px}
+.profile-id-row{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin:6px 0 2px}
+.verified-member-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:999px;background:#1d9bf022;border:1px solid #1d9bf066;color:#7cc4ff;font-size:12px;font-weight:700}
+.profile-id-chip{display:inline-flex;align-items:center;padding:3px 10px;min-height:0;border-radius:999px;border:1px solid var(--line,#263247);background:#111a2a;color:var(--muted,#8c9bb3);font:inherit;font-size:12px;font-weight:600;letter-spacing:.04em;cursor:pointer}
+.profile-id-chip:active{transform:scale(.97)}
