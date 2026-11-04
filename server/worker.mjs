@@ -36,8 +36,8 @@ async function friendExtras(db,u,people){if(!people.length)return people;try{con
 // Deal limit per Admin. The Owner has no limit; no row means no limit.
 async function adminDealLimit(db,adminId){try{const r=await one(db,"SELECT r.role,l.max_amount FROM wm_roles r LEFT JOIN wm_admin_deal_limits l ON l.user_id=r.user_id WHERE r.user_id=?",adminId);if(!r||r.role==='owner')return null;return r.max_amount??null}catch{return null}}
 async function needAdminLimit(db,adminId,price){const max=await adminDealLimit(db,adminId);need(max===null||!(price>max),'This Admin can handle deals up to ৳'+Number(max).toLocaleString('en-US')+'. Choose another Admin.',409)}
-// Owner first, then admins whose limit covers the price.
-async function withinLimits(db,list,price){let limits=new Map();try{limits=new Map((await rows(db,'SELECT user_id,max_amount FROM wm_admin_deal_limits')).map(r=>[r.user_id,r.max_amount]))}catch{}const out=(list||[]).filter(a=>a.role==='owner'||limits.get(a.id)==null||!(price>limits.get(a.id))).map(a=>({...a,deal_limit:a.role==='owner'?null:limits.get(a.id)??null}));out.sort((a,b)=>(b.role==='owner')-(a.role==='owner'));return out}
+// Admins whose limit covers the price (the Owner has no limit).
+async function withinLimits(db,list,price,ownerFirst=false){let limits=new Map();try{limits=new Map((await rows(db,'SELECT user_id,max_amount FROM wm_admin_deal_limits')).map(r=>[r.user_id,r.max_amount]))}catch{}const out=(list||[]).filter(a=>a.role==='owner'||limits.get(a.id)==null||!(price>limits.get(a.id))).map(a=>({...a,deal_limit:a.role==='owner'?null:limits.get(a.id)??null}));if(ownerFirst)out.sort((a,b)=>(b.role==='owner')-(a.role==='owner'));return out}
 // Videos: at most 2 minutes. Reads the length from the MP4 header (walking boxes, no full scan) or the WebM Info block.
 const MAX_VIDEO_SECONDS=120;
 function videoSeconds(b,type){try{const u32=i=>((b[i]<<24)>>>0)+(b[i+1]<<16)+(b[i+2]<<8)+b[i+3],tag=i=>String.fromCharCode(b[i],b[i+1],b[i+2],b[i+3]);
@@ -1064,8 +1064,8 @@ if(p==='/api/deal-admins'&&method==='GET'){
   picks.relatedAdmins=await rows(db,"SELECT u.id,u.name,u.picture,u.verified,r.role,max(m.user_id=?) mine,max(m.user_id=?) theirs,group_concat(DISTINCT CASE WHEN m.user_id=? THEN g.name END) my_groups,"+done+" FROM wm_group_members m JOIN wm_groups g ON g.id=m.group_id JOIN wm_roles r ON r.user_id=g.owner_id AND r.role IN ('owner','trusted') JOIN wm_public_users u ON u.id=r.user_id WHERE m.user_id IN (?,?) AND u.id NOT IN (?,?) AND NOT EXISTS(SELECT 1 FROM wm_chat_preferences cp WHERE cp.kind='group' AND cp.chat_id=g.id AND cp.user_id=? AND cp.blocked=1) GROUP BY u.id ORDER BY (max(m.user_id=?) AND max(m.user_id=?)) DESC,max(m.user_id=?) DESC,deals_done DESC,u.name LIMIT 30",u.id,peer,u.id,u.id,peer,buyerId,sellerId,u.id,u.id,peer,u.id);
  }
  if(picks.mode==='mediated'){const price=Number(post.price)||0;let owner=null;try{owner=await one(db,"SELECT u.id,u.name,u.picture,u.verified,r.role,(SELECT count(*) FROM wm_deals dd WHERE dd.admin_id=u.id AND dd.status='completed') deals_done FROM wm_public_users u JOIN wm_roles r ON r.user_id=u.id WHERE r.role='owner' AND u.id NOT IN (?,?) LIMIT 1",buyerId,sellerId)}catch{}
-  const withOwner=list=>owner&&!(list||[]).some(a=>a.id===owner.id)?[owner,...(list||[])]:(list||[]);
-  picks.relatedAdmins=await withinLimits(db,withOwner(picks.relatedAdmins),price);picks.myGroupAdmins=await withinLimits(db,withOwner(picks.myGroupAdmins),price);picks.allAdmins=await withinLimits(db,withOwner(picks.allAdmins),price);picks.dealPrice=price}
+  // Group Admins first as before. The Owner is shown on top only for new members (no group Admins yet), as a trusted reference.
+  picks.relatedAdmins=await withinLimits(db,picks.relatedAdmins,price,false);picks.myGroupAdmins=await withinLimits(db,picks.myGroupAdmins,price,false);picks.allAdmins=await withinLimits(db,owner&&!(picks.allAdmins||[]).some(a=>a.id===owner.id)?[...(picks.allAdmins||[]),owner]:picks.allAdmins,price,false);picks.recommendOwner=!picks.relatedAdmins.length&&!!owner;if(owner)picks.owner={...owner,...(picks.owner||{})};picks.dealPrice=price}
  return reply({postId:post.id,title:post.title,...picks});
 }
 if(p==='/api/friends/count'&&method==='GET')return reply({count:(await one(db,"SELECT count(*) n FROM wm_friend_requests WHERE to_id=? AND status='pending'",u.id)).n});

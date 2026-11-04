@@ -90,11 +90,12 @@ async function openListingAdminChoice({postId,deal}={}){
   const search=node('input',undefined,'input admin-search');search.type='search';search.placeholder='🔎 Search Admin by name';search.setAttribute('aria-label','Search Admins by name');
   const emptyNote=node('p','No Admin found with that name.','hint admin-search-empty');emptyNote.hidden=true;root.append(search,emptyNote);
   // The website Owner is always first and can handle any amount.
-  let ownerRow=null;if(ownerPerson){root.append(section('👑 Website owner'));ownerRow=choice(ownerPerson,'Website owner · any amount');ownerRow.classList.add('admin-owner-row');shown.add(ownerPerson.id);options++;root.append(ownerRow)}
+  // New members (no group Admins yet) see the Owner on top as a trusted reference; everyone else finds the Owner in Discover.
+  if(ownerPerson&&data.recommendOwner){root.append(section('⭐ Recommended for new members'));const ownerRow=choice(ownerPerson,'Website owner · any amount');ownerRow.classList.add('admin-owner-row');shown.add(ownerPerson.id);options++;root.append(ownerRow)}
   const limitNote=a=>a.deal_limit?' · up to ৳'+Number(a.deal_limit).toLocaleString('en-US'):'';
   const relatedNote=a=>relatedNoteBase(a)+limitNote(a);const related=add((data.relatedAdmins||[]).filter(a=>!isOwner(a)),'👥 Admins from your groups',relatedNote);
-  const others=[...(data.allAdmins||[]),...(data.fallback||[])].filter((a,i,list)=>a&&!isOwner(a)&&!shown.has(a.id)&&list.findIndex(b=>b.id===a.id)===i);
-  const discover=node('div',undefined,'admin-discover');add(others,'🧭 Discover Admins · most deals first',a=>'Admin'+limitNote(a),discover);
+  const others=[...(data.allAdmins||[]),...(data.fallback||[])].filter((a,i,list)=>a&&!shown.has(a.id)&&list.findIndex(b=>b.id===a.id)===i);
+  const discover=node('div',undefined,'admin-discover');add(others,'🧭 Discover Admins · most deals first',a=>isOwner(a)?'Website owner':'Admin'+limitNote(a),discover);
   const nobodyElse=!related&&!others.length;
   if(related&&others.length){discover.hidden=true;const open=node('button','🧭 Discover more Admins ('+others.length+')','btn secondary admin-discover-toggle');open.type='button';open.onclick=()=>{discover.hidden=false;open.hidden=true;discover.scrollIntoView({block:'start',behavior:'smooth'})};root.append(open)}
   root.append(discover);
