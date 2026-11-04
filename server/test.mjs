@@ -1304,3 +1304,18 @@ assert.equal(pk.owner.id,'owner');
  assert.equal(await send(mp4(150)),413);assert.equal(await send(mp4(60)),201);assert.equal(await send(mp4(120)),201);
  console.log('PASS: videos are limited to 2 minutes (MP4 length read from the header).');
 }
+{
+ const post={title:'Ban test',details:'Details',price:5000,kind:'Game ID',media:[]};
+ assert.equal((await call('/api/admin/suspend','POST',{userId:'outsider',hours:2},'admin')).status,403);
+ assert.equal((await call('/api/admin/suspend','POST',{userId:'owner',forever:true},'owner')).status,403);
+ assert.equal((await call('/api/admin/suspend','POST',{userId:'outsider',hours:0},'owner')).status,400);
+ const timed=await call('/api/admin/suspend','POST',{userId:'outsider',hours:48,reason:'Scam report'},'owner');assert.equal(timed.status,200);assert.ok(Math.abs(timed.data.until-Date.now()-48*3600000)<60000);
+ assert.equal((await call('/api/posts','POST',post,'outsider')).status,423);
+ let list=(await call('/api/admin/users?q=outsider','GET',undefined,'owner')).data.users;assert.equal(list[0].suspension.reason,'Scam report');
+ const ban=await call('/api/admin/suspend','POST',{userId:'outsider',forever:true},'owner');assert.equal(ban.status,200);assert.ok(ban.data.until>Date.now()+1e12);
+ const blocked=await call('/api/posts','POST',post,'outsider');assert.equal(blocked.status,423);assert.match(blocked.data.error,/banned/);
+ assert.equal((await call('/api/me','GET',undefined,'outsider')).status,200);
+ assert.equal((await call('/api/admin/restore','POST',{userId:'outsider'},'owner')).status,200);
+ list=(await call('/api/admin/users?q=outsider','GET',undefined,'owner')).data.users;assert.equal(list[0].suspension,null);
+ console.log('PASS: owner can suspend a member for hours/days or ban them with no end date; owner cannot be suspended; restore lifts it.');
+}
