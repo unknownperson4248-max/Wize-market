@@ -21,7 +21,7 @@ async function loadReports(){
  if(!reports.length)root.append(node('p','Nothing here yet.','muted'));
  for(const r of reports){
   const card=node('article',undefined,'card report-card');
-  card.append(node('span',r.status,'pill'),node('h3',r.post_title||'Website issue'),node('p','Reported by '+r.reporter_name+' · Account ID: '+r.user_id+' · '+new Date(r.created_at).toLocaleString(),'small muted'),node('strong',r.reason.replaceAll('-',' ')),node('p',r.details));
+  card.append(node('span',r.status,'pill'),node('h3',r.post_title||'Website issue'),node('p','Reported by '+r.reporter_name+' · Account ID: '+shortId(r.user_id)+' · '+new Date(r.created_at).toLocaleString(),'small muted'),node('strong',r.reason.replaceAll('-',' ')),node('p',r.details));
   if(r.post_details)card.append(node('blockquote',r.post_details,'reported-post-details'));
   if(r.attachment_id){const label=node('p','Attached screenshot (private)','small muted'),img=node('img');img.src='/api/control/evidence/'+encodeURIComponent(r.attachment_id);img.alt='Screenshot attached to report';img.loading='lazy';img.style.maxWidth='min(100%,380px)';img.style.maxHeight='360px';img.style.objectFit='contain';img.style.borderRadius='12px';card.append(label,img)}
   if(r.status==='open'){const actions=node('div',undefined,'action-row');for(const [action,label]of [['resolve','Mark resolved'],['dismiss','Dismiss'],...(r.post_id?[['restrict','Restrict reported post']]:[])])actions.append(button(label,async()=>{await api('report-action',{reportId:r.id,action});await loadReports()}));card.append(actions)}
@@ -29,14 +29,14 @@ async function loadReports(){
  }
 }
 async function refreshVerificationCount(){try{const {requests}=await api('verifications'),count=k=>requests.filter(r=>r.status==='pending'&&r.kind===k).length;$('verificationsNav').textContent='🛡️ Admin applications'+(count('trusted')?' ('+count('trusted')+')':'');$('verificationsMemberNav').textContent='✔️ Verified member applications'+(count('seller')?' ('+count('seller')+')':'');return requests}catch{return []}}
-async function loadVerificationPage(){const root=$('verificationList');root.replaceChildren();$('verificationHeading').textContent=verifyKind==='trusted'?'🛡️ Admin applications':'✔️ Verified member applications';for(const b of document.querySelectorAll('[data-verify-tab]'))b.setAttribute('aria-selected',String(b.dataset.verifyTab===verifyKind));await loadVerificationApplications(root);void refreshVerificationCount()}
+async function loadVerificationPage(){const root=$('verificationList');root.replaceChildren();$('verificationHeading').textContent=verifyKind==='trusted'?'🛡️ Admin applications':'✔️ Verified member applications';for(const b of document.querySelectorAll('[data-verify-tab]'))b.setAttribute('aria-selected',String(b.dataset.verifyTab===verifyKind));await loadVerificationApplications(root);void refreshVerificationCount(true)}
 async function loadVerificationApplications(root){
  const section=node('section',undefined,'verification-review-section');
  try{
   const requests=(await api('verifications')).requests.filter(r=>r.kind===verifyKind);
   if(!requests.length)section.append(node('p','No verification applications yet.','muted'));
   for(const r of requests){
-   const card=node('article',undefined,'card report-card');card.append(node('h3',r.applicant_name+' · '+(r.kind==='seller'?'Seller verification':'Trusted Admin application')),node('p','Account ID: '+r.user_id+' · Sent '+new Date(r.created_at).toLocaleString(),'small muted'),node('p',r.status==='pending'?'⏳ Waiting for you':r.status==='approved'?'✅ Approved':'❌ Rejected','pill'),...(r.contact?[node('p','Contact (owner only): '+r.contact,'small')]:[]));
+   const card=node('article',undefined,'card report-card');card.append(node('h3',r.applicant_name+' · '+(r.kind==='seller'?'Seller verification':'Trusted Admin application')),node('p','Account ID: '+shortId(r.user_id)+' · Sent '+new Date(r.created_at).toLocaleString(),'small muted'),node('p',r.status==='pending'?'⏳ Waiting for you':r.status==='approved'?'✅ Approved':'❌ Rejected','pill'),...(r.contact?[node('p','Contact (owner only): '+r.contact,'small')]:[]));
    if(r.whatsapp){const wa=node('a','🟢 WhatsApp 0'+r.whatsapp.slice(3),'btn');wa.href='https://wa.me/'+r.whatsapp;wa.target='_blank';wa.rel='noopener';card.append(wa)}
    if(Number.isFinite(r.location_lat)){const map=node('a','📍 See location on map (about '+Math.round(r.location_accuracy||0)+' m)','btn');map.href='https://maps.google.com/?q='+r.location_lat+','+r.location_lng;map.target='_blank';map.rel='noopener';card.append(map,node('p','Location shared '+new Date(r.location_at).toLocaleString(),'small muted'))}
    const answers=(()=>{try{return JSON.parse(r.answers||'[]')}catch{return []}})();if(answers.length){const list=node('dl',undefined,'verification-answers');for(const x of answers)list.append(node('dt',x.q),node('dd',x.a||'—'));card.append(list)}
@@ -159,14 +159,14 @@ function resetRow(person,{requestId,when}={}){
  const card=node('div',undefined,'reset-row'),head=node('div',undefined,'reset-row-head'),box=node('div',undefined,'reset-share-box');
  head.append(node('strong',person.name||'❓ No account found'),node('span',(person.kind==='phone'?'📱 ':'✉️ ')+prettyLogin(person.login),'muted'));if(when)head.append(node('small','Asked '+new Date(when).toLocaleString(),'muted'));card.append(head);
  const actions=node('div',undefined,'reset-actions');
- if(person.user_id&&person.has_password!==0)actions.append(button('🔗 Make reset link',async()=>{const data=await api('reset-link',{userId:person.user_id});resetShare(box,data);void refreshResetCount()}));
+ if(person.user_id&&person.has_password!==0)actions.append(button('🔗 Make reset link',async()=>{const data=await api('reset-link',{userId:person.user_id});resetShare(box,data);void refreshResetCount(true)}));
  else if(person.user_id)actions.append(node('span','This member uses Google sign-in.','muted'));
  else actions.append(node('span','Nobody has an account with this '+(person.kind==='phone'?'number':'email')+'. Ask them which one they used.','muted'));
  if(requestId)actions.append(button('✖️ Dismiss',async()=>{await api('reset-requests/dismiss',{id:requestId});await loadResetRequests()}));
  card.append(actions,box);return card;
 }
 async function loadResetRequests(){
- const root=$('resetRequests'),requests=await refreshResetCount();root.replaceChildren();
+ const root=$('resetRequests'),requests=await refreshResetCount(true);root.replaceChildren();
  if(!requests.length)root.append(node('p','No requests right now.','muted'));
  for(const r of requests)root.append(resetRow(r,{requestId:r.id,when:r.created_at}));
 }
@@ -230,7 +230,7 @@ for(const b of document.querySelectorAll('[data-verify-tab]'))b.onclick=()=>{ver
 for(const b of document.querySelectorAll('[data-report-tab]'))b.onclick=()=>{reportKind=b.dataset.reportTab;void loadReports().catch(e=>toast(e.message))};
 // 🔴 Website on/off (maintenance)
 async function refreshMaintenance(){try{const m=await api('maintenance');maintenanceOn=m.on;$('maintenanceNav').textContent=m.on?'🔴 Website is OFF':'🟢 Website on/off';return m}catch{return null}}
-async function loadMaintenance(){const m=await refreshMaintenance();if(!m)return;$('maintenanceMessage').value=m.message||'';$('maintenanceStatus').textContent=m.on?'🔴 Website is OFF'+(m.since?' since '+new Date(m.since).toLocaleString():'')+' — visitors see the sorry screen.':'🟢 Website is ON — everyone can use it.';$('maintenanceStatus').className='maintenance-status '+(m.on?'off':'on');$('maintenanceToggle').textContent=m.on?'🟢 Turn website ON':'🔴 Turn website OFF';$('maintenanceToggle').className='btn '+(m.on?'':'danger')}
+async function loadMaintenance(){const m=await refreshMaintenance(true);if(!m)return;$('maintenanceMessage').value=m.message||'';$('maintenanceStatus').textContent=m.on?'🔴 Website is OFF'+(m.since?' since '+new Date(m.since).toLocaleString():'')+' — visitors see the sorry screen.':'🟢 Website is ON — everyone can use it.';$('maintenanceStatus').className='maintenance-status '+(m.on?'off':'on');$('maintenanceToggle').textContent=m.on?'🟢 Turn website ON':'🔴 Turn website OFF';$('maintenanceToggle').className='btn '+(m.on?'':'danger')}
 $('maintenanceToggle').onclick=async()=>{const turnOff=!maintenanceOn;if(!confirm(turnOff?'Turn the website OFF for everyone (except you)?':'Turn the website back ON?'))return;const b=$('maintenanceToggle');b.disabled=true;try{await api('maintenance',{on:turnOff,message:$('maintenanceMessage').value});toast(turnOff?'🔴 Website is OFF. Visitors see the sorry screen.':'🟢 Website is ON again.');await loadMaintenance()}catch(e){toast(e.message)}finally{b.disabled=false}};
 
 let postSearchTimer;$('postSearch').oninput=()=>{clearTimeout(postSearchTimer);postSearchTimer=setTimeout(()=>void loadPosts().catch(e=>toast(e.message)),250)};
@@ -253,8 +253,8 @@ async function loadChatReports(){
   if(r.status==='open'){
    const actions=node('div',undefined,'chat-report-actions'),select=node('select',undefined,'input');select.setAttribute('aria-label','How long');for(const h of hours)select.append(new Option('🚫 No messages or calls for '+restrictLabel(h),String(h)));select.value='24';
    const remove=node('label',undefined,'rule-switch'),box=node('input');box.type='checkbox';box.checked=true;remove.append(box,node('span','Also remove this message'));
-   const restrict=button('🚫 Restrict',async()=>{if(!confirm('Restrict '+r.target_name+' for '+restrictLabel(Number(select.value))+'? They cannot send messages or call. Deal chats still work.'))return;const res=await api('message-report-action',{id:r.id,action:'restrict',hours:Number(select.value),deleteMessage:box.checked});toast('✅ '+res.action);await loadChatReports();void refreshChatReportCount()});restrict.classList.add('danger');
-   const dismiss=button('Dismiss',async()=>{const res=await api('message-report-action',{id:r.id,action:'dismiss',deleteMessage:box.checked});toast(res.action);await loadChatReports();void refreshChatReportCount()});
+   const restrict=button('🚫 Restrict',async()=>{if(!confirm('Restrict '+r.target_name+' for '+restrictLabel(Number(select.value))+'? They cannot send messages or call. Deal chats still work.'))return;const res=await api('message-report-action',{id:r.id,action:'restrict',hours:Number(select.value),deleteMessage:box.checked});toast('✅ '+res.action);await loadChatReports();void refreshChatReportCount(true)});restrict.classList.add('danger');
+   const dismiss=button('Dismiss',async()=>{const res=await api('message-report-action',{id:r.id,action:'dismiss',deleteMessage:box.checked});toast(res.action);await loadChatReports();void refreshChatReportCount(true)});
    actions.append(select,remove,restrict,dismiss);card.append(actions);
   }
   root.append(card);
@@ -288,3 +288,10 @@ async function loadFeedPresets(){const d=await fetch('/api/feed-presets',{cache:
 $('addFeedPreset').onclick=()=>{feedPresetList=readFeedPresets();if(feedPresetList.length>=12)return toast('12 ta porjonto button.');feedPresetList.push({min:null,max:null});paintFeedPresets();$('feedPresetRows').lastElementChild?.querySelector('input')?.focus()};
 $('resetFeedPresets').onclick=async()=>{if(!confirm('Default price buttons e fire jaben?'))return;try{const d=await api('feed-presets',{reset:true});feedPresetList=d.presets;paintFeedPresets();toast('Default price buttons.')}catch(e){toast(e.message)}};
 $('feedPresetsForm').onsubmit=async e=>{e.preventDefault();const list=readFeedPresets();if(list.some(p=>Number.isNaN(p.min)||Number.isNaN(p.max)))return toast('Price likhun 5000 ba 5k er moto.');const b=e.submitter;b.disabled=true;try{const d=await api('feed-presets',{presets:list});feedPresetList=d.presets;paintFeedPresets();toast('Price buttons saved. My feed e ekhon notun button dekhabe.')}catch(err){toast(err.message)}finally{b.disabled=false}};
+
+// Short account ID (first 8 characters), like a Deal ID. The full ID is still used inside the panel.
+function shortId(id){return '#'+String(id||'').slice(0,8).toUpperCase()}
+
+// Faster panel: the side counters (password resets, verifications, maintenance, chat reports) refresh at most every 30 seconds,
+// not on every page switch. Saving or answering something still updates the page you are on right away.
+for(const name of ['refreshResetCount','refreshVerificationCount','refreshMaintenance','refreshChatReportCount']){const base=globalThis[name];if(typeof base!=='function')continue;let last=0,running=null;globalThis[name]=function(force){const now=Date.now();if(!force&&now-last<30000)return running||Promise.resolve();last=now;running=Promise.resolve(base.apply(this,arguments)).finally(()=>{running=null});return running}}
