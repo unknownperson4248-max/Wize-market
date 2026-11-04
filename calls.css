@@ -398,3 +398,12 @@ html body #chatPanel #groupSettingsPanel>.group-info-popover{background:#3a3b3e!
 .fb-subhead{display:flex;align-items:center;gap:12px;margin:0 0 10px}.fb-subhead strong{font-size:21px}.fb-back{border:0;background:none;color:#e4e6eb;font-size:30px;padding:0 6px;min-height:0;cursor:pointer}
 .fb-search{border-radius:999px!important;margin-bottom:12px}.fb-count{display:flex;flex-direction:column;margin:4px 0 8px}.fb-count strong{font-size:19px}.fb-count small{color:#b0b3b8}
 .fb-friend-row{display:flex;align-items:center;gap:14px;padding:8px 0}.fb-more{border:0;background:none;color:#e4e6eb;font-size:24px;width:40px;height:40px;min-height:0;padding:0;cursor:pointer;border-radius:50%}
+/* New group page */
+.create-group-page{position:fixed;inset:0;z-index:270;background:#0b0f14;color:#e4e6eb;overflow-y:auto;padding:max(10px,env(safe-area-inset-top)) 16px 30px;animation:sheet-up .22s ease}
+.cg-head{display:flex;align-items:center;gap:12px;margin-bottom:14px}.cg-head strong{flex:1;font-size:19px}.cg-close{border:0;background:none;color:#fff;font-size:22px;width:40px;height:40px;min-height:0;padding:0;cursor:pointer}
+.cg-create{border:0;background:none;color:#5fb4ff;font-size:17px;font-weight:700;min-height:0;cursor:pointer}.cg-create:disabled{opacity:.4}
+.cg-photo{display:flex;flex-direction:column;align-items:center;gap:6px;margin:6px 0 12px;cursor:pointer}.cg-photo-preview{width:96px;height:96px;border-radius:50%;background:#1d2733 center/cover no-repeat;display:grid;place-items:center;font-size:30px;border:2px dashed #3a4a5c}.cg-photo small{color:#8fa6bd}
+.cg-name{font-size:17px;margin-bottom:10px}.cg-search{border-radius:999px!important;margin:8px 0}
+.cg-chips{display:flex;flex-wrap:wrap;gap:8px}.cg-chip{display:flex;align-items:center;gap:6px;padding:4px 10px 4px 4px;border-radius:999px;border:0;background:#1f3346;color:#e4e6eb;min-height:0;cursor:pointer}.cg-chip .avatar{width:26px;height:26px;border-radius:50%;overflow:hidden}.cg-chip b{font-size:12px;opacity:.7}
+.cg-row{display:flex;align-items:center;gap:12px;width:100%;padding:8px 2px;border:0;background:none;color:#e4e6eb;text-align:left;min-height:0;cursor:pointer;font-size:16px}.cg-row .avatar{width:44px;height:44px;border-radius:50%;overflow:hidden;flex:none}.cg-row span{flex:1}
+.cg-check{width:24px;height:24px;border-radius:50%;border:2px solid #4a5a6c;display:grid;place-items:center;font-style:normal;font-size:14px}.cg-row.on .cg-check{background:#1877f2;border-color:#1877f2;color:#fff}
