@@ -1018,7 +1018,7 @@ assert.equal(pk.owner.id,'owner');
 // Migration 021 keeps every existing deal and post, and existing deals stay on their original flow.
 {
  const current=readFileSync(new URL('./schema.sql',import.meta.url),'utf8');
- const before=current.replace(",flow INTEGER NOT NULL DEFAULT 0,paid_at INTEGER,paid_note TEXT NOT NULL DEFAULT '',funded_at INTEGER,funded_by TEXT REFERENCES users(id),payment_trx TEXT NOT NULL DEFAULT '',payment_proof_id TEXT,delivered_at INTEGER,checklist TEXT NOT NULL DEFAULT '',checklist_proof_id TEXT,buyer_done_at INTEGER,payout_note TEXT NOT NULL DEFAULT '',dispute_reason TEXT NOT NULL DEFAULT '',disputed_by TEXT REFERENCES users(id));",");").replace(",game_uid_hash TEXT,game_uid_enc TEXT,game_uid_hint TEXT NOT NULL DEFAULT '',bumped_at INTEGER,renewed_at INTEGER,media_updated_at INTEGER,id_gender TEXT);",");").replace(",whatsapp TEXT NOT NULL DEFAULT '',location_lat REAL,location_lng REAL,location_accuracy REAL,location_at INTEGER,answers TEXT NOT NULL DEFAULT '[]',doc_type TEXT NOT NULL DEFAULT 'nid',back_document_id TEXT);",");").split('-- Protected deals, secure handover, deal proofs and listing rules (migration 021).')[0];
+ const before=current.replace(",flow INTEGER NOT NULL DEFAULT 0,paid_at INTEGER,paid_note TEXT NOT NULL DEFAULT '',funded_at INTEGER,funded_by TEXT REFERENCES users(id),payment_trx TEXT NOT NULL DEFAULT '',payment_proof_id TEXT,delivered_at INTEGER,checklist TEXT NOT NULL DEFAULT '',checklist_proof_id TEXT,buyer_done_at INTEGER,payout_note TEXT NOT NULL DEFAULT '',dispute_reason TEXT NOT NULL DEFAULT '',disputed_by TEXT REFERENCES users(id));",");").replace(",game_uid_hash TEXT,game_uid_enc TEXT,game_uid_hint TEXT NOT NULL DEFAULT '',bumped_at INTEGER,renewed_at INTEGER,media_updated_at INTEGER,id_gender TEXT);",");").replace(",whatsapp TEXT NOT NULL DEFAULT '',location_lat REAL,location_lng REAL,location_accuracy REAL,location_at INTEGER,answers TEXT NOT NULL DEFAULT '[]',doc_type TEXT NOT NULL DEFAULT 'nid',back_document_id TEXT,review_note TEXT);",");").split('-- Protected deals, secure handover, deal proofs and listing rules (migration 021).')[0];
  assert.notEqual(before,current);assert.equal(before.includes('game_uid_hash'),false);assert.equal(before.includes('paid_note'),false);
  const migrated=new DatabaseSync(':memory:');migrated.exec('CREATE TABLE users(id TEXT PRIMARY KEY,name TEXT,picture TEXT,created_at INTEGER,updated_at INTEGER);'+before);
  migrated.exec("INSERT INTO users(id,name) VALUES('b','Buyer'),('s','Seller'),('a','Admin');INSERT INTO wm_posts(id,user_id,title,details,price,kind,status,created_at) VALUES('p','s','Old ID','Old details',4000,'Game ID','approved',5);INSERT INTO wm_threads(id,buyer_id,seller_id,post_id,pair_key,created_at,is_deal) VALUES('t','b','s','p','deal:b:p',1,1);INSERT INTO wm_deals(id,thread_id,buyer_id,seller_id,admin_id,price,status,created_at,post_id,buyer_done) VALUES('d','t','b','s','a',4000,'active',2,'p',1);");
@@ -1448,4 +1448,18 @@ assert.equal(pk.owner.id,'owner');
  r=await call('/api/admin/users?q=%235126fe11','GET',undefined,'owner');assert.equal(r.status,200);assert.ok(r.data.users.some(x=>x.id==='5126fe11-c297-4633-9416-e59b0b068e24'));
  r=await call('/api/admin/users?q=buyer','GET',undefined,'owner');assert.ok(r.data.users.some(x=>x.id===id));
  console.log('PASS: short account IDs open profiles (/id/XXXXXXXX) and work in the owner member search.');
+}
+{
+ // Notices: the reporter hears the owner's answer; verification results and appeal answers arrive under the bell.
+ sql.exec('DELETE FROM wm_limits');const post=sql.prepare("SELECT id,title FROM wm_posts WHERE status='approved' AND deleted_at IS NULL AND group_id IS NULL LIMIT 1").get();
+ let r=await call('/api/reports','POST',{reason:'scam',details:'Fake ID, seller asked money outside',postId:post.id},'seller');assert.equal(r.status,201,JSON.stringify(r.data));
+ const rep=sql.prepare("SELECT id FROM wm_reports WHERE user_id='seller' AND status='open' ORDER BY created_at DESC").get();
+ assert.equal((await call('/api/admin/report-action','POST',{reportId:rep.id,action:'dismiss',note:'The seller showed proof of ownership.'},'owner')).status,200);
+ assert.equal(sql.prepare('SELECT resolution_note FROM wm_reports WHERE id=?').get(rep.id).resolution_note,'The seller showed proof of ownership.');
+ let n=(await call('/api/notices','GET',undefined,'seller')).data;assert.equal(n.unread,1);assert.equal(n.notices[0].status,'rejected');assert.match(n.notices[0].body,/proof of ownership/);assert.equal(n.notices[0].link,'/post/'+post.id);
+ assert.equal((await call('/api/notices/read','POST',{},'seller')).status,200);assert.equal((await call('/api/notices','GET',undefined,'seller')).data.unread,0);
+ const vr=sql.prepare("SELECT id,user_id FROM wm_verification_requests WHERE status='pending' LIMIT 1").get();
+ if(vr){assert.equal((await call('/api/admin/verification-action','POST',{id:vr.id,action:'reject',note:'The photo is blurry.'},'owner')).status,200);const vn=(await call('/api/notices','GET',undefined,vr.user_id)).data.notices[0];assert.equal(vn.kind,'verification');assert.equal(vn.status,'rejected');assert.match(vn.body,/blurry/)}
+ assert.equal((await call('/api/notices','GET',undefined,'outsider')).status,200);
+ console.log('PASS: notices (report answers with the owner note and post link, verification results, read state).');
 }

@@ -425,3 +425,21 @@ function openLegal(which){navigate('privacy');requestAnimationFrame(()=>{const e
 
 // Owner only: open the admin panel straight away (signed in with the owner account, so no extra login).
 async function openOwnerAdminPanel(){if(me?.role!=='owner')return;const r=await fetch('/api/control/owner-access',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:'{}'});const d=await r.json().catch(()=>({}));if(!r.ok)return toast(d.error||'Could not open the admin panel.');location.href='/admin'}
+
+// ---- 🔔 Notices: answers to your reports, verification results and appeals (bell on Messages and on your profile).
+let noticeUnread=0,noticeBusy=false;
+function bellButton(){const b=node('button',undefined,'notice-bell');b.type='button';b.setAttribute('aria-label','Notifications');b.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.6 2H4.4Z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>';b.onclick=()=>void openNotices();return b}
+function paintNoticeBells(){for(const b of document.querySelectorAll('.notice-bell')){let dot=b.querySelector('.notice-dot');if(!noticeUnread){dot?.remove();continue}if(!dot){dot=node('span','','notice-dot');b.append(dot)}dot.textContent=noticeUnread>9?'9+':String(noticeUnread)}}
+function placeNoticeBells(){if(!me)return;const head=document.querySelector('.messenger-heading');if(head&&!head.querySelector('.notice-bell'))head.insertBefore(bellButton(),$('messengerMenu'));const cover=document.querySelector('#profileContent .gaming-cover');if(cover&&$('profileContent').dataset.profileId===me.id&&!cover.querySelector('.notice-bell')){const b=bellButton();b.classList.add('on-cover');cover.append(b)}paintNoticeBells()}
+async function refreshNotices(){if(!me||noticeBusy)return;noticeBusy=true;try{const d=await api('/notices');noticeUnread=d.unread;paintNoticeBells();return d}catch{}finally{noticeBusy=false}}
+async function openNotices(){
+ const d=await api('/notices').catch(e=>{toast(e.message);return null});if(!d)return;
+ const overlay=node('div',undefined,'message-sheet notice-sheet');overlay.id='messageSheet';overlay.onclick=e=>{if(e.target===overlay)closeMessageSheet()};const box=node('div',undefined,'delete-choice notice-box');
+ box.append(node('strong','🔔 Notifications','notice-title'));
+ if(!d.notices.length)box.append(node('p','No notifications yet. Answers to your reports, verification and appeals show here.','hint'));
+ for(const n of d.notices){const row=node('div',undefined,'notice-row '+(n.status||'info')+(n.read_at?'':' unread'));const icon={report:'🚩',verification:'✔️',appeal:'⚖️'}[n.kind]||'🔔';const text=node('div',undefined,'notice-text');text.append(node('strong',n.title),node('p',n.body),node('small',new Date(n.created_at).toLocaleString(),'hint'));if(n.link){const open=button('Open post ↗',()=>{closeMessageSheet();if(n.link.startsWith('/post/')&&typeof openListing==='function')void openListing(n.link.slice(6));else location.href=n.link},'btn secondary notice-open');text.append(open)}row.append(node('span',icon,'notice-icon'),text);box.append(row)}
+ box.append(button('Close',closeMessageSheet,'btn ghost'));overlay.append(box);document.body.append(overlay);
+ if(d.unread){try{await api('/notices/read',{})}catch{}noticeUnread=0;paintNoticeBells()}
+}
+new MutationObserver(rafBatch(()=>placeNoticeBells())).observe(document.body,{childList:true,subtree:true});
+setInterval(()=>{if(!document.hidden)void refreshNotices()},60000);setTimeout(()=>void refreshNotices(),3000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)void refreshNotices()});

@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS wm_post_views(post_id TEXT NOT NULL REFERENCES wm_pos
 CREATE TABLE IF NOT EXISTS wm_post_shares(id TEXT PRIMARY KEY,post_id TEXT NOT NULL REFERENCES wm_posts(id),user_id TEXT NOT NULL REFERENCES users(id),created_at INTEGER NOT NULL,UNIQUE(post_id,user_id));
 CREATE INDEX IF NOT EXISTS wm_shares_user ON wm_post_shares(user_id,created_at);
 CREATE INDEX IF NOT EXISTS wm_shares_post ON wm_post_shares(post_id);
-CREATE TABLE IF NOT EXISTS wm_reports(id TEXT PRIMARY KEY,post_id TEXT REFERENCES wm_posts(id),user_id TEXT NOT NULL REFERENCES users(id),reason TEXT NOT NULL,details TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','resolved','dismissed')),created_at INTEGER NOT NULL,resolved_by TEXT REFERENCES users(id),resolved_at INTEGER,attachment_id TEXT REFERENCES wm_private_uploads(id));
+CREATE TABLE IF NOT EXISTS wm_reports(id TEXT PRIMARY KEY,post_id TEXT REFERENCES wm_posts(id),user_id TEXT NOT NULL REFERENCES users(id),reason TEXT NOT NULL,details TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','resolved','dismissed')),created_at INTEGER NOT NULL,resolved_by TEXT REFERENCES users(id),resolved_at INTEGER,attachment_id TEXT REFERENCES wm_private_uploads(id),resolution_note TEXT);
 CREATE INDEX IF NOT EXISTS wm_reports_status ON wm_reports(status,created_at);
 CREATE UNIQUE INDEX IF NOT EXISTS wm_reports_one_open ON wm_reports(user_id,post_id) WHERE status='open' AND post_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS wm_posts_category_price ON wm_posts(game_category,status,price,created_at);
@@ -224,7 +224,7 @@ WHERE post_intent='sell' AND kind='Game ID' AND availability!='sold' AND id IN (
 -- Private report attachments and verification evidence are not served by public /media URLs.
 CREATE TABLE IF NOT EXISTS wm_private_uploads(id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id),kind TEXT NOT NULL CHECK(kind IN ('report','verification')),object_key TEXT NOT NULL UNIQUE,type TEXT NOT NULL,size INTEGER NOT NULL,created_at INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS wm_private_uploads_owner ON wm_private_uploads(user_id,kind,created_at);
-CREATE TABLE IF NOT EXISTS wm_verification_requests(id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id),kind TEXT NOT NULL CHECK(kind IN ('seller','trusted')),contact TEXT NOT NULL,document_id TEXT NOT NULL REFERENCES wm_private_uploads(id),status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected')),created_at INTEGER NOT NULL,reviewed_by TEXT REFERENCES users(id),reviewed_at INTEGER,whatsapp TEXT NOT NULL DEFAULT '',location_lat REAL,location_lng REAL,location_accuracy REAL,location_at INTEGER,answers TEXT NOT NULL DEFAULT '[]',doc_type TEXT NOT NULL DEFAULT 'nid',back_document_id TEXT);
+CREATE TABLE IF NOT EXISTS wm_verification_requests(id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id),kind TEXT NOT NULL CHECK(kind IN ('seller','trusted')),contact TEXT NOT NULL,document_id TEXT NOT NULL REFERENCES wm_private_uploads(id),status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected')),created_at INTEGER NOT NULL,reviewed_by TEXT REFERENCES users(id),reviewed_at INTEGER,whatsapp TEXT NOT NULL DEFAULT '',location_lat REAL,location_lng REAL,location_accuracy REAL,location_at INTEGER,answers TEXT NOT NULL DEFAULT '[]',doc_type TEXT NOT NULL DEFAULT 'nid',back_document_id TEXT,review_note TEXT);
 CREATE INDEX IF NOT EXISTS wm_verification_requests_user ON wm_verification_requests(user_id,created_at);
 CREATE INDEX IF NOT EXISTS wm_verification_requests_status ON wm_verification_requests(status,created_at);
 
@@ -294,3 +294,5 @@ CREATE TABLE IF NOT EXISTS wm_admin_deal_limits(user_id TEXT PRIMARY KEY REFEREN
 CREATE TABLE IF NOT EXISTS wm_post_signals(post_id TEXT NOT NULL REFERENCES wm_posts(id),user_id TEXT NOT NULL REFERENCES users(id),kind TEXT NOT NULL,created_at INTEGER NOT NULL,PRIMARY KEY(post_id,user_id,kind));
 CREATE INDEX IF NOT EXISTS wm_post_signals_user ON wm_post_signals(user_id,created_at);
 CREATE TABLE IF NOT EXISTS wm_post_interest(post_id TEXT PRIMARY KEY REFERENCES wm_posts(id),score INTEGER NOT NULL DEFAULT 0,updated_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS wm_notices(id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id),kind TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'info',title TEXT NOT NULL,body TEXT NOT NULL DEFAULT '',link TEXT,created_at INTEGER NOT NULL,read_at INTEGER);
+CREATE INDEX IF NOT EXISTS wm_notices_user ON wm_notices(user_id,created_at DESC);
