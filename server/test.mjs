@@ -684,8 +684,10 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  assert.equal((await call('/api/posts/'+vipListing+'/bump','POST',{},'newbie')).status,404);
  sql.prepare('UPDATE wm_posts SET created_at=created_at-25*3600000 WHERE id=?').run(vipListing);const vipVersion=sql.prepare('SELECT version FROM wm_posts WHERE id=?').get(vipListing).version;
   assert.equal((await call('/api/posts/'+vipListing+'/bump','POST',{},'vip')).status,200);assert.equal(sql.prepare('SELECT version FROM wm_posts WHERE id=?').get(vipListing).version,vipVersion);
+ sql.exec('DELETE FROM wm_post_interest');// smart feed: without likes or opens, a fresh Boost is first
  assert.equal((await call('/api/feed?limit=30')).data.posts[0].id,vipListing);
- // Expired listings leave the feed but stay on the owner's profile until renewed.
+ // Expired listings leave the feed (unless the smart feed brings a few back; switched off here) but stay on the owner's profile until renewed.
+ assert.equal((await call('/api/admin/market-rules','POST',{...strict,resurfacePercent:0},'owner')).status,200);
  sql.prepare('UPDATE wm_posts SET created_at=created_at-31*86400000,bumped_at=NULL,renewed_at=NULL WHERE id=?').run(vipListing);
  assert.equal((await call('/api/feed?limit=30')).data.posts.some(p=>p.id===vipListing),false);assert.ok((await call('/api/my-posts','GET',undefined,'vip')).data.posts.some(p=>p.id===vipListing));
  assert.equal((await call('/api/posts/'+vipListing+'/bump','POST',{},'vip')).status,200);assert.equal((await call('/api/feed?limit=30')).data.posts[0].id,vipListing);
@@ -1318,4 +1320,19 @@ assert.equal(pk.owner.id,'owner');
  assert.equal((await call('/api/admin/restore','POST',{userId:'outsider'},'owner')).status,200);
  list=(await call('/api/admin/users?q=outsider','GET',undefined,'owner')).data.users;assert.equal(list[0].suspension,null);
  console.log('PASS: owner can suspend a member for hours/days or ban them with no end date; owner cannot be suspended; restore lifts it.');
+}
+{
+ // Smart feed: opened/watched posts come forward for everyone, but go lower for the person who already opened them.
+ const pool=sql.prepare("SELECT p.id,p.user_id FROM wm_posts p WHERE p.deleted_at IS NULL AND p.status='approved' AND p.group_id IS NULL AND p.availability!='sold'").all(),list=[pool[0],pool.find(x=>x.user_id!==pool[0].user_id)];assert.equal(list.length,2);
+ const [a,b]=list,t=Date.now();sql.exec('DELETE FROM wm_post_interest; DELETE FROM wm_post_signals; DELETE FROM wm_post_shares');
+ sql.prepare('UPDATE wm_posts SET created_at=?,bumped_at=NULL,renewed_at=NULL WHERE id=?').run(t+61000,a.id);sql.prepare('UPDATE wm_posts SET created_at=?,bumped_at=NULL,renewed_at=NULL WHERE id=?').run(t+60000,b.id);
+ const order=async who=>(await call('/api/feed?limit=30','GET',undefined,who)).data.posts.map(p=>p.id).filter(id=>id===a.id||id===b.id);
+ assert.deepEqual(await order(),[a.id,b.id]);
+ const viewers=['owner','admin','buyer','seller','outsider'].filter(id=>id!==b.user_id);
+ for(const who of viewers)assert.equal((await call('/api/posts/signals','POST',{items:[{id:b.id,kind:'open'},{id:b.id,kind:'open'},{id:a.id,kind:'bogus'}]},who)).status,200);
+ assert.ok(sql.prepare('SELECT score FROM wm_post_interest WHERE post_id=?').get(b.id).score>=9);assert.equal(sql.prepare('SELECT count(*) n FROM wm_post_signals WHERE post_id=?').get(b.id).n,viewers.length);
+ assert.deepEqual(await order(),[b.id,a.id]);
+ assert.deepEqual(await order(viewers[0]),[a.id,b.id]);
+ const own=(await call('/api/posts/signals','POST',{items:[{id:a.id,kind:'open'}]},a.user_id));assert.equal(own.status,200);assert.equal(sql.prepare('SELECT count(*) n FROM wm_post_signals WHERE post_id=?').get(a.id).n,0);
+ console.log('PASS: smart feed (popular posts first, already-opened posts lower for that person, no points for your own post).');
 }

@@ -165,3 +165,19 @@ function renderFastProfileEditor(root){const box=node('section',undefined,'card 
  if(me.username){const link=node('a',location.origin+'/u/'+me.username,'profile-share-link');link.href='/u/'+me.username;form.append(link)}
  const save=node('button','Save changes','btn');save.id='saveProfileChanges';save.type='submit';form.append(save);form.onsubmit=async e=>{e.preventDefault();save.disabled=true;form.inert=true;save.textContent='Saving…';try{const chosen={photo:pending.photo,cover:pending.cover};const ids=await Promise.all(['photo','cover'].map(kind=>chosen[kind]?uploadAsset(chosen[kind]):undefined));await api('/profile/details',{name:name.value,bio:bio.value,pictureId:ids[0],coverId:ids[1],removePicture:removed.photo,removeCover:removed.cover,username:username.value.trim()||undefined});disposed=true;for(const draft of Object.values(pending))if(draft?.url)URL.revokeObjectURL(draft.url);await refreshMe();closeProfileEditor();await loadProfileView();toast('Profile updated.')}catch(e){toast(e.message)}finally{save.disabled=false;form.inert=false;save.textContent='Save changes'}};box.append(form);root.append(box)
 }
+
+// Smart feed: tell the server which posts people stay on, open or watch, so popular posts come forward.
+// Only for signed-in members; each post and kind is sent once per page load.
+(()=>{const queue=[],sent=new Set();let timer=null;
+ const signedIn=()=>!document.body.classList.contains('logged-out')&&!document.body.classList.contains('auth-pending');
+ const flush=()=>{timer=null;if(!queue.length)return;const items=queue.splice(0,30);try{fetch('/api/posts/signals',{method:'POST',credentials:'same-origin',keepalive:true,headers:{'content-type':'application/json'},body:JSON.stringify({items})}).catch(()=>{})}catch{}if(queue.length)timer=setTimeout(flush,1000)};
+ const signal=(id,kind)=>{if(!id||!signedIn())return;const key=id+':'+kind;if(sent.has(key))return;sent.add(key);queue.push({id,kind});if(!timer)timer=setTimeout(flush,4000)};
+ const cardOf=el=>el?.closest?.('article[data-post-id]');
+ const timers=new WeakMap();
+ const watcher='IntersectionObserver' in window?new IntersectionObserver(entries=>{for(const e of entries){const card=e.target;if(e.isIntersecting&&e.intersectionRatio>=.6){if(!timers.has(card))timers.set(card,setTimeout(()=>{timers.delete(card);signal(card.dataset.postId,'dwell')},3000))}else{clearTimeout(timers.get(card));timers.delete(card)}}},{threshold:[0,.6]}):null;
+ const observeCards=()=>{if(!watcher)return;for(const card of document.querySelectorAll('article[data-post-id]:not([data-signal-watch])')){card.dataset.signalWatch='1';watcher.observe(card)}};
+ new MutationObserver(()=>observeCards()).observe(document.body,{childList:true,subtree:true});observeCards();
+ document.addEventListener('click',e=>{const card=cardOf(e.target);if(!card)return;const button=e.target.closest('button');if(button&&!button.classList.contains('details-toggle')&&!button.closest('[class*="gallery"]'))return;signal(card.dataset.postId,'open')},true);
+ document.addEventListener('play',e=>{const card=cardOf(e.target);if(card)signal(card.dataset.postId,'watch')},true);
+ document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flush()});
+})();

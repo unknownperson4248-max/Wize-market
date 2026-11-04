@@ -291,3 +291,6 @@ CREATE INDEX IF NOT EXISTS wm_message_mentions_user ON wm_message_mentions(user_
 
 CREATE UNIQUE INDEX IF NOT EXISTS wm_groups_invite_code ON wm_groups(invite_code);
 CREATE TABLE IF NOT EXISTS wm_admin_deal_limits(user_id TEXT PRIMARY KEY REFERENCES users(id),max_amount INTEGER,updated_by TEXT NOT NULL REFERENCES users(id),updated_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS wm_post_signals(post_id TEXT NOT NULL REFERENCES wm_posts(id),user_id TEXT NOT NULL REFERENCES users(id),kind TEXT NOT NULL,created_at INTEGER NOT NULL,PRIMARY KEY(post_id,user_id,kind));
+CREATE INDEX IF NOT EXISTS wm_post_signals_user ON wm_post_signals(user_id,created_at);
+CREATE TABLE IF NOT EXISTS wm_post_interest(post_id TEXT PRIMARY KEY REFERENCES wm_posts(id),score INTEGER NOT NULL DEFAULT 0,updated_at INTEGER NOT NULL);
