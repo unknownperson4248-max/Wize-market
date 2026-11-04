@@ -152,7 +152,7 @@ function openProfileDrawer(person,items,trigger){
 // Live location for verification: asked once with the browser's permission, sent only with the application.
 async function openVerificationRequest(kind='seller'){
  if(!requireLogin())return;
- $('verificationForm').reset();renderVerificationQuestions();$('verificationKind').value=kind==='trusted'?'trusted':'seller';$('verificationTitle').textContent=kind==='trusted'?'🛡️ Become an Admin':'✅ Get verified';$('verificationModal').hidden=false;$('verificationHistory').textContent='Loading your application history…';
+ $('verificationForm').reset();verifyShots={front:null,back:null};paintVerifyShots();renderVerificationQuestions();$('verificationKind').value=kind==='trusted'?'trusted':'seller';$('verificationTitle').textContent=kind==='trusted'?'🛡️ Become an Admin':'✅ Get verified';$('verificationModal').hidden=false;$('verificationHistory').textContent='Loading your application history…';
  try{const result=await api('/verification');$('verificationHistory').textContent=result.requests.length?'Previous applications: '+result.requests.map(r=>r.kind+' — '+r.status).join(' · '):'No previous applications.'}catch(error){$('verificationHistory').textContent=error.message}
  $('verificationKind').focus();
 }
@@ -161,8 +161,10 @@ $('verificationModal').onclick=e=>{if(e.target===$('verificationModal'))$('verif
 $('verificationForm').onsubmit=async e=>{
  e.preventDefault();const submit=e.submitter||$('verificationForm').querySelector('[type=submit]');submit.disabled=true;
  try{
-  const documentId=await uploadPrivateEvidence($('verificationNid').files[0],'verification');
-  await api('/verification',{kind:$('verificationKind').value,whatsapp:$('verificationWhatsapp').value.trim(),documentId,answers:verificationAnswers()});
+  const docType=$('verificationDocType').value,needBack=VERIFY_BACK_DOCS.includes(docType);
+  if(!verifyShots.front)throw Error('Take a photo of the front of your '+VERIFY_DOC_NAMES[docType]+'.');if(needBack&&!verifyShots.back)throw Error('Take a photo of the back of your '+VERIFY_DOC_NAMES[docType]+'.');
+  const documentId=await uploadPrivateEvidence(verifyShots.front,'verification'),backDocumentId=needBack?await uploadPrivateEvidence(verifyShots.back,'verification'):null;
+  await api('/verification',{kind:$('verificationKind').value,whatsapp:$('verificationWhatsapp').value.trim(),docType,documentId,backDocumentId,answers:verificationAnswers()});
   $('verificationModal').hidden=true;toast('✅ Sent. The Owner will check it and give you the blue tick.');if(active==='profile'&&!profileViewId)await loadProfileView();
  }catch(error){toast(error.message)}
  finally{submit.disabled=false}
@@ -170,3 +172,27 @@ $('verificationForm').onsubmit=async e=>{
 function closeProfileDrawer(restore=true){$('profileMenuModal').hidden=true;document.body.classList.remove('profile-menu-open');profileMenuTrigger?.setAttribute('aria-expanded','false');if(restore&&profileMenuTrigger?.isConnected)profileMenuTrigger.focus();profileMenuTrigger=null}
 $('closeProfileMenu').onclick=()=>closeProfileDrawer();$('profileMenuModal').onclick=e=>{if(e.target===$('profileMenuModal'))closeProfileDrawer()};
 document.addEventListener('keydown',e=>{if($('profileMenuModal').hidden)return;if(e.key==='Escape'){e.preventDefault();closeProfileDrawer();return}if(e.key==='Tab'){const controls=[...$('profileMenuPanel').querySelectorAll('button:not([disabled]),a[href]')],first=controls[0],last=controls[controls.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}}});
+
+// ---- Verification photos: choose the document, then take live photos (front, and back for NID / driving licence).
+const VERIFY_DOC_NAMES={nid:'NID card',passport:'passport (photo page)',driving:'driving licence',birth:'birth certificate',student:'student ID'},VERIFY_BACK_DOCS=['nid','driving'];
+let verifyShots={front:null,back:null};
+function paintVerifyShots(){
+ const root=$('verificationShots');if(!root)return;const type=$('verificationDocType').value,sides=VERIFY_BACK_DOCS.includes(type)?['front','back']:['front'];root.replaceChildren();
+ for(const side of sides){const slot=node('div',undefined,'verify-shot'+(verifyShots[side]?' done':''));const label=side==='front'?(type==='passport'?'Photo page':'Front side'):'Back side';
+  if(verifyShots[side]){const img=node('img');img.src=URL.createObjectURL(verifyShots[side]);img.alt=label;slot.append(img)}else slot.append(node('span',side==='front'?'🪪':'🔄','verify-shot-icon'));
+  slot.append(node('strong',label),button(verifyShots[side]?'Retake':'📷 Take photo',()=>void captureVerifyShot(side,label+' of your '+VERIFY_DOC_NAMES[type]),'btn'+(verifyShots[side]?' secondary':'')));root.append(slot)}
+}
+$('verificationDocType').onchange=()=>{verifyShots.back=VERIFY_BACK_DOCS.includes($('verificationDocType').value)?verifyShots.back:null;paintVerifyShots()};
+async function captureVerifyShot(side,title){
+ // Live camera with a card frame. Phones without camera access in the browser open the camera app instead.
+ if(!navigator.mediaDevices?.getUserMedia){return pickFromCameraApp(side)}
+ let stream;try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false})}catch(e){if(e?.name==='NotAllowedError')toast('Allow camera access to take the photo.');return pickFromCameraApp(side)}
+ const box=node('div',undefined,'verify-camera');const video=node('video');video.autoplay=true;video.playsInline=true;video.muted=true;video.srcObject=stream;
+ const frame=node('div',undefined,'verify-frame');const tip=node('p','Fit the '+title.toLowerCase()+' inside the frame. Good light, no glare.','verify-tip');
+ const shoot=node('button',undefined,'verify-shutter');shoot.type='button';shoot.setAttribute('aria-label','Take photo');const cancel=node('button','Cancel','verify-cancel');cancel.type='button';
+ const stop=()=>{stream.getTracks().forEach(t=>t.stop());box.remove()};cancel.onclick=stop;
+ shoot.onclick=async()=>{const w=video.videoWidth,h=video.videoHeight;if(!w||!h)return;const scale=Math.min(1,1600/Math.max(w,h)),c=document.createElement('canvas');c.width=Math.round(w*scale);c.height=Math.round(h*scale);c.getContext('2d').drawImage(video,0,0,c.width,c.height);const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.9));stop();if(!blob)return toast('Could not take the photo. Try again.');verifyShots[side]=new File([blob],side+'.jpg',{type:'image/jpeg'});paintVerifyShots()};
+ box.append(video,frame,tip,cancel,shoot);document.body.append(box);
+}
+function pickFromCameraApp(side){const input=node('input');input.type='file';input.accept='image/jpeg,image/png,image/webp';input.capture='environment';input.onchange=()=>{const f=input.files[0];if(f){verifyShots[side]=f;paintVerifyShots()}};input.click()}
+paintVerifyShots();

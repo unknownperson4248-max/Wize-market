@@ -56,3 +56,12 @@
 .feed-gender-box{margin:12px 0 4px;display:grid;gap:8px}.feed-gender-box .hint{margin:0}
 .id-gender-tag{display:inline-flex;align-items:center;margin-left:6px;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:700;line-height:18px}.id-gender-tag.male{background:#1d4ed833;color:#93c5fd}.id-gender-tag.female{background:#db277733;color:#f9a8d4}
 .id-gender-divider{display:flex;align-items:center;gap:10px;margin:14px 4px;color:var(--muted);font-size:13px;font-weight:600}.id-gender-divider::before,.id-gender-divider::after{content:"";flex:1;height:1px;background:var(--line)}
+.verify-shots{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:8px 0}
+.verify-shot{display:grid;justify-items:center;gap:8px;padding:12px;border:1.5px dashed var(--line,#263247);border-radius:14px;background:#111a2a;text-align:center}
+.verify-shot.done{border-style:solid;border-color:#3fb97f}.verify-shot img{width:100%;aspect-ratio:1.585;object-fit:cover;border-radius:10px}.verify-shot-icon{font-size:34px;line-height:1.2}.verify-shot .btn{width:100%}
+.verify-camera{position:fixed;inset:0;z-index:300;background:#000;display:flex;align-items:center;justify-content:center}
+.verify-camera video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.verify-frame{position:relative;width:min(88vw,520px);aspect-ratio:1.585;border:3px solid #fff;border-radius:16px;box-shadow:0 0 0 100vmax #000a;pointer-events:none}
+.verify-tip{position:absolute;top:calc(18px + env(safe-area-inset-top));left:16px;right:16px;margin:0;text-align:center;color:#fff;font-weight:600;text-shadow:0 1px 4px #000}
+.verify-shutter{position:absolute;bottom:calc(28px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);width:74px;height:74px;border-radius:50%;border:5px solid #fff;background:#fff3;cursor:pointer}.verify-shutter:active{background:#fff8}
+.verify-cancel{position:absolute;bottom:calc(46px + env(safe-area-inset-bottom));left:24px;border:0;background:none;color:#fff;font:inherit;font-weight:600;font-size:16px;cursor:pointer}

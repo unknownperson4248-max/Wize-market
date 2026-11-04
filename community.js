@@ -194,3 +194,16 @@ function openChatAlbum(urls,start){
  requestAnimationFrame(()=>{track.scrollLeft=start*track.clientWidth;paint()});
 }
 {const base=refreshChat;refreshChat=async function(...a){const r=await base.apply(this,a);try{stackChatPhotos()}catch{}return r}}
+
+// ---- Join request bar (like Messenger): group admins see "N people requested to join" at the top of the group chat. Tap to answer.
+let joinBarChecked={id:'',at:0};
+async function paintJoinRequestBar(){
+ const bar=()=>$('joinRequestBar');if(chat?.kind!=='group'){bar()?.remove();return}
+ const id=chat.id,now=Date.now();
+ if(joinBarChecked.id!==id||now-joinBarChecked.at>30000){joinBarChecked={id,at:now};try{const d=await api('/groups/'+id);if(chat?.id!==id)return;if(groupDetail?.group?.id===id||!groupDetail)groupDetail=d}catch{return}}
+ const g=groupDetail?.group;const n=g&&g.id===id&&g.canManage?Number(g.requests||0):0;
+ if(!n){bar()?.remove();return}
+ let el=bar();if(!el){el=node('button',undefined,'join-request-bar');el.type='button';el.id='joinRequestBar';el.onclick=async()=>{try{await $('groupSettings').onclick();await openGroupRequests()}catch(e){toast(e.message)}};$('chatMessages').before(el)}
+ el.replaceChildren(node('span','👤+','join-request-icon'),(()=>{const t=node('span',undefined,'join-request-text');t.append(node('small','Join request'),node('strong',n+(n===1?' person requested':' people requested')+' to join.'));return t})());
+}
+{const base=refreshChat;refreshChat=async function(...a){const r=await base.apply(this,a);void paintJoinRequestBar().catch(()=>{});return r}}

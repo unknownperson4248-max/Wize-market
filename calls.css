@@ -442,3 +442,6 @@ html body #chatPanel #groupSettingsPanel>.group-info-popover{background:#3a3b3e!
 .chat-album-close{position:absolute;right:14px;top:calc(10px + env(safe-area-inset-top));width:42px;height:42px;border-radius:50%;border:0;background:#fff2;color:#fff;font-size:26px;line-height:1;cursor:pointer}
 .member-search{display:flex;align-items:center;gap:8px;margin:4px 0 10px;padding:0 12px;border:1px solid var(--line,#263247);border-radius:999px;background:#111a2a}.member-search .input{border:0;background:transparent;padding:11px 0;margin:0;box-shadow:none}.member-search-icon{opacity:.7}
 .kick-btn{background:#73323f!important;border-color:#9b4a57!important;color:#fff!important}
+.join-request-bar{display:flex;align-items:center;gap:12px;width:100%;padding:10px 14px;border:0;border-bottom:1px solid #ffffff14;background:#1c2233;color:var(--text,#f3f6ff);text-align:left;font:inherit;cursor:pointer}
+.join-request-icon{display:grid;place-items:center;flex:none;width:40px;height:40px;border-radius:50%;background:#e5534b;color:#fff;font-weight:800;font-size:14px}
+.join-request-text{display:grid;gap:2px}.join-request-text small{color:var(--muted,#8c9bb3)}.join-request-text strong{font-weight:600}

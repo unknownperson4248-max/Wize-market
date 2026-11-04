@@ -70,6 +70,7 @@ async function postInput(db,d,u,group){if(d.postIntent==='normal'){d.postIntent=
  return {title,details,description,postIntent,price,rangeId,attachments,gameCategory,priceFormat,customGameName,idGender}}
 const DEFAULT_PRICE_PRESETS=[{min:null,max:5000},{min:5000,max:10000},{min:10000,max:50000},{min:50000,max:null}];
 async function feedPresets(db){try{const row=await one(db,"SELECT value FROM wm_settings WHERE key='feed_price_presets'");const list=row?JSON.parse(row.value):null;return Array.isArray(list)&&list.length?list:DEFAULT_PRICE_PRESETS}catch{return DEFAULT_PRICE_PRESETS}}
+const VERIFY_DOCS={nid:'NID card',passport:'passport',driving:'driving licence',birth:'birth certificate',student:'student ID'},VERIFY_BACK=['nid','driving'];
 const BAN_FOREVER=253402300799000;// year 9999: a permanent ban
 function suspensionWrite(db,u,id,verdict){const until=now()+10800000;return {until,statement:stmt(db,'INSERT INTO wm_suspensions(user_id,until_at,reason,post_id) VALUES(?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET until_at=MAX(until_at,excluded.until_at),reason=excluded.reason,post_id=excluded.post_id,appealed=0',u.id,until,verdict.reason,id)}}
 
@@ -871,13 +872,17 @@ if(p==='/api/verification'&&method==='POST'){
  const whatsapp=loginId('phone',d.whatsapp),place=d.location??null;
  // Live location is no longer asked; an app that still sends one must send a valid one.
  need(place===null||typeof place==='object'&&Number.isFinite(place.lat)&&Math.abs(place.lat)<=90&&Number.isFinite(place.lng)&&Math.abs(place.lng)<=180&&Number.isFinite(place.accuracy)&&place.accuracy>=0&&place.accuracy<=100000,'Invalid location',400);
+ // Document type and live photos: NID and driving licence need the front and the back.
+ const docType=d.docType===undefined?'nid':d.docType;need(VERIFY_DOCS[docType],'Choose a document type');
  const evidence=await one(db,"SELECT id FROM wm_private_uploads WHERE id=? AND user_id=? AND kind='verification'",d.documentId,u.id);
- need(evidence,'Upload your NID photo first',400);
+ need(evidence,'Take a photo of the front of your '+VERIFY_DOCS[docType]+' first',400);
+ let back=null;if(d.backDocumentId!==undefined&&d.backDocumentId!==null){back=await one(db,"SELECT id FROM wm_private_uploads WHERE id=? AND user_id=? AND kind='verification'",d.backDocumentId,u.id);need(back&&back.id!==evidence.id,'Take a photo of the back again',400)}
+ need(!VERIFY_BACK.includes(docType)||back||d.docType===undefined,'Take a photo of the back of your '+VERIFY_DOCS[docType]+' too',400);
  const {verification:form}=await siteContent(db),given=Array.isArray(d.answers)?d.answers:[];
  const answers=form.questions.map((q,i)=>{const a=typeof given[i]==='string'?given[i].trim():'';need(a.length<=500,'Answers can be up to 500 characters');need(!q.required||a,'Please answer: '+q.label);return {q:q.label,a}});
  const pending=await one(db,"SELECT id FROM wm_verification_requests WHERE user_id=? AND kind=? AND status='pending'",u.id,d.kind);
  need(!pending,'⏳ Already sent. Please wait for the Owner to check it.',409);
- await run(db,'INSERT INTO wm_verification_requests(id,user_id,kind,contact,document_id,status,created_at,whatsapp,location_lat,location_lng,location_accuracy,location_at,answers) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',uuid(),u.id,d.kind,contact,evidence.id,'pending',now(),whatsapp,place?Math.round(place.lat*1e6)/1e6:null,place?Math.round(place.lng*1e6)/1e6:null,place?Math.round(place.accuracy):null,place?now():null,JSON.stringify(answers));
+ await run(db,'INSERT INTO wm_verification_requests(id,user_id,kind,contact,document_id,status,created_at,whatsapp,location_lat,location_lng,location_accuracy,location_at,answers,doc_type,back_document_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',uuid(),u.id,d.kind,contact,evidence.id,'pending',now(),whatsapp,place?Math.round(place.lat*1e6)/1e6:null,place?Math.round(place.lng*1e6)/1e6:null,place?Math.round(place.accuracy):null,place?now():null,JSON.stringify(answers),docType,back?.id||null);
  return reply({ok:true},201);
 }
 if(p==='/api/admin/verifications'&&method==='GET'){
