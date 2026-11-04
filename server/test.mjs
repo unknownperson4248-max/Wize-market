@@ -1383,3 +1383,11 @@ assert.equal(pk.owner.id,'owner');
  assert.equal((await call('/api/feed?gender=robot')).status,400);
  console.log('PASS: Free Fire ID type (Male/Female) is optional, Free Fire only, and the chosen type shows first in the feed.');
 }
+{
+ // Owner badge: only the owner can hide or show it.
+ assert.equal((await call('/api/owner-badge','POST',{show:false},'admin')).status,403);
+ assert.equal((await call('/api/owner-badge','POST',{show:'no'},'owner')).status,400);
+ assert.equal((await call('/api/owner-badge','POST',{show:false},'owner')).status,200);assert.equal(sql.prepare("SELECT value FROM wm_settings WHERE key='owner_badge_hidden'").get().value,'1');
+ assert.equal((await call('/api/owner-badge','POST',{show:true},'owner')).status,200);assert.equal(sql.prepare("SELECT value FROM wm_settings WHERE key='owner_badge_hidden'").get().value,'0');
+ console.log('PASS: owner can hide or show the Owner badge; nobody else can.');
+}

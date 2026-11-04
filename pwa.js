@@ -149,3 +149,9 @@ void loadPwaBranding();
   let changed=false;const files=[];for(const f of all){const i=vids.indexOf(f);if(i<0){files.push(f);continue}const small=await shrink(f,lens[i]);if(small!==f){changed=true;toast('🎬 Video optimized: '+(f.size/1048576).toFixed(0)+' MB → '+(small.size/1048576).toFixed(1)+' MB')}files.push(small)}
   if(changed&&window.DataTransfer){try{const dt=new DataTransfer();for(const f of files)dt.items.add(f);input.files=dt.files}catch{}}
   input.dataset.videoChecked='1';input.dispatchEvent(new Event('change',{bubbles:true}));delete input.dataset.videoChecked},true)})();
+
+// Hide the launch animation once the app is ready (at least 1.3 s so it can play, at most 3.5 s).
+(()=>{const splash=document.getElementById('appSplash');if(!splash)return;if(!matchMedia('(display-mode: standalone)').matches){splash.remove();return}
+ const started=performance.now();let gone=false;const hide=()=>{if(gone)return;gone=true;setTimeout(()=>{splash.classList.add('done');setTimeout(()=>splash.remove(),600)},Math.max(0,1300-(performance.now()-started)))};
+ const ready=()=>!document.body.classList.contains('auth-pending');if(ready())hide();else{const watch=new MutationObserver(()=>{if(ready()){watch.disconnect();hide()}});watch.observe(document.body,{attributes:true,attributeFilter:['class']})}
+ setTimeout(hide,3500)})();

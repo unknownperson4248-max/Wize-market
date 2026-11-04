@@ -409,3 +409,17 @@ html body #chatPanel #groupSettingsPanel>.group-info-popover{background:#3a3b3e!
 .cg-check{width:24px;height:24px;border-radius:50%;border:2px solid #4a5a6c;display:grid;place-items:center;font-style:normal;font-size:14px}.cg-row.on .cg-check{background:#1877f2;border-color:#1877f2;color:#fff}
 .video-optimize{position:fixed;left:50%;top:max(14px,env(safe-area-inset-top));transform:translateX(-50%);z-index:400;width:min(380px,calc(100% - 24px));padding:14px 16px;border-radius:16px;background:#151a24f7;border:1px solid #2a8de066;color:#fff;box-shadow:0 14px 34px #000c;display:grid;gap:8px}
 .video-optimize strong{font-size:15px}.video-optimize small{color:#9fb6cc;font-size:12px}.vo-bar{height:6px;border-radius:3px;background:#ffffff1f;overflow:hidden}.vo-bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#2a8de0,#a033ff);transition:width .2s}
+/* App launch: animated logo on a plain background (only when opened as the installed app) */
+.app-splash{display:none}
+@media (display-mode:standalone){.app-splash{display:flex;position:fixed;inset:0;z-index:100000;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:radial-gradient(circle at 50% 45%,#2a0f4a 0%,#0a0412 62%);transition:opacity .45s ease,visibility .45s}}
+.app-splash.done{opacity:0;visibility:hidden}
+.app-splash-logo{position:relative;width:min(68vw,300px);aspect-ratio:1;animation:splashIn .9s cubic-bezier(.2,.9,.25,1.2) both}
+.app-splash-logo img{width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 0 18px #a855f799);animation:splashGlow 1.6s ease-in-out .9s infinite alternate}
+.app-splash-shine{position:absolute;inset:0;-webkit-mask:url(/icons/app-512.png) center/contain no-repeat;mask:url(/icons/app-512.png) center/contain no-repeat;background:linear-gradient(110deg,transparent 35%,#ffffffcc 50%,transparent 65%) -150% 0/250% 100% no-repeat;animation:splashShine 1.1s ease-in-out .55s both}
+.app-splash-name{font-weight:800;font-size:22px;letter-spacing:.18em;color:#efe6ff;text-shadow:0 0 18px #a855f788;animation:splashName .7s ease-out .5s both}
+@keyframes splashIn{0%{opacity:0;transform:scale(.55) rotate(-6deg);filter:blur(10px)}100%{opacity:1;transform:none;filter:none}}
+@keyframes splashGlow{to{filter:drop-shadow(0 0 30px #c084fcdd)}}
+@keyframes splashShine{to{background-position:150% 0}}
+@keyframes splashName{0%{opacity:0;transform:translateY(10px)}100%{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.app-splash-logo,.app-splash-logo img,.app-splash-shine,.app-splash-name{animation:none}}
+.auth-logo-img{border-radius:0!important;box-shadow:none!important;object-fit:contain;filter:drop-shadow(0 6px 18px #a855f766)}
