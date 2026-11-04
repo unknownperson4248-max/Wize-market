@@ -1018,7 +1018,7 @@ assert.equal(pk.owner.id,'owner');
 // Migration 021 keeps every existing deal and post, and existing deals stay on their original flow.
 {
  const current=readFileSync(new URL('./schema.sql',import.meta.url),'utf8');
- const before=current.replace(",flow INTEGER NOT NULL DEFAULT 0,paid_at INTEGER,paid_note TEXT NOT NULL DEFAULT '',funded_at INTEGER,funded_by TEXT REFERENCES users(id),payment_trx TEXT NOT NULL DEFAULT '',payment_proof_id TEXT,delivered_at INTEGER,checklist TEXT NOT NULL DEFAULT '',checklist_proof_id TEXT,buyer_done_at INTEGER,payout_note TEXT NOT NULL DEFAULT '',dispute_reason TEXT NOT NULL DEFAULT '',disputed_by TEXT REFERENCES users(id));",");").replace(",game_uid_hash TEXT,game_uid_enc TEXT,game_uid_hint TEXT NOT NULL DEFAULT '',bumped_at INTEGER,renewed_at INTEGER,media_updated_at INTEGER);",");").replace(",whatsapp TEXT NOT NULL DEFAULT '',location_lat REAL,location_lng REAL,location_accuracy REAL,location_at INTEGER,answers TEXT NOT NULL DEFAULT '[]');",");").split('-- Protected deals, secure handover, deal proofs and listing rules (migration 021).')[0];
+ const before=current.replace(",flow INTEGER NOT NULL DEFAULT 0,paid_at INTEGER,paid_note TEXT NOT NULL DEFAULT '',funded_at INTEGER,funded_by TEXT REFERENCES users(id),payment_trx TEXT NOT NULL DEFAULT '',payment_proof_id TEXT,delivered_at INTEGER,checklist TEXT NOT NULL DEFAULT '',checklist_proof_id TEXT,buyer_done_at INTEGER,payout_note TEXT NOT NULL DEFAULT '',dispute_reason TEXT NOT NULL DEFAULT '',disputed_by TEXT REFERENCES users(id));",");").replace(",game_uid_hash TEXT,game_uid_enc TEXT,game_uid_hint TEXT NOT NULL DEFAULT '',bumped_at INTEGER,renewed_at INTEGER,media_updated_at INTEGER,id_gender TEXT);",");").replace(",whatsapp TEXT NOT NULL DEFAULT '',location_lat REAL,location_lng REAL,location_accuracy REAL,location_at INTEGER,answers TEXT NOT NULL DEFAULT '[]');",");").split('-- Protected deals, secure handover, deal proofs and listing rules (migration 021).')[0];
  assert.notEqual(before,current);assert.equal(before.includes('game_uid_hash'),false);assert.equal(before.includes('paid_note'),false);
  const migrated=new DatabaseSync(':memory:');migrated.exec('CREATE TABLE users(id TEXT PRIMARY KEY,name TEXT,picture TEXT,created_at INTEGER,updated_at INTEGER);'+before);
  migrated.exec("INSERT INTO users(id,name) VALUES('b','Buyer'),('s','Seller'),('a','Admin');INSERT INTO wm_posts(id,user_id,title,details,price,kind,status,created_at) VALUES('p','s','Old ID','Old details',4000,'Game ID','approved',5);INSERT INTO wm_threads(id,buyer_id,seller_id,post_id,pair_key,created_at,is_deal) VALUES('t','b','s','p','deal:b:p',1,1);INSERT INTO wm_deals(id,thread_id,buyer_id,seller_id,admin_id,price,status,created_at,post_id,buyer_done) VALUES('d','t','b','s','a',4000,'active',2,'p',1);");
@@ -1366,4 +1366,20 @@ assert.equal(pk.owner.id,'owner');
  const home=seoPage(main,new Request('https://wizenex.com/'),'/',page,cfg);assert.match(home,/<body class="x"><noscript><h1>WizeNex<\/h1>/);assert.match(home,/"Wize Nex"/);assert.match(home,/<meta name="robots" content="index,follow/);assert.match(home,/<link rel="canonical" href="https:\/\/wizenex\.com\/">/);assert.match(home,/application\/ld\+json/);assert.match(home,/og:image/);
  const testHome=seoPage(test,new Request('https://buysell.rahatwize.com/'),'/',page,cfg);assert.match(testHome,/noindex,nofollow/);assert.doesNotMatch(testHome,/ld\+json/);
  console.log('PASS: SEO (robots.txt, sitemap, canonical, structured data, www to main address; test site not indexed).');
+}
+{
+ // Free Fire ID type (Male/Female): optional, only for Free Fire; the chosen type comes first in the feed.
+ env.AI={run:async()=>({response:{decision:'safe',category:'none',confidence:.99}})};sql.exec('DELETE FROM wm_limits');
+ let n=0;const make=async(extra)=>call('/api/posts','POST',{title:'FF ID '+['alpha','bravo','charlie','delta'][n++],details:'Level 70',price:5000,kind:'Game ID',media:[],gameCategory:'free-fire',...extra},'owner');
+ let r=await make({idGender:'female'});assert.equal(r.status,201,JSON.stringify(r.data));const female=r.data.id;
+ r=await make({});assert.equal(r.status,201);const plain=r.data.id;
+ r=await make({idGender:'robot'});assert.equal(r.status,201);assert.equal(sql.prepare('SELECT id_gender FROM wm_posts WHERE id=?').get(r.data.id).id_gender,null);
+ r=await make({gameCategory:'efootball',idGender:'male'});assert.equal(r.status,201);assert.equal(sql.prepare('SELECT id_gender FROM wm_posts WHERE id=?').get(r.data.id).id_gender,null);
+ assert.equal(sql.prepare('SELECT id_gender FROM wm_posts WHERE id=?').get(female).id_gender,'female');
+ sql.prepare('UPDATE wm_posts SET created_at=created_at-3600000 WHERE id=?').run(female);
+ const list=async q=>(await call('/api/feed?category=free-fire&limit=30'+q)).data.posts.map(p=>p.id);
+ let ids=await list('');assert.ok(ids.includes(female)&&ids.includes(plain));
+ ids=await list('&gender=female');assert.equal(ids[0],female);assert.ok(ids.includes(plain));
+ assert.equal((await call('/api/feed?gender=robot')).status,400);
+ console.log('PASS: Free Fire ID type (Male/Female) is optional, Free Fire only, and the chosen type shows first in the feed.');
 }

@@ -50,3 +50,9 @@
 .in-app-login-note small{color:#f3dcae;line-height:1.35}
 .in-app-login-actions{display:flex;gap:8px;flex-wrap:wrap}
 .in-app-login-actions .btn{flex:1;min-height:38px;padding:8px 12px}
+.id-gender-box{margin:12px 0 4px}.id-gender-box[hidden],.feed-gender-box[hidden]{display:none!important}.id-gender-label{display:block;font-weight:600;margin-bottom:8px}.id-gender-label small{color:var(--muted);font-weight:400}
+.id-gender-chips{display:flex;gap:8px}.id-gender-chip{flex:1;min-height:42px;border-radius:999px;border:1px solid var(--line);background:#111a2a;color:var(--text);font:inherit;font-weight:600;cursor:pointer;transition:background .15s,border-color .15s,transform .1s}.id-gender-chip:active{transform:scale(.97)}
+.id-gender-chip[data-gender="male"][aria-pressed="true"]{background:#1d4ed855;border-color:#60a5fa;color:#dbeafe}.id-gender-chip[data-gender="female"][aria-pressed="true"]{background:#db277755;border-color:#f472b6;color:#fce7f3}
+.feed-gender-box{margin:12px 0 4px;display:grid;gap:8px}.feed-gender-box .hint{margin:0}
+.id-gender-tag{display:inline-flex;align-items:center;margin-left:6px;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:700;line-height:18px}.id-gender-tag.male{background:#1d4ed833;color:#93c5fd}.id-gender-tag.female{background:#db277733;color:#f9a8d4}
+.id-gender-divider{display:flex;align-items:center;gap:10px;margin:14px 4px;color:var(--muted);font-size:13px;font-weight:600}.id-gender-divider::before,.id-gender-divider::after{content:"";flex:1;height:1px;background:var(--line)}
