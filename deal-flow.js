@@ -235,7 +235,7 @@ function openAuth(mode){setAuthMode(mode);showLogin()}
 $('authSignInTab').onclick=()=>setAuthMode('signin');$('authSignUpTab').onclick=()=>setAuthMode('signup');$('authForgot').onclick=()=>setAuthMode('forgot');
 for(const radio of document.querySelectorAll('input[name=authMethod]'))radio.onchange=syncAuthMethod;
 $('guestLogin').onclick=()=>openAuth('signin');
-async function authPost(path,data){const response=await fetch('/api/auth/'+path,{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'content-type':'application/json'},body:JSON.stringify(data)}),result=await response.json().catch(()=>({}));if(!response.ok)throw Error(result.error||'Something went wrong. Try again.');return result}
+async function authPost(path,data){const response=await fetch('/api/auth/'+path,{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'content-type':'application/json'},body:JSON.stringify(data)}),result=await response.json().catch(()=>({}));if(!response.ok)throw Object.assign(Error(result.error||'Something went wrong. Try again.'),{status:response.status});return result}
 async function afterAuth(message){$('authPassword').value='';$('authConfirm').value='';await refreshMe();closeLogin();if(afterLoginTab){const next=afterLoginTab;afterLoginTab=null;navigate(next)}await loadPage();await acceptGroupInvite();await openSharedProfile();await handleAdminEntry();toast(message)}
 $('authForm').onsubmit=async e=>{
  e.preventDefault();const submit=$('authSubmit'),status=$('authStatus');submit.disabled=true;
@@ -248,7 +248,10 @@ $('authForm').onsubmit=async e=>{
   status.textContent=authMode==='signup'?'Creating your account…':'Logging in…';
   if(authMode==='signup'){const name=$('authName').value.trim();if(!name)throw Error('Enter your name.');await authPost('signup',{method,login,password,name})}else await authPost('signin',{login,password});
   status.textContent='';await afterAuth(authMode==='signup'?'🎉 Registered. Welcome!':'✅ Logged in.');
- }catch(error){status.textContent=error.message}finally{submit.disabled=false}
+ }catch(error){
+  // Login with an email/number that has no account: offer Create account right there (keeps what was typed).
+  if(error.status===404&&authMode==='signin'){status.replaceChildren(node('span',error.message+' '),button('Create account',()=>{setAuthMode('signup');$('authName').focus()},'btn auth-create-link'))}
+  else status.textContent=error.message}finally{submit.disabled=false}
 };
 syncAuthMethod();
 // A reset link looks like https://site/#reset=<token>. The token is read once and removed from the address bar.

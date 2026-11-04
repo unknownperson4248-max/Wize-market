@@ -840,7 +840,7 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  let signup=await authCall('signup',{method:'phone',login:'+8801712345678',password:'goodpass123',name:'Rafi Hasan'});assert.equal(signup.status,201);assert.match(signup.headers.get('set-cookie'),/^wm_session=[a-f0-9]{64}; HttpOnly; Secure; SameSite=Lax/);assert.equal((await signup.json()).user.name,'Rafi Hasan');
  const stored2=sql.prepare("SELECT c.login,c.kind,c.password_hash,u.google_sub FROM wm_credentials c JOIN users u ON u.id=c.user_id WHERE c.login='8801712345678'").get();assert.equal(stored2.kind,'phone');assert.match(stored2.password_hash,/^[a-f0-9]{64}$/);assert.ok(!stored2.password_hash.includes('goodpass'));assert.match(stored2.google_sub,/^password:/);
  assert.equal((await authCall('signup',{method:'phone',login:'01712345678',password:'another123',name:'Someone'})).status,409);
- assert.equal((await authCall('signin',{login:'01712345678',password:'wrongpass1'})).status,401);assert.equal((await authCall('signin',{login:'01999999999',password:'whatever1'})).status,401);
+ assert.equal((await authCall('signin',{login:'01712345678',password:'wrongpass1'})).status,401);{const none=await authCall('signin',{login:'01999999999',password:'whatever1'});assert.equal(none.status,404);assert.match((await none.json()).error,/Create account/)}
  const signin=await authCall('signin',{login:'০১৭১২৩৪৫৬৭৮',password:'goodpass123'});assert.equal(signin.status,200);const sessionCookie=signin.headers.get('set-cookie').split(';')[0];
  const meNow=await worker.fetch(new Request('https://test.local/api/me',{headers:{cookie:sessionCookie}}),env);assert.equal((await meNow.json()).user.name,'Rafi Hasan');
  assert.equal((await authCall('signup',{method:'email',login:'Mim@Example.com',password:'mimpass123',name:'মিম আক্তার'})).status,201);assert.equal((await authCall('signin',{login:'mim@example.com',password:'mimpass123'})).status,200);
@@ -878,7 +878,7 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  // Feed IDs added to a group are kept as placements but the group list shows only IDs posted inside the group.
  assert.ok(!(await call('/api/feed?group='+group,'GET',undefined,'vip')).data.posts.some(p=>p.id===sharedId));
  assert.equal((await call('/api/groups/'+group+'/share-post','POST',{postId:sharedId},'outsider')).status>=400,true);assert.equal((await call('/api/groups/'+group+'/share-post','POST',{postId:pListing},'vip')).status,404);
- assert.equal((await call('/api/groups/'+group+'/leave','POST',{},'admin')).status,403);
+ assert.equal((await call('/api/groups/'+group+'/leave','POST',{},'admin')).status,409);// the creator must hand the group to an admin first
  assert.equal((await call('/api/groups/'+group+'/messages','POST',{text:'before leaving'},'vip')).status,201);assert.equal((await call('/api/groups/'+group+'/leave','POST',{},'vip')).status,200);
  assert.equal(sql.prepare('SELECT count(*) n FROM wm_group_members WHERE group_id=? AND user_id=?').get(group,'vip').n,0);assert.ok((await call('/api/groups/'+group+'/messages','GET',undefined,'vip')).status>=400);
  assert.equal((await call('/api/groups/'+group+'/join','POST',{},'vip')).status,200);assert.equal((await call('/api/groups/'+group+'/messages','GET',undefined,'vip')).data.messages.some(m=>m.text==='before leaving'),false);
@@ -1304,7 +1304,14 @@ assert.equal(pk.owner.id,'owner');
  assert.equal(sql.prepare('SELECT count(*) n FROM wm_group_members WHERE group_id=? AND user_id=?').get(g,stranger).n,0);
  assert.equal((await call('/api/groups/'+g+'/members/remove','POST',{userId:stranger},maker)).status,404);
  assert.equal((await call('/api/groups/'+g+'/members/remove','POST',{userId:friend},maker)).status,200);assert.equal(sql.prepare("SELECT count(*) n FROM wm_group_messages WHERE group_id=? AND text='hello group'").get(g).n,1);
- console.log('PASS: member chat groups (create, add friends or chat contacts, join only with the invite link; admins can remove members, messages stay).');
+ // Creator leaves by handing the group to one of its admins.
+ assert.equal((await call('/api/groups/'+g+'/add-members','POST',{userIds:[friend]},maker)).status,200);
+ assert.equal((await call('/api/groups/'+g+'/leave','POST',{},maker)).status,409);
+ assert.equal((await call('/api/groups/'+g+'/leave','POST',{newOwnerId:friend},maker)).status,400);
+ assert.equal((await call('/api/groups/'+g+'/admins','POST',{userId:friend,admin:true},maker)).status,200);
+ assert.equal((await call('/api/groups/'+g+'/leave','POST',{newOwnerId:friend},maker)).status,200);
+ assert.equal(sql.prepare('SELECT owner_id FROM wm_groups WHERE id=?').get(g).owner_id,friend);assert.equal(sql.prepare('SELECT count(*) n FROM wm_group_members WHERE group_id=? AND user_id=?').get(g,maker).n,0);
+ console.log('PASS: member chat groups (create, add friends or chat contacts, join only with the invite link; admins can remove members, messages stay; the creator can leave after handing over to an admin).');
 }
 {
  // Videos longer than 2 minutes are refused.
@@ -1411,4 +1418,11 @@ assert.equal(pk.owner.id,'owner');
  const g=sql.prepare('SELECT id FROM wm_groups LIMIT 1').get();assert.ok(g);
  if(g){sql.prepare('INSERT INTO wm_group_ranges(id,group_id,label,min_price,max_price,created_at) VALUES(?,?,?,?,?,?)').run(crypto.randomUUID(),g.id,'Any',0,null,Date.now());sql.prepare('INSERT OR IGNORE INTO wm_group_members(group_id,user_id) VALUES(?,?)').run(g.id,'owner');const r=await call('/api/posts','POST',{title:'Custom game ID',details:'Lvl max',price:3000,kind:'Game ID',postIntent:'sell',gameCategory:'custom',customGameName:'Blood Strike',groupId:g.id,media:[]},'owner');assert.equal(r.status,201,JSON.stringify(r.data));assert.equal(sql.prepare('SELECT custom_game_name FROM wm_posts WHERE id=?').get(r.data.id).custom_game_name,'Blood Strike')}
  console.log('PASS: My feed price buttons (default, owner edits, reset) and group Sell ID with a custom game name.');
+}
+{
+ // Read replicas: each request uses a D1 session and the browser keeps the latest bookmark, so it always sees its own writes.
+ let seen=null;const replicated={...env,DB:{...env.DB,withSession(mark){seen=mark;return {...env.DB,getBookmark:()=>'00000001-0000abcd'}}}};
+ let r=await worker.fetch(new Request('https://test.local/api/feed-presets'),replicated);assert.equal(r.status,200);assert.equal(seen,'first-unconstrained');assert.match(r.headers.get('set-cookie')||'',/wm_d1=00000001-0000abcd/);
+ r=await worker.fetch(new Request('https://test.local/api/feed-presets',{headers:{cookie:'wm_d1=00000001-0000abcd'}}),replicated);assert.equal(seen,'00000001-0000abcd');assert.equal(r.headers.get('set-cookie'),null);
+ console.log('PASS: D1 sessions for nearby read copies (bookmark cookie keeps your own writes visible).');
 }

@@ -1,3 +1,5 @@
+// Run page watchers at most once per frame, with all changes of that frame together (keeps scrolling and chats smooth).
+function rafBatch(fn){let recs=[],queued=false;return list=>{if(list)recs.push(...list);if(queued)return;queued=true;requestAnimationFrame(()=>{queued=false;const r=recs;recs=[];fn(r)})}}
 let afterLoginTab=null;
 let profileViewId=null,profileTab='posts',profileData=null,profileLoad=0,activeComments=null,reviewDealId=null;let pendingPost=location.pathname.startsWith('/post/')?location.pathname.split('/')[2]:null;let pendingProfileId=new URLSearchParams(location.search).get('profile');
 let postIntent='sell';let editingPost=null,deletePending=null;

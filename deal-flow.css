@@ -411,3 +411,4 @@ body.create-menu-open::after{content:'';position:fixed;inset:0;z-index:140;backg
 .add-banner-button{display:inline-flex;align-items:center;gap:8px;margin-bottom:12%;padding:10px 18px;border-radius:999px;border:1.5px dashed #a891ffaa;background:#0b142499;color:#efe6ff;font:inherit;font-weight:700;cursor:pointer;backdrop-filter:blur(6px);transition:transform .15s,background .15s}
 .add-banner-button:hover{background:#1a2440cc}.add-banner-button:active{transform:scale(.97)}
 .add-banner-plus{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:#a891ff;color:#0b1424;font-size:16px;line-height:1}
+#authStatus .auth-create-link{display:inline-flex;margin-top:8px;padding:8px 16px;min-height:0;font-size:14px}

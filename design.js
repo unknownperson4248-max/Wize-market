@@ -181,7 +181,7 @@ function renderFastProfileEditor(root){const box=node('section',undefined,'card 
  const timers=new WeakMap();
  const watcher='IntersectionObserver' in window?new IntersectionObserver(entries=>{for(const e of entries){const card=e.target;if(e.isIntersecting&&e.intersectionRatio>=.6){if(!timers.has(card))timers.set(card,setTimeout(()=>{timers.delete(card);signal(card.dataset.postId,'dwell')},3000))}else{clearTimeout(timers.get(card));timers.delete(card)}}},{threshold:[0,.6]}):null;
  const observeCards=()=>{if(!watcher)return;for(const card of document.querySelectorAll('article[data-post-id]:not([data-signal-watch])')){card.dataset.signalWatch='1';watcher.observe(card)}};
- new MutationObserver(()=>observeCards()).observe(document.body,{childList:true,subtree:true});observeCards();
+ new MutationObserver(rafBatch(()=>observeCards())).observe(document.body,{childList:true,subtree:true});observeCards();
  document.addEventListener('click',e=>{const card=cardOf(e.target);if(!card)return;const button=e.target.closest('button');if(button&&!button.classList.contains('details-toggle')&&!button.closest('[class*="gallery"]'))return;signal(card.dataset.postId,'open')},true);
  document.addEventListener('play',e=>{const card=cardOf(e.target);if(card)signal(card.dataset.postId,'watch')},true);
  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flush()});

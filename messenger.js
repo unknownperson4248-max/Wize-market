@@ -286,7 +286,7 @@ renderGroupConversationActions=function(group){
  root.append(infoRowWith('warn','Report','Give feedback and report conversation',()=>{openReport(null,'other');$('reportContext').textContent='Report the group “'+group.name+'”. Only the website owner sees your report.';$('reportDetails')&&($('reportDetails').value='Group: '+group.name+' ('+group.id+')\n')}));
  if(!admin)root.append(infoRowWith('block','Block group','',()=>conversationAction(item,'block')));
  root.append(infoRowWith('trash','Delete chat','Clears your copy of the messages',()=>conversationAction(item,'delete')));
- if(!admin)root.append(infoRowWith('leave','Leave group','',async()=>{if(!confirm('Leave this group? Your messages here will be cleared and you will not get new messages from this group.'))return;await api('/groups/'+item.id+'/leave',{});toast('You left the group.');closeConversation();navigate('messages');await loadMessages()},'danger-row'));
+ root.append(infoRowWith('leave','Leave group','',()=>void leaveGroupFlow(item),'danger-row'));
 };
 async function openBlockMemberList(group){
  const root=$('groupInfoExtras');root.dataset.title='Block a member';showGroupInfoView('extras');root.replaceChildren(node('p','Loading…','muted'));
@@ -298,7 +298,7 @@ async function openBlockMemberList(group){
 $('groupInfoMenu').onclick=e=>{e.stopPropagation();document.querySelector('.group-info-popover')?.remove();const g=groupDetail?.group;if(!g)return;const menu=node('div',undefined,'group-info-popover');menu.setAttribute('role','menu');const add=(label,fn)=>{const b=button(label,()=>{menu.remove();fn()});b.setAttribute('role','menuitem');menu.append(b)};
  if(g.canManage){add('Change group photo',()=>{$('editGroupButton').click();setTimeout(()=>$('editGroupLogo')?.click(),200)});add('Change name',()=>{$('editGroupButton').click();setTimeout(()=>$('editGroupName')?.focus(),200)})}
  add('Delete conversation',()=>conversationAction({kind:'group',id:g.id,name:g.name,admin:g.owner_id===me.id},'delete'));
- if(g.owner_id!==me.id)add('Leave group',async()=>{if(!confirm('Leave this group?'))return;await api('/groups/'+g.id+'/leave',{});toast('You left the group.');closeConversation();navigate('messages');await loadMessages()});
+ add('Leave group',()=>void leaveGroupFlow(g));
  add('Report technical problem',()=>openReport(null,'website-issue'));$('groupSettingsPanel').append(menu);setTimeout(()=>document.addEventListener('click',()=>menu.remove(),{once:true}),0)};
 // Only admins can send: the box says so for everyone else.
 function paintComposerPermission(){const g=groupDetail?.group,blocked=chat?.kind==='group'&&g&&g.id===chat.id&&g.adminsOnly&&!g.canManage;let note=$('adminsOnlyNote');if(!note){note=node('div','🔒 Only admins can send messages in this group.','admins-only-note');note.id='adminsOnlyNote';$('chatForm').before(note)}note.hidden=!blocked;$('chatForm').classList.toggle('composer-locked',!!blocked)}
@@ -363,7 +363,7 @@ async function jumpToMention(){const id=(chatExtras.mentions||[])[0];if(!id)retu
 {const base=paintMessageExtras;paintMessageExtras=function(){base();void membersForMentions().then(highlightMentions);paintMentionJump();let prev=null,prevBubble=null;for(const b of document.querySelectorAll('#chatMessages>*')){if(!b.classList.contains('bubble')||b.hidden){if(!b.hidden)prev=null;continue}const m=b._message,same=prev&&m&&prev.user_id===m.user_id;b.classList.toggle('cont',!!same);if(same)prevBubble?.classList.add('has-next');b.classList.remove('has-next');prev=m;prevBubble=b}}}
 // @ badge on groups in the chat list, even when the group is muted.
 function paintMentionBadges(){for(const row of document.querySelectorAll('.chat-row[data-chat-key^="group:"]')){const id=row.dataset.chatKey.slice(6),n=mentionGroups.get(id);row.classList.toggle('has-mention',!!n)}}
-new MutationObserver(()=>paintMentionBadges()).observe(document.body,{childList:true,subtree:true});
+new MutationObserver(rafBatch(()=>paintMentionBadges())).observe(document.body,{childList:true,subtree:true});
 // Popup at the top when someone mentions me.
 function onMentions(data){mentionGroups=new Map((data.mentions||[]).map(m=>[m.group_id,m.total]));paintMentionBadges();const m=data.mention_popup;if(!m)return;const key='wm_mention_popped';let seen=[];try{seen=JSON.parse(localStorage.getItem(key)||'[]')}catch{}if(seen.includes(m.message_id))return;seen=[...seen.slice(-50),m.message_id];try{localStorage.setItem(key,JSON.stringify(seen))}catch{}
  if(chat?.kind==='group'&&chat.id===m.group_id&&!document.hidden){void loadChatExtras();return}showMentionPopup(m)}
@@ -455,7 +455,7 @@ const pinnedChats=()=>{try{return JSON.parse(localStorage.getItem('wm_pinned_cha
 function setPinnedChats(list){try{localStorage.setItem('wm_pinned_chats',JSON.stringify(list.slice(0,10)))}catch{}}
 function orderPinnedChats(){const list=$('chatList');if(!list)return;const pins=pinnedChats();for(const it of list.querySelectorAll(':scope>.chat-list-item')){const key=it.querySelector('.chat-row')?.dataset.chatKey;it.classList.toggle('pinned-chat',!!key&&pins.includes(key))}
  const items=[...list.querySelectorAll(':scope>.chat-list-item.pinned-chat')].sort((a,b)=>pins.indexOf(a.querySelector('.chat-row').dataset.chatKey)-pins.indexOf(b.querySelector('.chat-row').dataset.chatKey));let anchor=list.querySelector(':scope>.chat-list-item');for(const it of items){if(it!==anchor)list.insertBefore(it,anchor);else anchor=it.nextElementSibling;anchor=it.nextElementSibling}}
-new MutationObserver(()=>{if(!orderPinnedChats.busy){orderPinnedChats.busy=true;try{orderPinnedChats()}finally{setTimeout(()=>{orderPinnedChats.busy=false},0)}}}).observe(document.body,{childList:true,subtree:true});
+new MutationObserver(rafBatch(()=>{if(!orderPinnedChats.busy){orderPinnedChats.busy=true;try{orderPinnedChats()}finally{setTimeout(()=>{orderPinnedChats.busy=false},0)}}})).observe(document.body,{childList:true,subtree:true});
 const SHEET_ICONS={users:INFO_ICONS.users,pin:'<path d="M9 3.5h6l-1 5 3.5 3.5v1.5h-11V12L10 8.5Z"/><path d="M12 13.5V21"/>',archive:INFO_ICONS.archive,mute:INFO_ICONS.bellOff,bell:INFO_ICONS.bell,leave:INFO_ICONS.leave,trash:INFO_ICONS.trash,block:INFO_ICONS.block,user:INFO_ICONS.user,open:'<path d="M4 6h16v10H8l-4 4Z"/>'};
 function openChatRowSheet(item){
  closeMessageSheet();const row=item.querySelector('.chat-row'),key=row?.dataset.chatKey||'',[kind,id]=[key.split(':')[0],key.slice(key.indexOf(':')+1)],name=row?.querySelector('.inbox-person-name strong')?.textContent||'Chat',menuButtons=[...item.querySelectorAll('details.social-menu button')];if(!kind||kind==='deal')return;navigator.vibrate?.(12);
@@ -465,7 +465,7 @@ function openChatRowSheet(item){
  const arch=menuButtons.find(b=>/archive/i.test(b.textContent));if(arch)add('archive',arch.textContent.trim().replace(/ chat$/i,''),()=>arch.click());
  if(kind==='private'){add('users','Create group chat with '+name.split(' ')[0],()=>openCreateGroupChat({kind,id,name,avatar:row.querySelector('.avatar')}))}
  const muted=!!row.querySelector('.chat-muted-icon:not([hidden])');add(muted?'bell':'mute',muted?'Unmute':'Mute',()=>conversationAction({kind,id,name},muted?'unmute':'mute'));
- if(kind==='group'){const g=(typeof groups!=='undefined'?groups:[]).find(x=>x.id===id);if(g&&g.owner_id!==me?.id)add('leave','Leave group',async()=>{if(!confirm('Leave this group?'))return;await api('/groups/'+id+'/leave',{});toast('You left the group.');if(chat?.id===id)closeConversation();delete $('chatList').dataset.signature;await loadMessages()},true)}
+ if(kind==='group'){const g=(typeof groups!=='undefined'?groups:[]).find(x=>x.id===id);if(g)add('leave','Leave group',()=>void leaveGroupFlow(g),true)}
  const block=menuButtons.find(b=>/block/i.test(b.textContent));if(block)add('block',block.textContent.trim(),()=>block.click(),true);
  const del=menuButtons.find(b=>/delete/i.test(b.textContent));if(del)add('trash','Delete',()=>del.click(),true);
  overlay.append(sheet);document.body.append(overlay);
@@ -479,7 +479,7 @@ function openChatRowSheet(item){
 // ---- Post photos: dots under the album that follow the photo counter ----
 function paintAlbumDots(root=document){for(const album of root.querySelectorAll('.listing-album')){const counter=album.querySelector('.album-counter');if(!counter)continue;const m=(counter.textContent||'').match(/(\d+)\s*\/\s*(\d+)/);if(!m)continue;const [cur,total]=[Number(m[1]),Number(m[2])];if(total<2)continue;let dots=album.querySelector(':scope>.album-dots');if(!dots){dots=node('div',undefined,'album-dots');dots.setAttribute('aria-hidden','true');album.querySelector('.album-stage').after(dots)}
  const n=Math.min(total,8);if(dots.children.length!==n){dots.replaceChildren(...Array.from({length:n},()=>document.createElement('span')))}const on=total<=8?cur-1:Math.round((cur-1)/(total-1)*(n-1));[...dots.children].forEach((d,i)=>d.classList.toggle('on',i===on))}}
-new MutationObserver(recs=>{for(const r of recs){const a=r.target.closest?.('.listing-album')||r.target.parentElement?.closest?.('.listing-album');if(a){paintAlbumDots(a.parentElement||document);return}}if(recs.some(r=>[...r.addedNodes].some(n=>n.nodeType===1&&(n.matches?.('.listing-album')||n.querySelector?.('.listing-album')))))paintAlbumDots()}).observe(document.body,{childList:true,subtree:true,characterData:true});
+new MutationObserver(rafBatch(recs=>{for(const r of recs){const a=r.target.closest?.('.listing-album')||r.target.parentElement?.closest?.('.listing-album');if(a){paintAlbumDots(a.parentElement||document);return}}if(recs.some(r=>[...r.addedNodes].some(n=>n.nodeType===1&&(n.matches?.('.listing-album')||n.querySelector?.('.listing-album')))))paintAlbumDots()})).observe(document.body,{childList:true,subtree:true,characterData:true});
 
 // ---- Navigation icons: outline when idle, filled when open, your photo for Profile ----
 const NAV_ICONS={
@@ -490,7 +490,7 @@ const NAV_ICONS={
 function upgradeNavIcons(){for(const nav of [$('mobileNav'),$('desktopNav')]){if(!nav)continue;for(const b of nav.querySelectorAll('button[data-tab]')){const tab=b.dataset.tab,icons=NAV_ICONS[tab],holder=b.querySelector(':scope>span');if(!holder)continue;
   if(tab==='profile'&&me?.picture&&!/default-avatar/.test(me.picture)){if(holder.dataset.photo!==me.picture){holder.dataset.photo=me.picture;holder.querySelectorAll(':scope>.nav-ico').forEach(x=>x.remove());const old=holder.querySelector(':scope>.nav-photo')||holder.querySelector(':scope>svg');holder.dataset.upgraded='1';const img=node('img',undefined,'nav-photo');img.src=me.picture;img.alt='';img.loading='lazy';if(old)old.replaceWith(img);else holder.prepend(img)}continue}
   if(!icons||holder.dataset.upgraded==='1')continue;const svg=holder.querySelector('svg');if(!svg)continue;holder.dataset.upgraded='1';const wrap=document.createElement('i');wrap.className='nav-ico';wrap.innerHTML='<svg viewBox="0 0 24 24" class="ni-line" aria-hidden="true">'+icons[0]+'</svg><svg viewBox="0 0 24 24" class="ni-fill" aria-hidden="true">'+icons[1]+'</svg>';svg.replaceWith(wrap)}}}
-new MutationObserver(()=>upgradeNavIcons()).observe(document.body,{childList:true,subtree:true});upgradeNavIcons();
+new MutationObserver(rafBatch(()=>upgradeNavIcons())).observe(document.body,{childList:true,subtree:true});upgradeNavIcons();
 document.addEventListener('click',e=>{const b=e.target.closest?.('#mobileNav button[data-tab]');if(!b)return;b.classList.remove('nav-pop');void b.offsetWidth;b.classList.add('nav-pop')});
 
 
@@ -514,4 +514,18 @@ async function openCreateGroupChat(seed){
   try{let logoId;const f=file.files[0];if(f){const r=await fetch('/api/upload',{method:'POST',credentials:'same-origin',headers:{'content-type':f.type,'x-upload-purpose':'profile'},body:f}),d=await r.json();if(!r.ok)throw Error(d.error||'Upload failed');logoId=d.id}
    const g=await api('/groups',{name:groupName,...(logoId?{logoId}:{})});const r=await api('/groups/'+g.id+'/add-members',{userIds:[...picked]});page.remove();toast('👥 Group created'+(r.added?.length?' with '+r.added.length+' '+(r.added.length===1?'person':'people'):'')+'.');navigate('messages');await loadMessages();await openChat('group',g.id)
   }catch(e){toast(e.message);create.disabled=false;create.textContent='Create'}}
+}
+
+// Leave group. The creator first picks one of the group admins to take over the group.
+async function leaveGroupFlow(item){
+ const g=groupDetail?.group?.id===item.id?groupDetail.group:item,creator=g.owner_id===me.id;
+ const done=async newOwnerId=>{await api('/groups/'+item.id+'/leave',newOwnerId?{newOwnerId}:{});toast('You left the group.');closeConversation();navigate('messages');await loadMessages()};
+ if(!creator){if(!confirm('Leave this group? Your messages here will be cleared and you will not get new messages from this group.'))return;try{await done()}catch(e){toast(e.message)}return}
+ let members=[];try{members=(await api('/groups/'+item.id+'/members')).members||[]}catch(e){return toast(e.message)}
+ const admins=members.filter(m=>m.is_admin&&m.id!==me.id);
+ if(!admins.length)return toast('You made this group. Make another member admin first (Members → Make admin), then leave and hand the group to them.');
+ const overlay=node('div',undefined,'message-sheet');overlay.id='messageSheet';overlay.onclick=e=>{if(e.target===overlay)closeMessageSheet()};const box=node('div',undefined,'delete-choice');
+ box.append(node('strong','Who will own the group?'),node('p','You made this group. Choose an admin to take over, then you leave.','hint'));
+ for(const m of admins){const b=button('',async()=>{if(!confirm(m.name+' will own the group and you will leave. Continue?'))return;closeMessageSheet();try{await done(m.id)}catch(e){toast(e.message)}},'member-row');const who=node('span',undefined,'member-row-text');who.append(node('strong',m.name),node('small','Admin'));b.append(avatar(m),who);box.append(b)}
+ box.append(button('Cancel',closeMessageSheet,'btn ghost'));overlay.append(box);document.body.append(overlay);
 }

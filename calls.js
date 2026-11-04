@@ -353,11 +353,11 @@ function syncHistory(){
  if(staleEntry(history.state)){if(!openQueue.length)return hop('quiet');const id=openQueue.shift();backStack.push(id);history.replaceState(layerState(id),'')}
  for(const id of openQueue.splice(0)){backStack.push(id);history.pushState(layerState(id),'')}
 }
-new MutationObserver(records=>{
+new MutationObserver(rafBatch(records=>{
  backStack=backStack.filter(layerOpen);
  for(const r of records){const id=r.target.id;if(id&&id in BACK_LAYERS&&!openQueue.includes(id)&&!backStack.includes(id)&&layerOpen(id))openQueue.push(id)}
  syncHistory();
-}).observe(document.body,{attributes:true,attributeFilter:['hidden'],subtree:true});
+})).observe(document.body,{attributes:true,attributeFilter:['hidden'],subtree:true});
 // Links to a page (#messages, #privacy) switch the page in place.
 document.addEventListener('click',e=>{const a=e.target.closest?.('a[href^="#"]');if(!a||e.defaultPrevented)return;const t=a.getAttribute('href').slice(1);if(HISTORY_TABS.includes(t)){e.preventDefault();navigate(t)}});
 window.addEventListener('popstate',e=>{
