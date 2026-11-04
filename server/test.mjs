@@ -73,7 +73,8 @@ const safeAI={run:async()=>({response:{decision:'safe',confidence:.99,category:'
 let directPost=await call('/api/posts','POST',{...post,title:'Instant publication'},'seller');assert.equal(directPost.data.status,'approved');assert.ok((await call('/api/feed')).data.posts.some(p=>p.id===directPost.data.id));
 env.AI={run:async()=>({response:'{"decision":"unsafe","confidence":0.99,"category":"explicit_sexual"}'})};
 const beforeSuspension=Date.now();const blockedPost=await call('/api/posts','POST',{...post,title:'Safety fixture'},'buyer');assert.equal(blockedPost.data.status,'rejected');assert.ok(blockedPost.data.suspendedUntil>=beforeSuspension+10800000);assert.equal((await call('/api/posts','POST',post,'buyer')).status,423);assert.equal((await call('/api/threads/'+thread+'/messages','POST',{text:'blocked'},'buyer')).status,423);assert.equal((await call('/api/me','GET',undefined,'buyer')).data.user.suspension.reason,'Explicit sexual content is not allowed');assert.ok(!(await call('/api/feed')).data.posts.some(p=>p.id===blockedPost.data.id));
-assert.equal((await call('/api/safety/appeal','POST',{},'buyer')).status,200);sql.prepare('UPDATE wm_suspensions SET until_at=? WHERE user_id=?').run(Date.now()-1,'buyer');env.AI=safeAI;assert.equal((await call('/api/posts','POST',{...post,title:'After expiry'},'buyer')).data.status,'approved');
+assert.equal((await call('/api/safety/appeal','POST',{message:'Please check my post again.'},'buyer')).status,403);// timed suspensions end on their own; only bans can be appealed
+sql.prepare('UPDATE wm_suspensions SET until_at=? WHERE user_id=?').run(Date.now()-1,'buyer');env.AI=safeAI;assert.equal((await call('/api/posts','POST',{...post,title:'After expiry'},'buyer')).data.status,'approved');
 env.AI={run:async()=>({response:{decision:'unsafe',confidence:.7,category:'explicit_sexual'}})};assert.equal((await call('/api/posts','POST',post,'seller')).data.status,'pending');assert.equal((await call('/api/me','GET',undefined,'seller')).data.user.suspension,null);
 env.AI={run:async()=>{throw Error('Scanner offline')}};assert.equal((await call('/api/posts','POST',post,'seller')).data.status,'pending');assert.equal((await call('/api/me','GET',undefined,'seller')).data.user.suspension,null);env.AI=safeAI;
 // Standalone admin credentials and sessions are separate from normal Google sessions.
@@ -1317,9 +1318,25 @@ assert.equal(pk.owner.id,'owner');
  const ban=await call('/api/admin/suspend','POST',{userId:'outsider',forever:true},'owner');assert.equal(ban.status,200);assert.ok(ban.data.until>Date.now()+1e12);
  const blocked=await call('/api/posts','POST',post,'outsider');assert.equal(blocked.status,423);assert.match(blocked.data.error,/banned/);
  assert.equal((await call('/api/me','GET',undefined,'outsider')).status,200);
+ // Appeals: only for a permanent ban, with a message; the Owner accepts or keeps the ban.
+ assert.equal((await call('/api/safety/appeal','POST',{message:'short'},'outsider')).status,400);
+ assert.equal((await call('/api/safety/appeal','POST',{message:'It was my brother, please check again.'},'outsider')).status,200);
+ assert.equal((await call('/api/safety/appeal','POST',{message:'Sending the same appeal twice here.'},'outsider')).status,409);
+ assert.equal((await call('/api/me','GET',undefined,'outsider')).data.user.suspension.appeal_text,'It was my brother, please check again.');
+ assert.equal((await call('/api/admin/appeal','POST',{userId:'outsider',accept:false,note:'Proof is clear'},'admin')).status,403);
+ assert.equal((await call('/api/admin/appeal','POST',{userId:'outsider',accept:false,note:'Proof is clear'},'owner')).status,200);
+ assert.equal((await call('/api/me','GET',undefined,'outsider')).data.user.suspension.appeal_note,'Proof is clear');
+ assert.equal((await call('/api/safety/appeal','POST',{message:'Please look at it once more.'},'outsider')).status,429);
+ sql.prepare("UPDATE wm_suspensions SET appeal_at=? WHERE user_id='outsider'").run(Date.now()-8*86400000);
+ assert.equal((await call('/api/safety/appeal','POST',{message:'Please look at it once more.'},'outsider')).status,200);
+ assert.equal((await call('/api/admin/appeal','POST',{userId:'outsider',accept:true},'owner')).status,200);
+ assert.equal((await call('/api/me','GET',undefined,'outsider')).data.user.suspension,null);
+ assert.equal((await call('/api/admin/suspend','POST',{userId:'outsider',hours:5},'owner')).status,200);
+ assert.equal((await call('/api/safety/appeal','POST',{message:'Timed suspension appeal attempt.'},'outsider')).status,403);
+ assert.equal((await call('/api/admin/suspend','POST',{userId:'outsider',forever:true},'owner')).status,200);
  assert.equal((await call('/api/admin/restore','POST',{userId:'outsider'},'owner')).status,200);
  list=(await call('/api/admin/users?q=outsider','GET',undefined,'owner')).data.users;assert.equal(list[0].suspension,null);
- console.log('PASS: owner can suspend a member for hours/days or ban them with no end date; owner cannot be suspended; restore lifts it.');
+ console.log('PASS: owner can suspend a member for hours/days or ban them with no end date; owner cannot be suspended; restore lifts it; only a permanent ban can be appealed, with a message, and the owner accepts or keeps it.');
 }
 {
  // Smart feed: opened/watched posts come forward for everyone, but go lower for the person who already opened them.
