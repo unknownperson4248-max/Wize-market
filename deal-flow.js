@@ -390,7 +390,7 @@ function profileMenuItems(){
  if(!installedApp())items.push(['Install app','download',()=>installMarketApp()]);
  items.push(['Account security','lock',openAccountSecurity]);
  items.push({group:'Help & support',icon:'help',items:[['Report a scammer','flag',()=>openReport(null,'scam')],['Help','help',()=>openReport(null,'help')],['Website issue','bug',()=>openReport(null,'website-issue')],['Other','chat',()=>openReport(null,'other')]]});
- items.push(['Privacy & Terms','file',()=>navigate('privacy')]);
+ items.push(['Terms & Conditions','file',()=>openLegal('terms')],['Privacy policy','lock',()=>openLegal('privacy')]);
  return items;
 }
 function drawerItem(item){
@@ -416,3 +416,6 @@ function appendAdminAgreement(root,d){
 
 // Show / hide the password while typing.
 $('authShowPassword').onclick=()=>{const input=$('authPassword'),show=input.type==='password';input.type=show?'text':'password';$('authShowPassword').setAttribute('aria-pressed',String(show));$('authShowPassword').setAttribute('aria-label',show?'Hide password':'Show password');input.focus()};
+
+// Profile menu: open the Terms or the Privacy Policy (both live on the same page).
+function openLegal(which){navigate('privacy');requestAnimationFrame(()=>{const el=document.getElementById(which==='terms'?'termsNotice':'privacyNotice');if(el)el.scrollIntoView({behavior:'smooth',block:'start'})})}
