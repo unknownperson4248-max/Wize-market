@@ -124,17 +124,20 @@ void loadPwaBranding();
 
 // Videos can be at most 2 minutes: checked as soon as a video is picked, before any upload starts.
 // Large phone videos are then made smaller on the phone (same resolution up to 1080p, lower bitrate) with the browser's own video encoder.
-(()=>{const MAX=120,TARGET_BPS=2500000,MEDIABUNNY='https://cdn.jsdelivr.net/npm/mediabunny@1.62.0/dist/bundles/mediabunny.min.mjs';
+(()=>{const MAX=120,TARGET_BPS=1800000,SHORT=720,MEDIABUNNY='https://cdn.jsdelivr.net/npm/mediabunny@1.62.0/dist/bundles/mediabunny.min.mjs';
  const length=f=>new Promise(res=>{const v=document.createElement('video');v.preload='metadata';v.muted=true;const url=URL.createObjectURL(f);const done=d=>{URL.revokeObjectURL(url);res(d)};v.onloadedmetadata=()=>done(isFinite(v.duration)?v.duration:null);v.onerror=()=>done(null);setTimeout(()=>done(null),8000);v.src=url});
- let progressBox=null;const progress=(text,pct)=>{if(!progressBox){progressBox=document.createElement('div');progressBox.className='video-optimize';progressBox.setAttribute('role','status');progressBox.innerHTML='<strong></strong><div class="vo-bar"><i></i></div><small>Keep this page open. The video keeps its quality.</small>';document.body.append(progressBox)}progressBox.querySelector('strong').textContent=text;progressBox.querySelector('i').style.width=Math.round((pct||0)*100)+'%'};
+ let progressBox=null;const progress=(text,pct)=>{if(!progressBox){progressBox=document.createElement('div');progressBox.className='video-optimize';progressBox.setAttribute('role','status');progressBox.innerHTML='<strong></strong><div class="vo-bar"><i></i></div><small>Keep this page open. The video is saved in 720p.</small>';document.body.append(progressBox)}progressBox.querySelector('strong').textContent=text;progressBox.querySelector('i').style.width=Math.round((pct||0)*100)+'%'};
  const hideProgress=()=>{progressBox?.remove();progressBox=null};
  async function shrink(file,secs){
-  if(!secs||!window.VideoEncoder||file.size*8/secs<=TARGET_BPS*1.4)return file;// already light, or this phone cannot encode
+  if(!secs||!window.VideoEncoder)return file;// this phone cannot encode
   try{const mb=await import(MEDIABUNNY);const input=new mb.Input({source:new mb.BlobSource(file),formats:mb.ALL_FORMATS});const track=await input.getPrimaryVideoTrack();if(!track)return file;
-   const w=track.displayWidth,h=track.displayHeight,cap=w>=h?(w>1920?{width:1920}:{}):(h>1920?{height:1920}:{});
+   const w=track.displayWidth,h=track.displayHeight,big=Math.min(w,h)>SHORT;
+   if(!big&&file.size*8/secs<=TARGET_BPS*1.4)return file;// already 720p or smaller and light
+   const cap=big?(w>=h?{height:SHORT}:{width:SHORT}):{};// 720p: the short side becomes 720, shape kept
    const output=new mb.Output({format:new mb.Mp4OutputFormat({fastStart:'in-memory'}),target:new mb.BufferTarget()});
    const conversion=await mb.Conversion.init({input,output,video:{codec:'avc',bitrate:TARGET_BPS,forceTranscode:true,...cap}});// sound is copied as it is
-   if(!conversion.isValid||conversion.discardedTracks?.length)return file;// never drop the sound or any trackconversion.onProgress=p=>progress('🎬 Optimizing video… '+Math.round(p*100)+'%',p);progress('🎬 Optimizing video… 0%',0);await conversion.execute();
+   if(!conversion.isValid||conversion.discardedTracks?.length)return file;// never drop the sound or any track
+   conversion.onProgress=p=>progress('🎬 Optimizing video… '+Math.round(p*100)+'%',p);progress('🎬 Optimizing video… 0%',0);await conversion.execute();
    const buf=output.target.buffer;if(!buf||buf.byteLength<50000)return file;
    // Check the result before using it: same length, and the sound is still there.
    const check=new mb.Input({source:new mb.BufferSource(buf),formats:mb.ALL_FORMATS}),hadAudio=!!(await input.getPrimaryAudioTrack()),[dur,audio,vid]=await Promise.all([check.computeDuration(),check.getPrimaryAudioTrack(),check.getPrimaryVideoTrack()]);
