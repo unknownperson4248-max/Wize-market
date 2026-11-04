@@ -29,15 +29,19 @@
   },
   // WizeNex (wizenex.com): a separate site with its own worker, database and media. The settings above stay Wize Market's.
   // Deploy with: npx wrangler deploy --env wizenex
-  // SITE_HOST: "none" keeps wizenex.rahatwize.workers.dev open. When wizenex.com is active in Cloudflare, set it to
-  // "wizenex.com" and add the custom-domain routes below in the same deploy.
+  // SITE_HOST: wizenex.com is the one address; workers.dev sends visitors there. The routes serve wizenex.com and www
+  // through the existing proxied DNS records (custom domains need those records removed first).
   "env": {
     "wizenex": {
       "name": "wizenex",
       "workers_dev": true,
       "vars": {
-        "SITE_HOST": "none"
+        "SITE_HOST": "wizenex.com"
       },
+      "routes": [
+        { "pattern": "wizenex.com/*", "zone_name": "wizenex.com" },
+        { "pattern": "www.wizenex.com/*", "zone_name": "wizenex.com" }
+      ],
       "d1_databases": [
         {
           "binding": "DB",
