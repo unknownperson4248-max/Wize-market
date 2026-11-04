@@ -1463,3 +1463,15 @@ assert.equal(pk.owner.id,'owner');
  assert.equal((await call('/api/notices','GET',undefined,'outsider')).status,200);
  console.log('PASS: notices (report answers with the owner note and post link, verification results, read state).');
 }
+{
+ // Owner gives or removes the blue tick by hand (no application); the member gets a notice.
+ sql.prepare("DELETE FROM wm_verifications WHERE user_id='outsider'").run();
+ assert.equal((await call('/api/admin/verify','POST',{userId:'outsider',verified:true},'admin')).status,403);
+ assert.equal((await call('/api/admin/verify','POST',{userId:'owner',verified:false},'owner')).status,403);
+ assert.equal((await call('/api/admin/verify','POST',{userId:'outsider',verified:true},'owner')).status,200);
+ assert.ok((await call('/api/me','GET',undefined,'outsider')).data.user.verified);
+ assert.equal((await call('/api/notices','GET',undefined,'outsider')).data.notices[0].title,'✅ You are now a Verified member');
+ assert.equal((await call('/api/admin/verify','POST',{userId:'outsider',verified:false},'owner')).status,200);
+ assert.ok(!(await call('/api/me','GET',undefined,'outsider')).data.user.verified);
+ console.log('PASS: owner gives or removes the blue tick by hand, with a notice to the member.');
+}

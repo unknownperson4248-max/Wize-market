@@ -103,3 +103,5 @@ body{background:radial-gradient(ellipse at 0 0,#20483a44,transparent 55%),radial
 .admin-post-card .btn,.report-card .btn,#control-verifications article.card .btn{min-height:0!important;padding:6px 12px!important;font-size:13px!important}
 .admin-post-card .admin-post-code{font-size:13px}
 .verification-shots img{max-height:180px!important}
+.member-verify{flex:none;align-self:center;padding:6px 12px;border-radius:999px;border:1px solid #1d9bf088;background:transparent;color:#7cc4ff;font:inherit;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+.member-verify.on{background:#1d9bf0;border-color:#1d9bf0;color:#fff}

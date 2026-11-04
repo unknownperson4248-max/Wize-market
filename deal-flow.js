@@ -431,7 +431,11 @@ let noticeUnread=0,noticeBusy=false;
 function bellButton(){const b=node('button',undefined,'notice-bell');b.type='button';b.setAttribute('aria-label','Notifications');b.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.6 2H4.4Z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>';b.onclick=()=>void openNotices();return b}
 function paintNoticeBells(){for(const b of document.querySelectorAll('.notice-bell')){let dot=b.querySelector('.notice-dot');if(!noticeUnread){dot?.remove();continue}if(!dot){dot=node('span','','notice-dot');b.append(dot)}dot.textContent=noticeUnread>9?'9+':String(noticeUnread)}}
 function placeNoticeBells(){if(!me)return;const head=document.querySelector('.messenger-heading');if(head&&!head.querySelector('.notice-bell'))head.insertBefore(bellButton(),$('messengerMenu'));const cover=document.querySelector('#profileContent .gaming-cover');if(cover&&$('profileContent').dataset.profileId===me.id&&!cover.querySelector('.notice-bell')){const b=bellButton();b.classList.add('on-cover');cover.append(b)}paintNoticeBells()}
-async function refreshNotices(){if(!me||noticeBusy)return;noticeBusy=true;try{const d=await api('/notices');noticeUnread=d.unread;paintNoticeBells();return d}catch{}finally{noticeBusy=false}}
+let noticeSeenVerify=null;
+async function refreshNotices(){if(!me||noticeBusy)return;noticeBusy=true;try{const d=await api('/notices');noticeUnread=d.unread;paintNoticeBells();
+ // A new verification result: reload my account so the blue tick (or "Not verified") changes at once, without a manual refresh.
+ const latest=d.notices.find(n=>n.kind==='verification');if(latest&&noticeSeenVerify!==null&&latest.id!==noticeSeenVerify){await refreshMe().catch(()=>{});if(active==='profile'&&(!profileViewId||profileViewId===me.id)&&typeof loadProfileView==='function')await loadProfileView().catch(()=>{});if(active==='home'&&typeof loadFeed==='function')await loadFeed().catch(()=>{})}noticeSeenVerify=latest?.id||'';
+ return d}catch{}finally{noticeBusy=false}}
 async function openNotices(){
  const d=await api('/notices').catch(e=>{toast(e.message);return null});if(!d)return;
  const overlay=node('div',undefined,'message-sheet notice-sheet');overlay.id='messageSheet';overlay.onclick=e=>{if(e.target===overlay)closeMessageSheet()};const box=node('div',undefined,'delete-choice notice-box');
