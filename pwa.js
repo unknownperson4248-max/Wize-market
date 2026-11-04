@@ -50,7 +50,7 @@ function showInstallGuide(){
  $('installHelp').hidden=false;$('closeInstallHelp').focus();
 }
 async function installMarketApp(){
- if(installedApp())return toast('WIZE MARKET is already open as an app.');
+ if(installedApp())return toast('WizeNex is already open as an app.');
  if(deferredInstall&&!inAppBrowser()){
   const prompt=deferredInstall;deferredInstall=null;await prompt.prompt();
   const result=await prompt.userChoice;
@@ -70,7 +70,7 @@ window.addEventListener('beforeinstallprompt',event=>{
  if(knownInstalled()){try{localStorage.removeItem('wm_app_installed')}catch{}}
  displayInstallOffer();
 });
-window.addEventListener('appinstalled',()=>{deferredInstall=null;try{localStorage.setItem('wm_app_installed','1')}catch{}$('appInstallBanner').hidden=true;closeInstallHelp();toast('WIZE MARKET installed.')});
+window.addEventListener('appinstalled',()=>{deferredInstall=null;try{localStorage.setItem('wm_app_installed','1')}catch{}$('appInstallBanner').hidden=true;closeInstallHelp();toast('WizeNex installed.')});
 $('installApp').onclick=()=>void installMarketApp().catch(e=>toast(e.message));
 $('dismissInstall').onclick=()=>hideInstallFor(3);
 $('closeInstallHelp').onclick=closeInstallHelp;
@@ -82,7 +82,13 @@ if(installedApp()){try{localStorage.setItem('wm_app_installed','1')}catch{}}
 // Android/Chrome only offers installation when the app is not installed yet: wait for that signal. iPhone has no signal, so show it once.
 if(onIos())displayInstallOffer();
 inAppLoginNote();
-if(navigator.getInstalledRelatedApps)void navigator.getInstalledRelatedApps().then(apps=>{if(apps.length){try{localStorage.setItem('wm_app_installed','1')}catch{}$('appInstallBanner').hidden=true}}).catch(()=>{});
+// Ask Chrome whether WizeNex is installed on this phone. Installed: no Install bar. Not installed (or uninstalled later): show it right away,
+// without waiting for Chrome's own install signal. Tapping Install uses Chrome's one-tap install when ready, otherwise shows the ⋮ → Install app steps.
+if(!onIos()&&!installedApp()){
+ const decide=installed=>{if(installed){try{localStorage.setItem('wm_app_installed','1')}catch{}$('appInstallBanner').hidden=true;return}try{localStorage.removeItem('wm_app_installed')}catch{}displayInstallOffer()};
+ if(navigator.getInstalledRelatedApps)void navigator.getInstalledRelatedApps().then(apps=>decide(apps.length>0)).catch(()=>{if(!knownInstalled())displayInstallOffer()});
+ else if(!knownInstalled())displayInstallOffer();
+}
 
 if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('/sw.js',{scope:'/',updateViaCache:'none'}).catch(()=>{});
 
