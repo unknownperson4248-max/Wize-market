@@ -117,6 +117,7 @@ async function requestListingDeal(db,input,u){
  const selfAdmin=mode==='mediated'&&['owner','trusted'].includes(u.role)&&(input.adminId===undefined||input.adminId===u.id);
  // New steps: the buyer asks the seller first. The Admin is chosen inside the deal box after the seller accepts.
  if(selfAdmin)adminId=u.id;
+ else if(mode==='mediated'&&(await marketRules(db)).ownerOnly)adminId=null;// owner-only: the Owner joins after the seller accepts
  else if(mode==='mediated'&&input.adminId!==undefined){// older app versions still send a chosen Admin up front
   need(typeof input.adminId==='string'&&input.adminId!==u.id&&input.adminId!==post.user_id&&await one(db,"SELECT user_id FROM wm_roles WHERE user_id=? AND role IN ('owner','trusted')",input.adminId),'Select an independent trusted admin');await needAdminLimit(db,input.adminId,post.price);adminId=input.adminId}
  else if(mode==='mediated')adminId=null;
@@ -178,7 +179,7 @@ async function dealAction(db,d,u,input){
   update="admin_id=?,status='proposed',buyer_ok=?,seller_ok=?";updateArgs=[input.adminId,buyer?1:0,seller?1:0];event='admin_changed';
  }else if(input.action==='confirm'){
   need(party,'Only buyer or seller can agree to terms',403);
-  if(d.status==='awaiting_seller'){need(seller,'Waiting for seller consent',403);if(!d.admin_id&&(await marketRules(db)).ownerOnly){const owner=await one(db,"SELECT user_id FROM wm_roles WHERE role='owner' AND user_id NOT IN (?,?) LIMIT 1",d.buyer_id,d.seller_id);if(owner){update="seller_ok=1,admin_id=?,status='active'";updateArgs=[owner.user_id];event='owner_joined'}}
+  if(d.status==='awaiting_seller'){need(seller,'Waiting for seller consent',403);if((!d.admin_id||await one(db,"SELECT 1 x FROM wm_roles WHERE user_id=? AND role='owner'",d.admin_id))&&d.mode==='mediated'&&(await marketRules(db)).ownerOnly){const owner=await one(db,"SELECT user_id FROM wm_roles WHERE role='owner' AND user_id NOT IN (?,?) LIMIT 1",d.buyer_id,d.seller_id);if(owner){update="seller_ok=1,admin_id=?,status='active'";updateArgs=[owner.user_id];event='owner_joined'}}
    if(!update)update=d.admin_id===d.buyer_id?"seller_ok=1,status='active'":!d.admin_id?"seller_ok=1,status='open'":"seller_ok=1,status='awaiting_admin'"}
   else {need(d.status==='proposed','Cannot confirm now',403);update=(buyer?'buyer_ok':'seller_ok')+'=1'}
  }else if(['accept','activate'].includes(input.action)){
@@ -1208,7 +1209,7 @@ if((p==='/api/deal-management'||p==='/api/admin/deals')&&method==='GET'){
 }
 if(p==='/api/deals'&&method==='GET'){
  const filters=dealManagementFilter(url);
- return reply({deals:await rows(db,dealSelect+" WHERE (d.buyer_id=? OR d.seller_id=? OR (d.admin_id=? AND d.status NOT IN ('open','admin_proposed')))"+filters.sql+' ORDER BY d.created_at DESC LIMIT 100',u.id,u.id,u.id,...filters.args),summary:await completedDealSummary(db,u,false)});
+ return reply({deals:await rows(db,dealSelect+" WHERE (d.buyer_id=? OR d.seller_id=? OR (d.admin_id=? AND d.status NOT IN ('open','admin_proposed','awaiting_seller')))"+filters.sql+' ORDER BY d.created_at DESC LIMIT 100',u.id,u.id,u.id,...filters.args),summary:await completedDealSummary(db,u,false)});
 }
 if(p==='/api/deals'&&method==='POST'){
  const input=await body(req);await throttle(db,'deal:'+u.id,15);
@@ -1249,7 +1250,7 @@ if(proofRead&&method==='GET'){
 m=p.match(/^\/api\/(?:admin\/)?deals\/([^/]+)(?:\/(action|messages|history))?$/);
 if(m){
  const [,id,action]=m,d=await one(db,dealSelect+' WHERE d.id=?',id);
- const party=d&&[d.buyer_id,d.seller_id].includes(u.id),assigned=d&&d.admin_id===u.id&&trusted(u)&&!['open','admin_proposed'].includes(d.status),participant=party||assigned;
+ const party=d&&[d.buyer_id,d.seller_id].includes(u.id),assigned=d&&d.admin_id===u.id&&trusted(u)&&!['open','admin_proposed','awaiting_seller'].includes(d.status),participant=party||assigned;
  // The owner may inspect the audit trail of every deal, but only participants read messages.
  if(action==='history'&&method==='GET'){
   need(d&&(participant||u.role==='owner'),'Deal not found',404);

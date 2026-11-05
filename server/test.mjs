@@ -615,7 +615,7 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  const unrelated=(await call('/api/deal-admins?postId='+sale,'GET',undefined,other)).data;assert.equal(unrelated.recommended.length,0);assert.equal(unrelated.owner.id,'owner');
  assert.equal((await call('/api/deals','POST',{postId:sale,adminId:b},b)).status,400);assert.equal((await call('/api/deals','POST',{postId:sale,adminId:other},b)).status,400);
  const created=await call('/api/deals','POST',{postId:sale,adminId:a},b);assert.equal(created.status,201);const d=created.data.deal;assert.equal(d.admin_id,a);assert.equal(d.status,'awaiting_seller');assert.equal(d.buyer_ok,1);assert.equal(d.seller_ok,0);
- assert.equal((await call('/api/deal-admins?dealId='+d.id,'GET',undefined,other)).status,404);assert.equal((await call('/api/deals/'+d.id+'/action','POST',{action:'change_admin',adminId:'owner',version:0},a)).status,403);
+ assert.equal((await call('/api/deal-admins?dealId='+d.id,'GET',undefined,other)).status,404);assert.equal((await call('/api/deals/'+d.id+'/action','POST',{action:'change_admin',adminId:'owner',version:0},a)).status,404);// the Admin does not see the deal before the seller accepts
  assert.equal((await call('/api/deals/'+d.id+'/action','POST',{action:'change_admin',adminId:'owner',version:0},s)).status,200);let changed=(await call('/api/deals/'+d.id,'GET',undefined,b)).data.deal;assert.equal(changed.admin_id,'owner');assert.equal(changed.status,'proposed');assert.equal(changed.seller_ok,1);assert.equal(changed.buyer_ok,0);
  assert.equal((await call('/api/deals/'+d.id+'/action','POST',{action:'accept',version:1},'owner')).status,409);assert.equal((await call('/api/deals/'+d.id+'/action','POST',{action:'confirm',version:1},b)).status,200);assert.equal((await call('/api/deals/'+d.id+'/action','POST',{action:'accept',version:2},'owner')).status,200);assert.equal((await call('/api/deals/'+d.id+'/action','POST',{action:'change_admin',adminId:a,version:3},b)).status,409);
  const history=(await call('/api/deals/'+d.id+'/history','GET',undefined,b)).data.events;assert.ok(history.some(e=>e.action==='admin_changed'));
@@ -712,7 +712,7 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  const sellerAlert=(await call('/api/deal-alerts','GET',undefined,'pseller')).data.alerts.find(a=>a.deal_id===pd);assert.equal((await call('/api/notifications/read','POST',{ids:[sellerAlert.id]},'pseller')).status,200);assert.equal((await call('/api/deal-alerts','GET',undefined,'pseller')).data.alerts.some(a=>a.id===sellerAlert.id),false);
  const deal=async(who='pbuyer')=>(await call('/api/deals/'+pd,'GET',undefined,who)).data.deal;
  const act=async(who,action,extra={})=>call('/api/deals/'+pd+'/action','POST',{action,version:(await deal()).version,...extra},who);
- assert.equal((await act('admin','accept')).status,409);
+ assert.equal((await act('admin','accept')).status,404);// the Admin is not in the deal before the seller accepts
  // The seller suggests another Admin: the buyer must agree again; nobody's Admin hears about it before both agree.
  assert.equal((await act('pseller','change_admin',{adminId:'owner'})).status,200);let pending=await deal();assert.equal(pending.admin_id,'owner');assert.equal(pending.buyer_ok,0);assert.equal(pending.seller_ok,1);assert.equal(pending.admin_role,'owner');
  assert.ok((await call('/api/deal-alerts','GET',undefined,'pbuyer')).data.alerts.some(a=>a.deal_id===pd&&a.title==='Another Admin was suggested'));assert.equal((await call('/api/deal-alerts','GET',undefined,'owner')).data.alerts.some(a=>a.deal_id===pd),false);
@@ -1532,9 +1532,15 @@ assert.equal(pk.owner.id,'owner');
  const mk=async id=>{sql.prepare('INSERT OR IGNORE INTO users VALUES(?,?,?,?,?,?,?)').run(id,id,id+'@example.com',id,'',Date.now(),Date.now());tokens[id]=Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('hex');sql.prepare('INSERT INTO sessions VALUES(?,?,?,?)').run(await hash(tokens[id]),id,Date.now()+1000000,Date.now())};
  await mk('oobuyer');await mk('ooseller');env.AI={run:async()=>({response:{decision:'safe',category:'none',confidence:.99}})};
  const made=await call('/api/posts','POST',{title:'Owner only ID',details:'Level 30',price:2000,kind:'Game ID',media:[],gameCategory:'efootball'},'ooseller');assert.equal(made.status,201,JSON.stringify(made.data));
- const r=await call('/api/deals','POST',{postId:made.data.id},'oobuyer');assert.equal(r.status,201);let d=sql.prepare('SELECT * FROM wm_deals WHERE id=?').get(r.data.id);assert.equal(d.admin_id,null);
+ const r=await call('/api/deals','POST',{postId:made.data.id,adminId:'owner'},'oobuyer');assert.equal(r.status,201);let d=sql.prepare('SELECT * FROM wm_deals WHERE id=?').get(r.data.id);assert.equal(d.admin_id,null);// an older app naming the Admin up front is ignored
+ assert.ok(!(await call('/api/deals?status=current','GET',undefined,'owner')).data.deals.some(x=>x.id===d.id));// the Owner sees nothing before the seller accepts
+ assert.equal((await call('/api/deals/'+d.id,'GET',undefined,'owner')).status,404);
  assert.equal((await call('/api/deals/'+d.id+'/action','POST',{action:'confirm',version:d.version},'ooseller')).status,200);d=sql.prepare('SELECT * FROM wm_deals WHERE id=?').get(d.id);
  assert.equal(d.status,'active');assert.equal(d.admin_id,'owner');
+ assert.ok((await call('/api/deals?status=current','GET',undefined,'owner')).data.deals.some(x=>x.id===d.id));
+ // an older deal that already named the Owner also starts at once when the seller accepts
+ await mk('oobuyer2');sql.prepare("UPDATE wm_settings SET value=json_set(value,'$.ownerOnly',json('false')) WHERE key='market_rules'").run();const old=await call('/api/deals','POST',{postId:made.data.id,adminId:'owner'},'oobuyer2');sql.prepare("UPDATE wm_settings SET value=json_set(value,'$.ownerOnly',json('true')) WHERE key='market_rules'").run();let od=sql.prepare('SELECT * FROM wm_deals WHERE id=?').get(old.data.id);assert.equal(od.admin_id,'owner');assert.equal(od.status,'awaiting_seller');
+ assert.equal((await call('/api/deals/'+od.id+'/action','POST',{action:'confirm',version:od.version},'ooseller')).status,200);od=sql.prepare('SELECT * FROM wm_deals WHERE id=?').get(od.id);assert.equal(od.status,'active');
  assert.equal((await call('/api/verification','POST',{kind:'trusted',whatsapp:'01811113333',documentId:'x'},'oobuyer')).status,403);
  assert.equal((await call('/api/admin/member-access','POST',{userId:'oobuyer',verified:false,trustedSeller:false,role:'trusted'},'owner')).status,403);
  assert.equal((await call('/api/admin/market-rules','POST',{...rules,ownerOnly:false},'owner')).status,200);
