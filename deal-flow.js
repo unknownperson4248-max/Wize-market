@@ -2,18 +2,19 @@
 let marketRulesCache=null;
 async function loadMarketRules(){try{marketRulesCache=(await api('/market-rules')).rules}catch{}return marketRulesCache}
 const dealTime=t=>t?new Date(t).toLocaleString([],{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
-const DEAL_EVENT_LABELS={requested:'Deal request sent',accept:'Admin accepted the deal',activate:'Admin accepted the deal',payment_sent:'Buyer sent the money',payment_received:'Admin got the money',handover_ready:'Buyer is ready for the login',handover_submitted:'Seller sent the login safely',handover_revealed:'Buyer opened the login',delivered:'Seller gave the ID',buyer_confirmed:'Buyer got the ID',seller_paid:'Deal complete',auto_confirmed:'Buyer did not reply · confirmed automatically',dispute:'Problem reported',resolve_dispute:'Problem solved · deal continues',resolve_redeliver:'Problem solved · seller gives the ID again',finalize:'Deal complete',cancel:'Deal cancelled',reject:'Admin said no',cancel_requested:'Cancel requested',cancel_request_rejected:'Cancel request turned down',admin_changed:'Admin changed'};
+const DEAL_EVENT_LABELS={admin_proposed:'🛡️ Suggested an Admin · the other side agrees above',admin_requested:'🤝 Agreed on the Admin · the Admin was asked to join',admin_declined:'The Admin said no · add another Admin',confirm:'✅ Accepted the request · deal box open',withdraw:'Deal cancelled',requested:'Deal request sent',accept:'Admin accepted the deal',activate:'Admin accepted the deal',payment_sent:'Buyer sent the money',payment_received:'Admin got the money',handover_ready:'Buyer is ready for the login',handover_submitted:'Seller sent the login safely',handover_revealed:'Buyer opened the login',delivered:'Seller gave the ID',buyer_confirmed:'Buyer got the ID',seller_paid:'Deal complete',auto_confirmed:'Buyer did not reply · confirmed automatically',dispute:'Problem reported',resolve_dispute:'Problem solved · deal continues',resolve_redeliver:'Problem solved · seller gives the ID again',finalize:'Deal complete',cancel:'Deal cancelled',reject:'Admin said no',cancel_requested:'Cancel requested',cancel_request_rejected:'Cancel request turned down',admin_changed:'Admin changed'};
 const CHECKLIST_LABELS={login_checked:'I logged in and the account matches the post (level, items, rank).',email_changed:'I bound my own email / Gmail and removed the seller’s.',password_changed:'I changed every password (game login, Facebook / Google).',links_removed:'I removed the seller’s Facebook / Google / VK / X links.',recovery_changed:'I changed the recovery phone and 2-step verification.'};
 const PROTECTED_STEPS=['Money sent','Money received','ID received','Complete'];
 
 function dealSystemLine(m){const line=node('div',undefined,'deal-system-line');line.append(node('span',(DEAL_EVENT_LABELS[m.text]||String(m.text).replaceAll('_',' '))+(m.name?' · '+m.name:'')),node('time',new Date(m.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})));return line}
 function dealRoles(d){const buyer=me?.id===d.buyer_id,seller=me?.id===d.seller_id,isAdmin=me?.id===d.admin_id&&['owner','trusted'].includes(me?.role);return {buyer,seller,isAdmin,participant:buyer||seller||isAdmin}}
-function protectedStage(d){if(d.status==='completed')return 4;if(d.status==='cancelled')return -1;if(['proposed','awaiting_admin','awaiting_seller','open'].includes(d.status))return 0;if(d.buyer_done)return 3;if(d.funded_at)return 2;if(d.paid_at)return 1;return 0}
+function protectedStage(d){if(d.status==='completed')return 4;if(d.status==='cancelled')return -1;if(['proposed','awaiting_admin','awaiting_seller','open','admin_proposed'].includes(d.status))return 0;if(d.buyer_done)return 3;if(d.funded_at)return 2;if(d.paid_at)return 1;return 0}
 function protectedTimes(d){const rules=marketRulesCache||{holdHours:d.hold_hours??0,autoConfirmHours:d.auto_confirm_hours??72},start=d.delivered_at||d.funded_at||0;return {holdUntil:d.hold_until??(d.buyer_done_at?d.buyer_done_at+rules.holdHours*3600000:start?start+rules.holdHours*3600000:null),autoAt:d.auto_confirm_at??(start?start+rules.autoConfirmHours*3600000:null)}}
 function protectedStepText(d){
  const {buyer,seller,isAdmin}=dealRoles(d),{holdUntil,autoAt}=protectedTimes(d),stage=protectedStage(d),direct=d.admin_id===d.seller_id;
  if(d.status==='disputed')return '⚠️ Problem reported: '+(d.dispute_reason||'see the chat')+'. '+(direct?'The Owner will check it.':'The Admin will check it.');
- if(d.status==='open')return '💬 The deal box is open. Choose an Admin together.';
+ if(d.status==='open')return '💬 The deal box is open. Add your Admin.';
+ if(d.status==='admin_proposed')return '🤝 An Admin was suggested. Both must agree.';
  if(['proposed','awaiting_admin','awaiting_seller'].includes(d.status))return '⏳ Pending: waiting for the '+(d.status==='awaiting_seller'?'seller':'Admin')+' to accept.';
  if(stage===0)return buyer?'💳 Send the money to the Admin’s number in this chat. Then tap “Money sent” and add the screenshot.':isAdmin?'💳 Give your bKash / Nagad number in this chat. Tap “Money received” when the money comes.':'⏳ Waiting for the buyer to send the money.';
  if(stage===1)return isAdmin?'🧾 The buyer sent the money. Check your account, then tap “Money received”.':'⏳ Waiting for the Admin to get the money.';
@@ -406,7 +407,7 @@ function drawerItem(item){
 
 // Deal: the buyer and the seller must agree on the same Admin. The Admin is asked only after both agree.
 function appendAdminAgreement(root,d){
- if(d.mode==='direct'||!['proposed','awaiting_seller','awaiting_admin','open'].includes(d.status))return;
+ if(d.mode==='direct'||!['proposed','awaiting_seller','awaiting_admin','open','admin_proposed'].includes(d.status))return;
  if(d.status!=='proposed'&&appendDealBoxSteps(root,d))return;
  const buyer=me?.id===d.buyer_id,seller=me?.id===d.seller_id,party=buyer||seller,isAdmin=me?.id===d.admin_id&&['owner','trusted'].includes(me?.role),agreed=!!d.buyer_ok&&!!d.seller_ok;
  const box=node('div',undefined,'admin-agreement'+(agreed?' agreed':''));box.append(node('strong','🛡️ Admin for this deal','admin-agreement-title'));
@@ -463,12 +464,18 @@ function appendDealBoxSteps(root,d){
   if(seller){const row=node('div',undefined,'action-row');row.append(button('✅ Accept request',()=>dealActionRequest(d,'confirm'),'btn'));box.append(row)}
   root.append(box);return true}
  if(!d.admin_id){
-  box.append(node('strong','🛡️ Choose an Admin','admin-agreement-title'),node('p',party?'The deal box is open. Talk here, then choose an Admin. The Admin joins after they accept, then the safe steps start.':'Waiting for the buyer and the seller to choose an Admin.','hint'));
-  if(party){const row=node('div',undefined,'action-row');row.append(button('🛡️ Choose Admin',()=>openListingAdminChoice({deal:d}),'btn'));box.append(row)}
+  box.append(node('strong','➕ Add your Admin','admin-agreement-title'),node('p',party?'The deal box is open. Add an Admin you both trust. The other side agrees, then the Admin is asked to join.':'Waiting for the buyer and the seller to add an Admin.','hint'));
+  if(party){const row=node('div',undefined,'action-row');row.append(button('➕ Add Admin',()=>openListingAdminChoice({deal:d}),'btn'));box.append(row)}
   root.append(box);return true}
  const person=node('div',undefined,'admin-agreement-person'),who=node('div',undefined,'admin-agreement-name'),line=node('div',undefined,'admin-choice-name');
  line.append(node('strong',d.admin_name||'Admin'),verifiedMark(d.admin_role||'trusted',undefined,!!d.admin_verified));who.append(line);person.append(avatar({name:d.admin_name,picture:d.admin_picture,role:d.admin_role,verified:d.admin_verified}),who);
- box.append(node('strong','🛡️ Admin for this deal','admin-agreement-title'),person,node('p',isAdmin?'The buyer and the seller asked you to look after this deal. Accept to join the deal box.':'⏳ Waiting for '+String(d.admin_name||'the Admin').split(' ')[0]+' to accept. They join the deal box after that.','hint'));
- if(party){const row=node('div',undefined,'action-row');row.append(button('🔁 Choose another Admin',()=>openListingAdminChoice({deal:d}),'btn ghost'));box.append(row)}
+ const first=String(d.admin_name||'the Admin').split(' ')[0];
+ if(d.status==='admin_proposed'){
+  const mine=d.admin_proposed_by===me?.id,by=d.admin_proposed_by===d.buyer_id?'The buyer':'The seller',other=buyer?'seller':'buyer';
+  box.append(node('strong','🛡️ Suggested Admin','admin-agreement-title'),person,node('p',mine?'You suggested '+first+'. Waiting for the '+other+' to agree. Then '+first+' is asked to join.':by+' suggested '+first+' as the Admin. Agree, or add another Admin.','hint'));
+  if(party){const row=node('div',undefined,'action-row');if(!mine)row.append(button('✅ Agree with '+first,()=>dealActionRequest(d,'agree_admin'),'btn'));row.append(button(mine?'🔁 Suggest another Admin':'🔁 Add another Admin',()=>openListingAdminChoice({deal:d}),'btn ghost'));box.append(row)}
+  root.append(box);return true}
+ box.append(node('strong','🛡️ Admin for this deal','admin-agreement-title'),person,node('p',isAdmin?'The buyer and the seller asked you to look after this deal. Accept to join the deal box.':'⏳ You both agreed. Waiting for '+first+' to accept. They join the deal box after that.','hint'));
+ if(party){const row=node('div',undefined,'action-row');row.append(button('🔁 Add another Admin',()=>openListingAdminChoice({deal:d}),'btn ghost'));box.append(row)}
  root.append(box);return true
 }

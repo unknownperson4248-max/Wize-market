@@ -83,7 +83,7 @@ async function loadControlDeals(){
  for(const d of deals){
   const c=node('article',undefined,'card control-deal-card');c.append(node('span',d.status.replaceAll('_',' '),'pill'),node('h2',d.account_title||d.title||'Marketplace account'),node('p',d.deal_code+' · '+d.listing_code),node('p','Buyer: '+d.buyer_name+' · Seller: '+d.seller_name),node('p','৳'+d.price.toLocaleString('en-BD')+' · Admin: '+d.admin_name));
   if(d.cancel_pending)c.append(node('p','Cancellation requested · awaiting your decision\n'+(d.cancel_reasons||''),'control-cancel-notice'));
-  const assigned=d.admin_id===controlUser?.id,pending=['proposed','awaiting_admin','awaiting_seller','open'].includes(d.status),open=pending||['active','awaiting_final','disputed'].includes(d.status);
+  const assigned=d.admin_id===controlUser?.id,pending=['proposed','awaiting_admin','awaiting_seller','open','admin_proposed'].includes(d.status),open=pending||['active','awaiting_final','disputed'].includes(d.status);
   if(assigned){
    const actions=[];
    if(['awaiting_admin','proposed'].includes(d.status)&&d.buyer_ok&&(d.mode==='direct'||d.seller_ok))actions.push(['accept','Accept deal']);

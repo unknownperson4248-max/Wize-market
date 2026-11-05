@@ -3,7 +3,7 @@ function selectedCrosspostGroups(){return [...document.querySelectorAll('#crossp
 function renderCrosspostGroups(selected=selectedCrosspostGroups()){const root=$('crosspostGroups');root.replaceChildren();for(const g of groups.filter(g=>g.joined)){const label=node('label',undefined,'crosspost-choice'),input=node('input');input.type='checkbox';input.value=g.id;input.checked=selected.includes(g.id);label.append(input,avatar({name:g.name,picture:g.logo||null}),node('span',g.name));root.append(label)}if(!root.children.length)root.append(node('p','Join a group to share your public listing there.','hint'));$('crosspostField').hidden=$('postDestination').value!=='public-groups';}
 async function startListingDeal(postId){if(!requireLogin())return;await openListingAdminChoice({postId})}
 
-const dealLabels={awaiting_final:'Pending',awaiting_admin:'Waiting for the Admin',awaiting_seller:'Waiting for the seller',open:'Deal box open',proposed:'Pending',active:'Pending',completed:'Complete',disputed:'Pending · problem',cancelled:'Cancelled'};
+const dealLabels={awaiting_final:'Pending',awaiting_admin:'Waiting for the Admin',awaiting_seller:'Waiting for the seller',open:'Deal box open',admin_proposed:'Agreeing on the Admin',proposed:'Pending',active:'Pending',completed:'Complete',disputed:'Pending · problem',cancelled:'Cancelled'};
 function renderDealFilters(){
  const root=$('dealStatusTabs');root.replaceChildren();
  for(const [value,label]of [['current','Ongoing'],['previous','Previous'],['website','Website total']]){
@@ -17,14 +17,14 @@ async function dealActionRequest(d,action){
 }
 function appendDealActions(root,d){
  const buyer=me.id===d.buyer_id,seller=me.id===d.seller_id,party=buyer||seller,isAdmin=me.id===d.admin_id&&['owner','trusted'].includes(me.role),participant=party||isAdmin;
- const pending=['proposed','awaiting_admin','awaiting_seller','open'].includes(d.status),open=pending||['active','awaiting_final','disputed'].includes(d.status);
+ const pending=['proposed','awaiting_admin','awaiting_seller','open','admin_proposed'].includes(d.status),open=pending||['active','awaiting_final','disputed'].includes(d.status);
  const add=(label,action,cls='btn secondary')=>root.append(button(label,()=>dealActionRequest(d,action),cls));
  if(d.mode==='direct'&&d.status==='proposed'&&party&&!(buyer?d.buyer_ok:d.seller_ok))add('👍 Agree','confirm','btn');
  if(['awaiting_admin','proposed'].includes(d.status)&&isAdmin&&d.buyer_ok&&(d.mode==='direct'||d.seller_ok))add('✅ Accept deal','accept','btn');
  if(pending&&isAdmin)add('✖️ Say no','reject');
  const ownerOnlyCancel=d.flow===1&&d.admin_id===d.seller_id&&me.role!=='owner'&&(d.paid_at||d.funded_at||d.status==='disputed');
  if(open&&isAdmin&&!ownerOnlyCancel)add('✖️ Cancel deal','cancel');
- const beforeAdmin=d.mode==='mediated'&&['awaiting_seller','open','awaiting_admin'].includes(d.status)&&!isAdmin;
+ const beforeAdmin=d.mode==='mediated'&&['awaiting_seller','open','admin_proposed','awaiting_admin'].includes(d.status)&&!isAdmin;
  if(beforeAdmin&&party)root.append(button(d.status==='awaiting_seller'&&seller?'✖️ Decline':'✖️ Cancel request',async()=>{if(!confirm('Cancel this deal request?'))return;await dealActionRequest(d,'withdraw')},'btn ghost'));
  else if(open&&party&&!isAdmin)root.append(button('Ask to cancel',()=>openCancelRequest(d),'btn ghost'));
  if(open&&isAdmin&&d.cancel_pending)add('Keep the deal','reject_cancel');
@@ -37,7 +37,7 @@ function appendDealActions(root,d){
  if(['active','awaiting_final'].includes(d.status)&&participant)add('⚠️ Report a problem','dispute');
  if(isAdmin&&['active','awaiting_final'].includes(d.status)&&!d.cancel_pending&&d.seller_done){if(d.buyer_done)add('Admin final confirmation','finalize','btn');else if(d.mode==='direct'&&seller)root.append(button('Confirm completion again',()=>openDirectFinal(d),'btn'))}if(d.status==='disputed'&&isAdmin)add('▶️ Continue deal','resolve_dispute','btn');
  }
- if((['active','awaiting_final','disputed'].includes(d.status)||d.status==='cancelled'&&d.room_opened)&&participant||party&&d.mode==='mediated'&&['open','awaiting_admin'].includes(d.status))root.append(button('💬 Open deal chat',()=>openDealRoom(d.id),'btn'));
+ if((['active','awaiting_final','disputed'].includes(d.status)||d.status==='cancelled'&&d.room_opened)&&participant||party&&d.mode==='mediated'&&['open','admin_proposed','awaiting_admin'].includes(d.status))root.append(button('💬 Open deal chat',()=>openDealRoom(d.id),'btn'));
  if(d.status==='completed'&&party)root.append(button('⭐ Give a review',()=>openReview(d.id),'btn secondary'));
 }
 async function loadDeals(){
@@ -82,7 +82,7 @@ function renderDealRoomSummary(deal){
  const people=node('div',undefined,'deal-participants');
  const participants=[['Buyer',deal.buyer_name],...(deal.mode==='direct'?[['Seller / Admin',deal.seller_name]]:[['Seller',deal.seller_name],['Admin',deal.admin_name||'Not chosen yet']])];
  for(const [role,name]of participants){const key=role==='Buyer'?'buyer':role==='Admin'?'admin':'seller';const person=node('div',undefined,'deal-participant');person.append(avatar({name,picture:deal[key+'_picture']}));if(deal[key+'_verified'])person.append(verifiedMark('member'));person.append(node('span',role,'participant-badge'),node('span',name));people.append(person)}
- const details=node('details',undefined,'deal-room-details');details.append(node('summary',(deal.account_title||'Marketplace account')+' · '+formatPrice(deal.price)),info,people);if(deal.mode==='mediated'&&['open','awaiting_admin'].includes(deal.status)&&typeof appendAdminAgreement==='function')appendAdminAgreement(root,deal);root.append(details);if(deal.cancel_pending)root.append(node('p','Cancel requested · waiting for the Admin','deal-cancel-notice'));if(deal.flow===1)root.append(renderDealProgress(deal));
+ const details=node('details',undefined,'deal-room-details');details.append(node('summary',(deal.account_title||'Marketplace account')+' · '+formatPrice(deal.price)),info,people);if(deal.mode==='mediated'&&['open','admin_proposed','awaiting_admin'].includes(deal.status)&&typeof appendAdminAgreement==='function')appendAdminAgreement(root,deal);root.append(details);if(deal.cancel_pending)root.append(node('p','Cancel requested · waiting for the Admin','deal-cancel-notice'));if(deal.flow===1)root.append(renderDealProgress(deal));
  const controls=$('dealRoomActions');controls.replaceChildren();const detached=node('div');appendDealActions(detached,deal);
  // Keep lifecycle controls in the room, without another Open room button.
  for(const control of [...detached.children])if(control.textContent!=='💬 Open deal chat'&&control.textContent!=='⭐ Give a review'&&!control.dataset.dealStep)controls.append(control);
