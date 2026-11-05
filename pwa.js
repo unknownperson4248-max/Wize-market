@@ -134,6 +134,30 @@ void loadPwaBranding();
  const length=f=>new Promise(res=>{const v=document.createElement('video');v.preload='metadata';v.muted=true;const url=URL.createObjectURL(f);const done=d=>{URL.revokeObjectURL(url);res(d)};v.onloadedmetadata=()=>done(isFinite(v.duration)?v.duration:null);v.onerror=()=>done(null);setTimeout(()=>done(null),8000);v.src=url});
  let progressBox=null;const progress=(text,pct)=>{if(!progressBox){progressBox=document.createElement('div');progressBox.className='video-optimize';progressBox.setAttribute('role','status');progressBox.innerHTML='<strong></strong><div class="vo-bar"><i></i></div><small>Keep this page open. The video is saved in 720p.</small>';document.body.append(progressBox)}progressBox.querySelector('strong').textContent=text;progressBox.querySelector('i').style.width=Math.round((pct||0)*100)+'%'};
  const hideProgress=()=>{progressBox?.remove();progressBox=null};
+ const CUT=119,fmt=t=>Math.floor(t/60)+':'+String(Math.floor(t%60)).padStart(2,'0');
+ // Choose the 2 minutes to keep: a slider moves a 2-minute window over the video; ▶ plays just that part.
+ function askTrim(file,dur){return new Promise(resolve=>{
+  const url=URL.createObjectURL(file),box=document.createElement('div');box.className='video-trim';
+  box.innerHTML='<div class="vt-card"><strong>✂️ Keep 2 minutes of this video</strong><small>Videos can be up to 2 minutes. Move the slider to choose the part to keep.</small><video playsinline muted></video><div class="vt-range"><span class="vt-from"></span><span class="vt-to"></span></div><input type="range" min="0" step="1" aria-label="Start of the 2 minutes"><div class="vt-bar"><i></i></div><div class="vt-actions"><button type="button" class="btn secondary vt-play">▶ Play this part</button><button type="button" class="btn vt-use">✂️ Use these 2 minutes</button><button type="button" class="btn ghost vt-cancel">Cancel</button></div></div>';
+  const video=box.querySelector('video'),range=box.querySelector('input'),bar=box.querySelector('.vt-bar i');video.src=url;range.max=String(Math.max(0,Math.floor(dur-CUT)));range.value='0';
+  const paint=()=>{const a=Number(range.value),b=Math.min(dur,a+CUT);box.querySelector('.vt-from').textContent=fmt(a);box.querySelector('.vt-to').textContent=fmt(b)+' of '+fmt(dur);bar.style.left=(a/dur*100)+'%';bar.style.width=((b-a)/dur*100)+'%';video.currentTime=a};
+  range.oninput=paint;video.onloadedmetadata=paint;
+  box.querySelector('.vt-play').onclick=()=>{const a=Number(range.value);video.currentTime=a;video.muted=false;void video.play();const stop=()=>{if(video.currentTime>=a+CUT){video.pause();video.removeEventListener('timeupdate',stop)}};video.addEventListener('timeupdate',stop)};
+  const done=v=>{video.pause();URL.revokeObjectURL(url);box.remove();resolve(v)};
+  box.querySelector('.vt-use').onclick=()=>done(Number(range.value));box.querySelector('.vt-cancel').onclick=()=>done(null);
+  document.body.append(box);paint()})}
+ // Cut the chosen part and save it in 720p (same settings as the normal video optimizing).
+ async function trimVideo(file,start,end){
+  try{const mb=await import(MEDIABUNNY);const input=new mb.Input({source:new mb.BlobSource(file),formats:mb.ALL_FORMATS});const track=await input.getPrimaryVideoTrack();if(!track)return null;
+   const w=track.displayWidth,h=track.displayHeight,cap=Math.min(w,h)>SHORT?(w>=h?{height:SHORT}:{width:SHORT}):{};
+   const output=new mb.Output({format:new mb.Mp4OutputFormat({fastStart:'in-memory'}),target:new mb.BufferTarget()});
+   const srcDur=await input.computeDuration().catch(()=>0),srcBps=srcDur?file.size*8/srcDur:TARGET_BPS,bitrate=Math.round(Math.min(TARGET_BPS,Math.max(400000,srcBps*1.1)));// never bigger than the original quality
+   const conversion=await mb.Conversion.init({input,output,trim:{start,end},video:{codec:'avc',bitrate,forceTranscode:true,...cap}});
+   if(!conversion.isValid||conversion.discardedTracks?.length)return null;
+   conversion.onProgress=p=>progress('✂️ Cutting video… '+Math.round(p*100)+'%',p);progress('✂️ Cutting video… 0%',0);await conversion.execute();
+   const buf=output.target.buffer;if(!buf||buf.byteLength<20000)return null;
+   const check=new mb.Input({source:new mb.BufferSource(buf),formats:mb.ALL_FORMATS}),dur=await check.computeDuration();if(!(dur>0&&dur<=MAX+0.5))return null;
+   return new File([buf],file.name.replace(/\.[^.]+$/,'')+'-2min.mp4',{type:'video/mp4'})}catch(e){console.warn('Video cut failed',e);return null}finally{hideProgress()}}
  async function shrink(file,secs){
   if(!secs||!window.VideoEncoder)return file;// this phone cannot encode
   try{const mb=await import(MEDIABUNNY);const input=new mb.Input({source:new mb.BlobSource(file),formats:mb.ALL_FORMATS});const track=await input.getPrimaryVideoTrack();if(!track)return file;
@@ -150,9 +174,14 @@ void loadPwaBranding();
    if(!vid||(hadAudio&&!audio)||Math.abs(dur-secs)>1.5)return file;
    const out=new File([buf],file.name.replace(/\.[^.]+$/,'')+'.mp4',{type:'video/mp4'});return out.size<file.size*0.9?out:file}catch(e){console.warn('Video optimize skipped',e);return file}finally{hideProgress()}}
  document.addEventListener('change',async e=>{const input=e.target;if(!(input instanceof HTMLInputElement)||input.type!=='file'||input.dataset.videoChecked==='1')return;const all=[...(input.files||[])],vids=all.filter(f=>f.type.startsWith('video/'));if(!vids.length)return;
-  e.stopImmediatePropagation();const lens=await Promise.all(vids.map(length)),tooLong=lens.findIndex(d=>d!==null&&d>MAX+1);
-  if(tooLong>=0){const m=Math.floor(lens[tooLong]/60),s=String(Math.round(lens[tooLong]%60)).padStart(2,'0');toast('🎬 Video is '+m+':'+s+' long. Videos can be at most 2 minutes — trim it and try again.');input.value='';return}
-  let changed=false;const files=[];for(const f of all){const i=vids.indexOf(f);if(i<0){files.push(f);continue}const small=await shrink(f,lens[i]);if(small!==f){changed=true;toast('🎬 Video optimized: '+(f.size/1048576).toFixed(0)+' MB → '+(small.size/1048576).toFixed(1)+' MB')}files.push(small)}
+  e.stopImmediatePropagation();const lens=await Promise.all(vids.map(length)),trimmed=new Map();
+  // Longer than 2 minutes: choose which 2 minutes to keep, and the phone cuts it (no need to trim in another app).
+  for(const [i,d] of lens.entries()){if(d===null||d<=MAX+1)continue;const v=vids[i],mm=Math.floor(d/60),ss=String(Math.round(d%60)).padStart(2,'0');
+   if(!window.VideoEncoder){toast('🎬 Video is '+mm+':'+ss+' long. Videos can be at most 2 minutes — trim it and try again.');input.value='';return}
+   const start=await askTrim(v,d);if(start===null){input.value='';return}
+   const cut=await trimVideo(v,start,Math.min(d,start+CUT));if(!cut){toast('Could not cut this video on this phone. Trim it to 2 minutes and try again.');input.value='';return}
+   trimmed.set(v,cut);lens[i]=CUT;toast('✂️ Video cut to 2 minutes ('+fmt(start)+' – '+fmt(Math.min(d,start+CUT))+').')}
+  let changed=trimmed.size>0;const files=[];for(const f of all){const i=vids.indexOf(f);if(i<0){files.push(f);continue}if(trimmed.has(f)){files.push(trimmed.get(f));continue}const small=await shrink(f,lens[i]);if(small!==f){changed=true;toast('🎬 Video optimized: '+(f.size/1048576).toFixed(0)+' MB → '+(small.size/1048576).toFixed(1)+' MB')}files.push(small)}
   if(changed&&window.DataTransfer){try{const dt=new DataTransfer();for(const f of files)dt.items.add(f);input.files=dt.files}catch{}}
   input.dataset.videoChecked='1';input.dispatchEvent(new Event('change',{bubbles:true}));delete input.dataset.videoChecked},true)})();
 

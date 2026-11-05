@@ -82,8 +82,10 @@ function renderDealRoomSummary(deal){
  const people=node('div',undefined,'deal-participants');
  const participants=[['Buyer',deal.buyer_name],...(deal.mode==='direct'?[['Seller / Admin',deal.seller_name]]:[['Seller',deal.seller_name],['Admin',deal.admin_name||'Not chosen yet']])];
  for(const [role,name]of participants){const key=role==='Buyer'?'buyer':role==='Admin'?'admin':'seller';const person=node('div',undefined,'deal-participant');person.append(avatar({name,picture:deal[key+'_picture']}));if(deal[key+'_verified'])person.append(verifiedMark('member'));person.append(node('span',role,'participant-badge'),node('span',name));people.append(person)}
- const details=node('details',undefined,'deal-room-details');details.append(node('summary',(deal.account_title||'Marketplace account')+' · '+formatPrice(deal.price)),info,people);if(deal.mode==='mediated'&&['open','admin_proposed','awaiting_admin'].includes(deal.status)&&typeof appendAdminAgreement==='function')appendAdminAgreement(root,deal);root.append(details);if(deal.cancel_pending)root.append(node('p','Cancel requested · waiting for the Admin','deal-cancel-notice'));if(deal.flow===1)root.append(renderDealProgress(deal));
- const controls=$('dealRoomActions');controls.replaceChildren();const detached=node('div');appendDealActions(detached,deal);
+ const details=node('details',undefined,'deal-room-details');details.append(node('summary',(deal.account_title||'Marketplace account')+' · '+formatPrice(deal.price)),info,people);if(deal.mode==='mediated'&&['open','admin_proposed','awaiting_admin'].includes(deal.status)&&typeof appendAdminAgreement==='function')appendAdminAgreement(root,deal);root.append(details);if(deal.cancel_pending)root.append(node('p','Cancel requested · waiting for the Admin','deal-cancel-notice'));
+ // Messenger-like room: the steps and buttons live under More options; a small line on top says what is next.
+ const controls=$('dealRoomActions');controls.replaceChildren();if(deal.flow===1){controls.append(renderDealProgress(deal));const labels=['Money sent','Money received','ID received','Complete'],stage=typeof protectedStage==='function'?Math.max(0,protectedStage(deal)-1):0;if(['active','awaiting_final','disputed'].includes(deal.status)){const next=button('📋 '+(deal.status==='disputed'?'Problem reported · open options':'Now: '+(labels[Math.max(0,Math.min(3,stage))]||'Steps'))+' ›',()=>{const box=document.querySelector('.deal-room-controls');if(box)box.open=!box.open},'deal-next-chip');root.append(next)}}
+ paintDealRoomTools(deal);const detached=node('div');appendDealActions(detached,deal);
  // Keep lifecycle controls in the room, without another Open room button.
  for(const control of [...detached.children])if(control.textContent!=='💬 Open deal chat'&&control.textContent!=='⭐ Give a review'&&!control.dataset.dealStep)controls.append(control);
 }
@@ -101,7 +103,7 @@ async function refreshDealRoom(){
    root.replaceChildren();for(const m of [...messages].reverse()){if(m.system){root.append(dealSystemLine(m));continue}
     const bubble=node('div',undefined,'bubble'+(m.user_id===me.id?' mine':'')),head=node('div',undefined,'bubble-heading');
     const identity=node('span',undefined,'deal-message-name');identity.append(node('strong',m.name));if(m.verified)identity.append(verifiedMark('member'));head.append(avatar({name:m.name,picture:m.picture}),identity,node('span',m.participant_role,'participant-badge'));
-    const message=node('p',m.text.replace(/^chat:/,''));message.dir='ltr';
+    const message=node('p');message.dir='ltr';{const raw=m.text.replace(/^chat:/,''),names=[activeDealRoom?.buyer_name,activeDealRoom?.seller_name,activeDealRoom?.admin_name].filter(Boolean);let rest=raw;while(rest){let hit=-1,who='';for(const n of names){const i=rest.indexOf('@'+n);if(i>=0&&(hit<0||i<hit)){hit=i;who=n}}if(hit<0){message.append(rest);break}message.append(rest.slice(0,hit),node('strong','@'+who,'deal-mention'));rest=rest.slice(hit+who.length+1)}}
     const time=node('time',new Date(m.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),'message-time');time.dateTime=new Date(m.created_at).toISOString();time.title=new Date(m.created_at).toLocaleString();
     bubble.append(head,message,time);root.append(bubble);
    }
@@ -201,3 +203,21 @@ paintVerifyShots();
 
 // Account ID on the profile (same short ID the admin panel shows). Tap to copy the profile link: wizenex.com/id/XXXXXXXX
 function profileIdChip(id){const short=String(id).slice(0,8),link=location.origin+'/id/'+short.toLowerCase();const b=button('ID #'+short.toUpperCase(),async()=>{try{await navigator.clipboard.writeText(link);toast('Profile link copied: '+link)}catch{toast(link)}},'profile-id-chip');b.title='Copy profile link';return b}
+
+// Deal room tools: voice / video call buttons in the header and @mentions of the buyer, seller and Admin.
+function paintDealRoomTools(deal){
+ const head=$('dealRoomTitle')?.parentElement;if(!head)return;let tools=head.querySelector('.deal-room-calls');
+ const live=['active','awaiting_final','disputed'].includes(deal.status);
+ if(!tools){tools=node('div',undefined,'deal-room-calls');head.insertBefore(tools,$('closeDealRoom'))}
+ tools.replaceChildren();if(!live||typeof joinRoom!=='function')return;
+ for(const [video,label,icon] of [[false,'Voice call','📞'],[true,'Video call','🎥']]){const b=button(icon,()=>{if(typeof callState!=='undefined'&&callState)return toast('You are already on a call.');void joinRoom({kind:'deal',id:deal.id,video,title:deal.deal_code||'Deal'})},'deal-call-btn');b.setAttribute('aria-label',label);b.title=label;tools.append(b)}
+}
+(()=>{const input=$('dealRoomText');if(!input)return;let pop=null;
+ const close=()=>{pop?.remove();pop=null};
+ const people=()=>{const d=activeDealRoom;if(!d)return[];return [[d.buyer_name,'Buyer'],[d.seller_name,d.mode==='direct'?'Seller / Admin':'Seller'],...(d.admin_name&&d.mode!=='direct'&&!['open','admin_proposed','awaiting_admin'].includes(d.status)?[[d.admin_name,'Admin']]:[])].filter(p=>p[0]&&p[0]!==me?.name)};
+ input.addEventListener('input',()=>{const at=input.selectionStart??input.value.length,before=input.value.slice(0,at),m=before.match(/@([^\s@]{0,20})$/);if(!m){close();return}
+  const q=m[1].toLowerCase(),list=people().filter(([n])=>n.toLowerCase().includes(q));if(!list.length){close();return}
+  close();pop=node('div',undefined,'deal-mention-pop');for(const [name,role] of list){const b=button('',()=>{const start=at-m[0].length;input.value=input.value.slice(0,start)+'@'+name+' '+input.value.slice(at);input.focus();const pos=start+name.length+2;input.setSelectionRange(pos,pos);close()},'deal-mention-item');b.append(node('strong','@'+name),node('small',role));pop.append(b)}
+  input.closest('form').before(pop)});
+ input.addEventListener('blur',()=>setTimeout(close,200));
+})();
