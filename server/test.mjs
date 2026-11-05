@@ -1064,7 +1064,7 @@ assert.equal(pk.owner.id,'owner');
   const alert=pushes.find(x=>x.url===phone);assert.ok(alert,'group members get a call alert');assert.equal(alert.headers.urgency,'high');assert.equal(alert.headers.ttl,'45');
   const [jwt,k]=alert.headers.authorization.slice('vapid t='.length).split(', k=');assert.equal(k,key);const [h,c,sg]=jwt.split('.');assert.equal(JSON.parse(Buffer.from(c,'base64url')).aud,'https://fcm.googleapis.com');
   const pub=await crypto.subtle.importKey('raw',Buffer.from(key,'base64url'),{name:'ECDSA',namedCurve:'P-256'},false,['verify']);assert.ok(await crypto.subtle.verify({name:'ECDSA',hash:'SHA-256'},pub,Buffer.from(sg,'base64url'),new TextEncoder().encode(h+'.'+c)),'VAPID signature is valid');
-  r=await call('/api/push/pending','GET',undefined,'rc2');assert.equal(r.data.events[0].kind,'room');assert.match(r.data.events[0].url,new RegExp('room='+room));assert.equal((await call('/api/push/pending','GET',undefined,'outsider')).data.events.length,0);
+  r=await call('/api/push/pending','GET',undefined,'rc2');assert.equal(r.data.events[0].kind,'room');assert.match(r.data.events[0].url,new RegExp('room='+room));assert.equal((await call('/api/push/pending','GET',undefined,'outsider')).data.events.filter(e=>e.kind==='room').length,0);
   assert.equal((await call('/api/chat-unread','GET',undefined,'rc2')).data.room_invite.id,room);assert.equal((await call('/api/chat-unread','GET',undefined,'rc1')).data.room_invite,null);assert.equal((await call('/api/chat-unread','GET',undefined,'outsider')).data.room_invite,null);
   r=await call('/api/groups/'+group+'/messages','GET',undefined,'rc2');assert.equal(r.data.call.id,room);assert.equal(r.data.call.joined,false);assert.equal(r.data.call.count,1);
   r=await call('/api/rooms','POST',{kind:'group',id:group},'rc2');assert.equal(r.status,200);assert.equal(r.data.room.id,room);assert.deepEqual(r.data.members.map(m=>m.id),['rc1','rc2']);assert.ok(r.data.room.answered_at);
@@ -1545,4 +1545,23 @@ assert.equal(pk.owner.id,'owner');
  assert.equal((await call('/api/admin/member-access','POST',{userId:'oobuyer',verified:false,trustedSeller:false,role:'trusted'},'owner')).status,403);
  assert.equal((await call('/api/admin/market-rules','POST',{...rules,ownerOnly:false},'owner')).status,200);
  console.log('PASS: owner-only website (the Owner joins every deal as the Admin when the seller accepts; no new Admins).');
+}
+{
+ // Phone notifications: deal steps, @mentions in a deal room, private messages and friend requests create push alerts.
+ const wait=()=>new Promise(r=>setTimeout(r,80));sql.exec('DELETE FROM wm_limits');
+ const mk=async id=>{sql.prepare('INSERT OR IGNORE INTO users VALUES(?,?,?,?,?,?,?)').run(id,id,id+'@example.com',id,'',Date.now(),Date.now());tokens[id]=Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('hex');sql.prepare('INSERT INTO sessions VALUES(?,?,?,?)').run(await hash(tokens[id]),id,Date.now()+1000000,Date.now())};
+ await mk('pnbuyer');await mk('pnseller');env.AI={run:async()=>({response:{decision:'safe',category:'none',confidence:.99}})};
+ const pushes=who=>sql.prepare('SELECT ref_id,title,url FROM wm_push_events WHERE user_id=? ORDER BY id').all(who);
+ const made=await call('/api/posts','POST',{title:'Push test ID',details:'Level 20',price:1500,kind:'Game ID',media:[],gameCategory:'efootball'},'pnseller');assert.equal(made.status,201);
+ const r=await call('/api/deals','POST',{postId:made.data.id},'pnbuyer');assert.equal(r.status,201);await wait();
+ assert.ok(pushes('pnseller').some(p=>p.ref_id.startsWith('dn-')&&p.url.includes(r.data.id)),'seller gets the deal request on the phone');
+ let d=sql.prepare('SELECT * FROM wm_deals WHERE id=?').get(r.data.id);assert.equal((await call('/api/deals/'+d.id+'/action','POST',{action:'confirm',version:d.version},'pnseller')).status,200);await wait();
+ d=sql.prepare('SELECT * FROM wm_deals WHERE id=?').get(d.id);
+ assert.equal((await call('/api/deals/'+d.id+'/messages','POST',{text:'@pnbuyer please send the money'},'pnseller')).status,201);await wait();
+ assert.ok(pushes('pnbuyer').some(p=>p.ref_id.startsWith('dm-')&&/mentioned you/.test(p.title)));
+ assert.equal((await call('/api/deals/'+d.id+'/messages','POST',{text:'no mention here'},'pnseller')).status,201);await wait();
+ assert.equal(pushes('pnbuyer').filter(p=>p.ref_id.startsWith('dm-')).length,1);
+ assert.equal((await call('/api/friends/request','POST',{userId:'pnbuyer'},'pnseller')).status,200);await wait();
+ assert.ok(pushes('pnbuyer').some(p=>p.ref_id.startsWith('fr-')));
+ console.log('PASS: phone notifications for deal steps, deal @mentions and friend requests (chat without a mention stays quiet).');
 }

@@ -377,3 +377,13 @@ window.addEventListener('popstate',e=>{
  if(tab!==active||(s?.profileId||null)!==(profileViewId||null))return navigate(tab,{fromHistory:true,profileId:s?.profileId});
  hop('user');// this step showed the same page again: go one more step back
 });
+
+// Tapping a phone notification for a deal step, a deal @mention or a notice opens the right place.
+{const base=openFromAlert;openFromAlert=async function(params){const deal=params.get('deal'),notices=params.get('notices');
+ if(!deal&&!notices)return base(params);if(location.search)history.replaceState(history.state,'',location.pathname+location.hash);if(!me)return;
+ try{if(notices){if(typeof openNotices==='function')await openNotices();return}
+  navigate('deals');await loadDeals();const {deal:d}=await api('/deals/'+deal);if(['open','admin_proposed','awaiting_admin','active','awaiting_final','disputed'].includes(d.status)&&typeof openDealRoom==='function')await openDealRoom(deal)}catch(e){toast(e.message)}}}
+
+// Ask once (gently) to turn on phone notifications: messages, @mentions, deal steps, calls and notices.
+setTimeout(()=>{try{if(!me||!('Notification' in window)||!('PushManager' in window)||Notification.permission!=='default')return;if(Number(localStorage.getItem('wm_notify_ask')||0)>Date.now())return}catch{return}
+ const bar=node('div',undefined,'notify-ask');bar.append(node('span','🔔 Get notifications on your phone for messages, mentions and deals.'),button('Turn on',async()=>{bar.remove();try{await enableCallAlerts()}catch(e){toast(e.message)}},'btn'),button('Later',()=>{bar.remove();try{localStorage.setItem('wm_notify_ask',String(Date.now()+3*86400000))}catch{}},'btn ghost'));document.body.append(bar)},6000);

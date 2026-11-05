@@ -451,3 +451,5 @@ html body #chatPanel #groupSettingsPanel>.group-info-popover{background:#3a3b3e!
 .vt-range{display:flex;justify-content:space-between;font-weight:700;font-size:14px}.vt-card input[type=range]{width:100%;accent-color:#a891ff}
 .vt-bar{position:relative;height:8px;border-radius:99px;background:#263247;overflow:hidden}.vt-bar i{position:absolute;top:0;bottom:0;background:#a891ff;border-radius:99px}
 .vt-actions{display:flex;flex-wrap:wrap;gap:8px}.vt-actions .btn{flex:1 1 auto}
+.notify-ask{position:fixed;left:12px;right:12px;bottom:calc(92px + env(safe-area-inset-bottom));z-index:90;display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:12px 14px;border-radius:16px;background:#1a2440;border:1px solid #a891ff66;box-shadow:0 10px 30px #0008;font-size:14px}
+.notify-ask span{flex:1 1 200px}.notify-ask .btn{min-height:0;padding:8px 14px}
