@@ -2,7 +2,7 @@
 let marketRulesCache=null;
 async function loadMarketRules(){try{marketRulesCache=(await api('/market-rules')).rules}catch{}return marketRulesCache}
 const dealTime=t=>t?new Date(t).toLocaleString([],{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
-const DEAL_EVENT_LABELS={admin_proposed:'🛡️ Suggested an Admin · the other side agrees above',admin_requested:'🤝 Agreed on the Admin · the Admin was asked to join',admin_declined:'The Admin said no · add another Admin',confirm:'✅ Accepted the request · deal box open',withdraw:'Deal cancelled',requested:'Deal request sent',accept:'Admin accepted the deal',activate:'Admin accepted the deal',payment_sent:'Buyer sent the money',payment_received:'Admin got the money',handover_ready:'Buyer is ready for the login',handover_submitted:'Seller sent the login safely',handover_revealed:'Buyer opened the login',delivered:'Seller gave the ID',buyer_confirmed:'Buyer got the ID',seller_paid:'Deal complete',auto_confirmed:'Buyer did not reply · confirmed automatically',dispute:'Problem reported',resolve_dispute:'Problem solved · deal continues',resolve_redeliver:'Problem solved · seller gives the ID again',finalize:'Deal complete',cancel:'Deal cancelled',reject:'Admin said no',cancel_requested:'Cancel requested',cancel_request_rejected:'Cancel request turned down',admin_changed:'Admin changed'};
+const DEAL_EVENT_LABELS={owner_joined:'👑 The Owner joined as the Admin · the deal started',admin_proposed:'🛡️ Suggested an Admin · the other side agrees above',admin_requested:'🤝 Agreed on the Admin · the Admin was asked to join',admin_declined:'The Admin said no · add another Admin',confirm:'✅ Accepted the request · deal box open',withdraw:'Deal cancelled',requested:'Deal request sent',accept:'Admin accepted the deal',activate:'Admin accepted the deal',payment_sent:'Buyer sent the money',payment_received:'Admin got the money',handover_ready:'Buyer is ready for the login',handover_submitted:'Seller sent the login safely',handover_revealed:'Buyer opened the login',delivered:'Seller gave the ID',buyer_confirmed:'Buyer got the ID',seller_paid:'Deal complete',auto_confirmed:'Buyer did not reply · confirmed automatically',dispute:'Problem reported',resolve_dispute:'Problem solved · deal continues',resolve_redeliver:'Problem solved · seller gives the ID again',finalize:'Deal complete',cancel:'Deal cancelled',reject:'Admin said no',cancel_requested:'Cancel requested',cancel_request_rejected:'Cancel request turned down',admin_changed:'Admin changed'};
 const CHECKLIST_LABELS={login_checked:'I logged in and the account matches the post (level, items, rank).',email_changed:'I bound my own email / Gmail and removed the seller’s.',password_changed:'I changed every password (game login, Facebook / Google).',links_removed:'I removed the seller’s Facebook / Google / VK / X links.',recovery_changed:'I changed the recovery phone and 2-step verification.'};
 const PROTECTED_STEPS=['Money sent','Money received','ID received','Complete'];
 
@@ -392,7 +392,7 @@ Object.assign(socialGlyphs,{download:'<path d="M12 3v12M7 10l5 5 5-5"/><path d="
 function profileMenuItems(){
  const admin=['owner','trusted'].includes(me?.role),items=[...(me?.role==='owner'?[['Admin panel','shield',openOwnerAdminPanel]]:[]),['Friends','users',()=>navigate('friends')],['Saved posts','bookmark',async()=>{if(active!=='profile'||profileViewId)await showProfile(me.id);await loadProfileTab('saved')}],['My deals','deals',()=>navigate('deals')]];
  if(!me?.verified&&!admin)items.push(['Get verified (blue tick)','verified',()=>openVerificationRequest('seller')]);
- if(!admin)items.push(['Become an Admin','shield',()=>openVerificationRequest('trusted')]);
+ if(!admin&&!ownerOnlyMode)items.push(['Become an Admin','shield',()=>openVerificationRequest('trusted')]);
  items.push(['Call alerts','bell',()=>enableCallAlerts()]);
  if(!installedApp())items.push(['Install app','download',()=>installMarketApp()]);
  items.push(['Account security','lock',openAccountSecurity]);
@@ -460,7 +460,7 @@ function appendDealBoxSteps(root,d){
  const buyer=me?.id===d.buyer_id,seller=me?.id===d.seller_id,party=buyer||seller,isAdmin=me?.id===d.admin_id&&['owner','trusted'].includes(me?.role);
  const box=node('div',undefined,'admin-agreement deal-steps');
  if(d.status==='awaiting_seller'){
-  box.append(node('strong','📨 Deal request','admin-agreement-title'),node('p',seller?(d.buyer_name||'The buyer')+' wants to buy this ID. Accept to open the deal box. You choose an Admin together inside it.':buyer?'Waiting for the seller to accept. The deal box opens as soon as they do.':'Waiting for the seller.','hint'));
+  box.append(node('strong','📨 Deal request','admin-agreement-title'),node('p',ownerOnlyMode?(seller?(d.buyer_name||'The buyer')+' wants to buy this ID. Accept and '+(ownerCard?.name||'the Owner')+' joins as the Admin — the deal starts at once.':buyer?'Waiting for the seller to accept. Then '+(ownerCard?.name||'the Owner')+' joins as the Admin and the deal starts.':'Waiting for the seller.'):seller?(d.buyer_name||'The buyer')+' wants to buy this ID. Accept to open the deal box. You choose an Admin together inside it.':buyer?'Waiting for the seller to accept. The deal box opens as soon as they do.':'Waiting for the seller.','hint'));
   if(seller){const row=node('div',undefined,'action-row');row.append(button('✅ Accept request',()=>dealActionRequest(d,'confirm'),'btn'));box.append(row)}
   root.append(box);return true}
  if(!d.admin_id){
@@ -479,3 +479,17 @@ function appendDealBoxSteps(root,d){
  if(party){const row=node('div',undefined,'action-row');row.append(button('🔁 Add another Admin',()=>openListingAdminChoice({deal:d}),'btn ghost'));box.append(row)}
  root.append(box);return true
 }
+
+// ---- Owner-only website: one Admin (the Owner) for every deal. Home shows the Owner's card on top (posts are not pinned).
+var ownerOnlyMode=false,ownerCard=null;
+async function loadOwnerCard(){try{const d=await fetch('/api/owner-card',{cache:'no-store'}).then(r=>r.json());ownerOnlyMode=!!d.ownerOnly;ownerCard=d.owner;paintOwnerCard()}catch{}}
+function paintOwnerCard(){
+ const home=$('page-home');if(!home)return;home.querySelector('.owner-card')?.remove();if(!ownerOnlyMode||!ownerCard)return;const o=ownerCard;
+ const card=node('section',undefined,'owner-card');const who=node('div',undefined,'owner-card-who');const name=node('div',undefined,'owner-card-name');name.append(node('strong',o.name),verifiedMark('owner',o.id,true));
+ const stats=[(o.deals_done||0)+' deals done'];if(o.reviews)stats.push('⭐ '+o.rating+' ('+o.reviews+')');
+ who.append(name,node('small','Every deal on WizeNex is handled by '+String(o.name).split(' ')[0]+' · '+stats.join(' · ')));
+ const pic=button('',()=>showProfile(o.id),'owner-card-pic');pic.append(avatar({...o,role:'owner'}));
+ const actions=node('div',undefined,'owner-card-actions');if(me?.id!==o.id)actions.append(button('💬 Message',async()=>{if(!requireLogin())return;await showProfile(o.id)},'btn'));
+ card.append(pic,who,actions);const heading=home.querySelector('.feed-heading');if(heading)heading.after(card);else home.prepend(card);
+}
+void loadOwnerCard();

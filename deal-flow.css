@@ -430,3 +430,7 @@ body.create-menu-open::after{content:'';position:fixed;inset:0;z-index:140;backg
 .deal-mention-pop{display:grid;gap:4px;margin:0 0 6px;padding:6px;border-radius:12px;background:#111a2a;border:1px solid var(--line,#263247)}
 .deal-mention-item{display:flex;justify-content:space-between;gap:10px;padding:8px 10px;border:0;border-radius:8px;background:transparent;color:var(--text,#f3f6ff);font:inherit;text-align:left;cursor:pointer}.deal-mention-item:hover{background:#1c2740}.deal-mention-item small{color:var(--muted,#8c9bb3)}
 .deal-mention{color:#9ecbff}
+.owner-card{display:flex;align-items:center;gap:12px;margin:6px 0 12px;padding:12px 14px;border-radius:16px;border:1px solid #e3b34155;background:linear-gradient(135deg,#2a1f0a66,#111a2a)}
+.owner-card-pic{flex:none;padding:0;border:0;background:none;cursor:pointer}.owner-card-pic .avatar,.owner-card-pic img{width:48px;height:48px}
+.owner-card-who{display:grid;gap:3px;min-width:0;flex:1}.owner-card-name{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.owner-card-who small{color:#d9c79a;font-size:12px}
+.owner-card-actions .btn{min-height:0;padding:8px 14px;font-size:14px;white-space:nowrap}

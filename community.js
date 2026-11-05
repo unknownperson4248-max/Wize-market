@@ -74,7 +74,7 @@ let listingAdminDraft=null,listingAdminRequest=0;
 async function openListingAdminChoice({postId,deal}={}){
  const request=++listingAdminRequest;const data=await api('/deal-admins?'+(deal?'dealId='+encodeURIComponent(deal.id):'postId='+encodeURIComponent(postId)));if(request!==listingAdminRequest)return;
  // New steps: a deal request goes to the seller first, with no Admin. The Admin is chosen later inside the deal box.
- if(!deal&&data.mode==='mediated'){if(!confirm('Send a deal request to the seller?\nWhen they accept, a deal box opens for you both and you choose an Admin there.'))return;
+ if(!deal&&data.mode==='mediated'){if(!confirm(ownerOnlyMode?'Send a deal request to the seller?\nWhen they accept, '+(ownerCard?.name||'the Owner')+' joins as the Admin and the deal starts.':'Send a deal request to the seller?\nWhen they accept, a deal box opens for you both and you choose an Admin there.'))return;
   try{await api('/deals',{postId:postId||data.postId});$('listingModal').hidden=true;manageDeals=false;dealStatus='current';$('dealSearch').value='';navigate('deals');await loadMessages();await loadDeals();toast('✅ Request sent. The deal box opens when the seller accepts.')}catch(error){toast(error.message)}return}
  if(data.mode==='self'){// You are an Admin: you look after this deal yourself. The seller agrees, then it starts at once.
   if(!confirm('You are an Admin, so you will look after this deal yourself.\nSend the deal to the seller? It starts as soon as they agree.'))return;

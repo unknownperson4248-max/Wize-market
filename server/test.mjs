@@ -1524,3 +1524,19 @@ assert.equal(pk.owner.id,'owner');
  {const d2=sql.prepare('SELECT * FROM wm_deals WHERE id=?').get(r2.data.id);assert.equal(d2.status,'awaiting_seller');assert.equal((await call('/api/deals/'+d2.id+'/action','POST',{action:'withdraw',version:d2.version},'boxbuyer2')).status,200);assert.equal(sql.prepare('SELECT status FROM wm_deals WHERE id=?').get(d2.id).status,'cancelled')}
  console.log('PASS: deal box first: seller accepts → box opens → one side suggests an Admin → the other agrees → the Admin accepts and joins (saying no reopens the choice).');
 }
+{
+ // Owner-only website: the Owner is the Admin of every deal; nobody else becomes an Admin.
+ sql.exec('DELETE FROM wm_limits');const rules=(await call('/api/market-rules')).data.rules;
+ assert.equal((await call('/api/admin/market-rules','POST',{...rules,ownerOnly:true},'owner')).status,200);
+ const card=(await call('/api/owner-card')).data;assert.equal(card.ownerOnly,true);assert.equal(card.owner.id,'owner');
+ const mk=async id=>{sql.prepare('INSERT OR IGNORE INTO users VALUES(?,?,?,?,?,?,?)').run(id,id,id+'@example.com',id,'',Date.now(),Date.now());tokens[id]=Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('hex');sql.prepare('INSERT INTO sessions VALUES(?,?,?,?)').run(await hash(tokens[id]),id,Date.now()+1000000,Date.now())};
+ await mk('oobuyer');await mk('ooseller');env.AI={run:async()=>({response:{decision:'safe',category:'none',confidence:.99}})};
+ const made=await call('/api/posts','POST',{title:'Owner only ID',details:'Level 30',price:2000,kind:'Game ID',media:[],gameCategory:'efootball'},'ooseller');assert.equal(made.status,201,JSON.stringify(made.data));
+ const r=await call('/api/deals','POST',{postId:made.data.id},'oobuyer');assert.equal(r.status,201);let d=sql.prepare('SELECT * FROM wm_deals WHERE id=?').get(r.data.id);assert.equal(d.admin_id,null);
+ assert.equal((await call('/api/deals/'+d.id+'/action','POST',{action:'confirm',version:d.version},'ooseller')).status,200);d=sql.prepare('SELECT * FROM wm_deals WHERE id=?').get(d.id);
+ assert.equal(d.status,'active');assert.equal(d.admin_id,'owner');
+ assert.equal((await call('/api/verification','POST',{kind:'trusted',whatsapp:'01811113333',documentId:'x'},'oobuyer')).status,403);
+ assert.equal((await call('/api/admin/member-access','POST',{userId:'oobuyer',verified:false,trustedSeller:false,role:'trusted'},'owner')).status,403);
+ assert.equal((await call('/api/admin/market-rules','POST',{...rules,ownerOnly:false},'owner')).status,200);
+ console.log('PASS: owner-only website (the Owner joins every deal as the Admin when the seller accepts; no new Admins).');
+}
