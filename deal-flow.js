@@ -8,11 +8,12 @@ const PROTECTED_STEPS=['Money sent','Money received','ID received','Complete'];
 
 function dealSystemLine(m){const line=node('div',undefined,'deal-system-line');line.append(node('span',(DEAL_EVENT_LABELS[m.text]||String(m.text).replaceAll('_',' '))+(m.name?' · '+m.name:'')),node('time',new Date(m.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})));return line}
 function dealRoles(d){const buyer=me?.id===d.buyer_id,seller=me?.id===d.seller_id,isAdmin=me?.id===d.admin_id&&['owner','trusted'].includes(me?.role);return {buyer,seller,isAdmin,participant:buyer||seller||isAdmin}}
-function protectedStage(d){if(d.status==='completed')return 4;if(d.status==='cancelled')return -1;if(['proposed','awaiting_admin','awaiting_seller'].includes(d.status))return 0;if(d.buyer_done)return 3;if(d.funded_at)return 2;if(d.paid_at)return 1;return 0}
+function protectedStage(d){if(d.status==='completed')return 4;if(d.status==='cancelled')return -1;if(['proposed','awaiting_admin','awaiting_seller','open'].includes(d.status))return 0;if(d.buyer_done)return 3;if(d.funded_at)return 2;if(d.paid_at)return 1;return 0}
 function protectedTimes(d){const rules=marketRulesCache||{holdHours:d.hold_hours??0,autoConfirmHours:d.auto_confirm_hours??72},start=d.delivered_at||d.funded_at||0;return {holdUntil:d.hold_until??(d.buyer_done_at?d.buyer_done_at+rules.holdHours*3600000:start?start+rules.holdHours*3600000:null),autoAt:d.auto_confirm_at??(start?start+rules.autoConfirmHours*3600000:null)}}
 function protectedStepText(d){
  const {buyer,seller,isAdmin}=dealRoles(d),{holdUntil,autoAt}=protectedTimes(d),stage=protectedStage(d),direct=d.admin_id===d.seller_id;
  if(d.status==='disputed')return '⚠️ Problem reported: '+(d.dispute_reason||'see the chat')+'. '+(direct?'The Owner will check it.':'The Admin will check it.');
+ if(d.status==='open')return '💬 The deal box is open. Choose an Admin together.';
  if(['proposed','awaiting_admin','awaiting_seller'].includes(d.status))return '⏳ Pending: waiting for the '+(d.status==='awaiting_seller'?'seller':'Admin')+' to accept.';
  if(stage===0)return buyer?'💳 Send the money to the Admin’s number in this chat. Then tap “Money sent” and add the screenshot.':isAdmin?'💳 Give your bKash / Nagad number in this chat. Tap “Money received” when the money comes.':'⏳ Waiting for the buyer to send the money.';
  if(stage===1)return isAdmin?'🧾 The buyer sent the money. Check your account, then tap “Money received”.':'⏳ Waiting for the Admin to get the money.';
@@ -191,7 +192,7 @@ async function startDealFromChat(peer){
 }
 
 // Deal popup: new requests, each deal step and deal messages, plus a count on the Deals tab.
-let dealAlertSeen=(()=>{try{return Number(sessionStorage.getItem('wm_deal_alert_seen'))||0}catch{return 0}})(),dealAlertBusy=false,dealPopupTimer,lastDealAlerts=[];
+let dealPopupShownAt=0;let dealAlertSeen=(()=>{try{return Number(sessionStorage.getItem('wm_deal_alert_seen'))||0}catch{return 0}})(),dealAlertBusy=false,dealPopupTimer,lastDealAlerts=[];
 async function markDealAlertsRead(alerts){const ids=alerts.map(a=>a.id);if(ids.length)try{await api('/notifications/read',{ids})}catch{}}
 function paintDealAlertCount(count){
  for(const target of [$('dealChatsTab'),document.querySelector('#mobileNav [data-tab="messages"]'),document.querySelector('#desktopNav [data-tab="messages"]')]){if(!target)continue;let dot=target.querySelector('.deal-alert-count');if(!count){dot?.remove();continue}if(!dot){dot=node('span',undefined,'deal-alert-count');target.append(dot)}dot.textContent=count>9?'9+':String(count);dot.title=count+' deal update'+(count===1?'':'s')}
@@ -214,7 +215,9 @@ async function pollDealAlerts(){
   const here=activeDealRoom?alerts.filter(a=>a.deal_id===activeDealRoom.id):[];if(here.length){await api('/notifications/read',{ids:here.map(a=>a.id)});pending=alerts.filter(a=>a.deal_id!==activeDealRoom.id)}
   paintDealAlertCount(pending.length);const fresh=pending.filter(a=>a.id>dealAlertSeen);
   if(alerts.length){dealAlertSeen=Math.max(dealAlertSeen,...alerts.map(a=>a.id));try{sessionStorage.setItem('wm_deal_alert_seen',String(dealAlertSeen))}catch{}}
-  if(fresh.length)showDealPopup(fresh[0],fresh.length);
+  // Calm alerts: chat messages only raise the count; a popup is shown for real deal steps, at most once every 30 seconds.
+  const steps=fresh.filter(a=>a.title!=='New deal message');
+  if(steps.length&&Date.now()-dealPopupShownAt>30000){dealPopupShownAt=Date.now();showDealPopup(steps[0],steps.length)}
  }catch{}finally{dealAlertBusy=false}
 }
 setInterval(()=>void pollDealAlerts(),12000);setTimeout(()=>void pollDealAlerts(),2500);document.addEventListener('visibilitychange',()=>{if(!document.hidden)void pollDealAlerts()});
@@ -403,7 +406,8 @@ function drawerItem(item){
 
 // Deal: the buyer and the seller must agree on the same Admin. The Admin is asked only after both agree.
 function appendAdminAgreement(root,d){
- if(d.mode==='direct'||!['proposed','awaiting_seller','awaiting_admin'].includes(d.status))return;
+ if(d.mode==='direct'||!['proposed','awaiting_seller','awaiting_admin','open'].includes(d.status))return;
+ if(d.status!=='proposed'&&appendDealBoxSteps(root,d))return;
  const buyer=me?.id===d.buyer_id,seller=me?.id===d.seller_id,party=buyer||seller,isAdmin=me?.id===d.admin_id&&['owner','trusted'].includes(me?.role),agreed=!!d.buyer_ok&&!!d.seller_ok;
  const box=node('div',undefined,'admin-agreement'+(agreed?' agreed':''));box.append(node('strong','🛡️ Admin for this deal','admin-agreement-title'));
  const person=node('div',undefined,'admin-agreement-person'),who=node('div',undefined,'admin-agreement-name'),line=node('div',undefined,'admin-choice-name');
@@ -447,3 +451,24 @@ async function openNotices(){
 }
 new MutationObserver(rafBatch(()=>placeNoticeBells())).observe(document.body,{childList:true,subtree:true});
 setInterval(()=>{if(!document.hidden)void refreshNotices()},60000);setTimeout(()=>void refreshNotices(),3000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)void refreshNotices()});
+
+// New deal steps: 1) the buyer asks the seller, 2) the seller accepts and the deal box opens for both,
+// 3) they choose an Admin inside the box, 4) the Admin accepts and joins.
+function appendDealBoxSteps(root,d){
+ if(d.admin_id&&d.admin_id===d.buyer_id)return false;
+ const buyer=me?.id===d.buyer_id,seller=me?.id===d.seller_id,party=buyer||seller,isAdmin=me?.id===d.admin_id&&['owner','trusted'].includes(me?.role);
+ const box=node('div',undefined,'admin-agreement deal-steps');
+ if(d.status==='awaiting_seller'){
+  box.append(node('strong','📨 Deal request','admin-agreement-title'),node('p',seller?(d.buyer_name||'The buyer')+' wants to buy this ID. Accept to open the deal box. You choose an Admin together inside it.':buyer?'Waiting for the seller to accept. The deal box opens as soon as they do.':'Waiting for the seller.','hint'));
+  if(seller){const row=node('div',undefined,'action-row');row.append(button('✅ Accept request',()=>dealActionRequest(d,'confirm'),'btn'));box.append(row)}
+  root.append(box);return true}
+ if(!d.admin_id){
+  box.append(node('strong','🛡️ Choose an Admin','admin-agreement-title'),node('p',party?'The deal box is open. Talk here, then choose an Admin. The Admin joins after they accept, then the safe steps start.':'Waiting for the buyer and the seller to choose an Admin.','hint'));
+  if(party){const row=node('div',undefined,'action-row');row.append(button('🛡️ Choose Admin',()=>openListingAdminChoice({deal:d}),'btn'));box.append(row)}
+  root.append(box);return true}
+ const person=node('div',undefined,'admin-agreement-person'),who=node('div',undefined,'admin-agreement-name'),line=node('div',undefined,'admin-choice-name');
+ line.append(node('strong',d.admin_name||'Admin'),verifiedMark(d.admin_role||'trusted',undefined,!!d.admin_verified));who.append(line);person.append(avatar({name:d.admin_name,picture:d.admin_picture,role:d.admin_role,verified:d.admin_verified}),who);
+ box.append(node('strong','🛡️ Admin for this deal','admin-agreement-title'),person,node('p',isAdmin?'The buyer and the seller asked you to look after this deal. Accept to join the deal box.':'⏳ Waiting for '+String(d.admin_name||'the Admin').split(' ')[0]+' to accept. They join the deal box after that.','hint'));
+ if(party){const row=node('div',undefined,'action-row');row.append(button('🔁 Choose another Admin',()=>openListingAdminChoice({deal:d}),'btn ghost'));box.append(row)}
+ root.append(box);return true
+}

@@ -275,12 +275,13 @@ assert.equal(groupFeed.data.posts.filter(p=>p.id===dualId).length,0);const place
 assert.ok((await call('/api/feed')).data.posts.some(p=>p.id===dualId));
 assert.equal((await call('/api/posts','POST',{...post,groupIds:[group,group]},'seller')).status,400);
 assert.equal((await call('/api/posts','POST',{...post,groupIds:[group]},'outsider')).status,403);
-let mediated=await call('/api/deals','POST',{postId:dualId},'buyer');assert.equal(mediated.status,201);const mediatedId=mediated.data.id;assert.equal(mediated.data.deal.mode,'mediated');assert.equal(mediated.data.deal.admin_id,'owner');
+let mediated=await call('/api/deals','POST',{postId:dualId},'buyer');assert.equal(mediated.status,201);const mediatedId=mediated.data.id;assert.equal(mediated.data.deal.mode,'mediated');assert.equal(mediated.data.deal.admin_id,null);// new steps: no Admin until the deal box is open
 assert.equal(mediated.data.deal.status,'awaiting_seller');
-assert.equal((await call('/api/deals/'+mediatedId+'/action','POST',{action:'accept',version:0},'owner')).status,409);
+assert.equal((await call('/api/deals/'+mediatedId+'/action','POST',{action:'accept',version:0},'owner')).status,404);// no Admin yet: the Owner is not part of this deal
 assert.equal((await call('/api/deals/'+mediatedId+'/action','POST',{action:'confirm',version:0},'seller')).status,200);
-assert.equal((await call('/api/deals/'+mediatedId,'GET',undefined,'seller')).data.deal.status,'awaiting_admin');assert.equal((await call('/api/deals/'+mediatedId+'/messages','GET',undefined,'seller')).status,409);
-assert.equal((await call('/api/deals/'+mediatedId+'/action','POST',{action:'accept',version:1},'owner')).status,200);
+assert.equal((await call('/api/deals/'+mediatedId,'GET',undefined,'seller')).data.deal.status,'open');assert.equal((await call('/api/deals/'+mediatedId+'/messages','GET',undefined,'seller')).status,200);
+assert.equal((await call('/api/deals/'+mediatedId+'/action','POST',{action:'choose_admin',adminId:'owner',version:1},'buyer')).status,200);
+assert.equal((await call('/api/deals/'+mediatedId+'/action','POST',{action:'accept',version:2},'owner')).status,200);
 assert.equal((await call('/api/deals/'+mediatedId+'/messages','POST',{text:'Mediated room'},'owner')).status,201);
 assert.equal((await call('/api/deal-management','GET',undefined,'buyer')).status,403);assert.ok((await call('/api/deal-management','GET',undefined,'owner')).data.deals.some(d=>d.id===mediatedId));
 assert.ok(!(await call('/api/deal-management','GET',undefined,'admin')).data.deals.some(d=>d.id===directId));
@@ -1486,4 +1487,30 @@ assert.equal(pk.owner.id,'owner');
  const ok=await call('/api/deals/'+deal.id+'/action','POST',{action:'confirm',version:deal.version},sellerId);assert.equal(ok.status,200,JSON.stringify(ok.data));
  assert.equal(sql.prepare('SELECT status FROM wm_deals WHERE id=?').get(deal.id).status,'active');
  console.log('PASS: an Admin who starts a deal looks after it; it starts as soon as the seller agrees.');
+}
+{
+ // New deal steps: buyer → seller accepts → deal box opens for both → they choose an Admin → the Admin accepts and joins.
+ sql.exec('DELETE FROM wm_limits');env.AI={run:async()=>({response:{decision:'safe',category:'none',confidence:.99}})};
+ const mk=async id=>{sql.prepare('INSERT OR IGNORE INTO users VALUES(?,?,?,?,?,?,?)').run(id,id,id+'@example.com',id,'',Date.now(),Date.now());tokens[id]=Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('hex');sql.prepare('INSERT INTO sessions VALUES(?,?,?,?)').run(await hash(tokens[id]),id,Date.now()+1000000,Date.now())};
+ await mk('boxbuyer');await mk('boxseller');
+ const made=await call('/api/posts','POST',{title:'Box flow ID',details:'Level 40',price:3000,kind:'Game ID',media:[],gameCategory:'efootball'},'boxseller');assert.equal(made.status,201,JSON.stringify(made.data));
+ const r=await call('/api/deals','POST',{postId:made.data.id},'boxbuyer');assert.equal(r.status,201,JSON.stringify(r.data));
+ const get=()=>sql.prepare('SELECT * FROM wm_deals WHERE id=?').get(r.data.id);let d=get();assert.equal(d.admin_id,null);assert.equal(d.status,'awaiting_seller');
+ assert.equal((await call('/api/deals/'+d.id+'/messages','GET',undefined,'boxbuyer')).status,409);
+ assert.equal((await call('/api/deals/'+d.id+'/action','POST',{action:'confirm',version:d.version},'boxseller')).status,200);d=get();assert.equal(d.status,'open');
+ assert.equal((await call('/api/deals/'+d.id+'/messages','POST',{text:'Hi, which Admin?'},'boxbuyer')).status,201);
+ assert.equal((await call('/api/deals/'+d.id+'/messages','GET',undefined,'boxseller')).status,200);
+ assert.equal((await call('/api/deals/'+d.id+'/action','POST',{action:'choose_admin',adminId:'admin',version:d.version},'boxbuyer')).status,200);d=get();assert.equal(d.status,'awaiting_admin');assert.equal(d.admin_id,'admin');
+ assert.equal((await call('/api/deals/'+d.id+'/messages','GET',undefined,'admin')).status,409);
+ sql.prepare("UPDATE wm_notifications SET read_at=1 WHERE user_id='admin'").run();
+ assert.equal((await call('/api/deals/'+d.id+'/messages','POST',{text:'Waiting for the Admin'},'boxseller')).status,201);
+ assert.equal(sql.prepare("SELECT count(*) n FROM wm_notifications WHERE user_id='admin' AND target_id=? AND read_at IS NULL AND title='New deal message'").get(d.id).n,0);
+ assert.equal((await call('/api/deals/'+d.id+'/action','POST',{action:'reject',version:d.version},'admin')).status,200);d=get();assert.equal(d.status,'open');assert.equal(d.admin_id,null);
+ assert.equal((await call('/api/deals/'+d.id+'/action','POST',{action:'choose_admin',adminId:'admin',version:d.version},'boxseller')).status,200);d=get();
+ assert.equal((await call('/api/deals/'+d.id+'/action','POST',{action:'accept',version:d.version},'admin')).status,200);d=get();assert.equal(d.status,'active');
+ assert.equal((await call('/api/deals/'+d.id+'/messages','GET',undefined,'admin')).status,200);
+ // withdraw before the Admin joins
+ await mk('boxbuyer2');const r2=await call('/api/deals','POST',{postId:made.data.id},'boxbuyer2');assert.equal(r2.status,201,JSON.stringify(r2.data));
+ {const d2=sql.prepare('SELECT * FROM wm_deals WHERE id=?').get(r2.data.id);assert.equal(d2.status,'awaiting_seller');assert.equal((await call('/api/deals/'+d2.id+'/action','POST',{action:'withdraw',version:d2.version},'boxbuyer2')).status,200);assert.equal(sql.prepare('SELECT status FROM wm_deals WHERE id=?').get(d2.id).status,'cancelled')}
+ console.log('PASS: deal box first: seller accepts → box opens for both → Admin chosen → Admin accepts and joins (Admin saying no reopens the choice).');
 }

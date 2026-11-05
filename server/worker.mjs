@@ -115,8 +115,11 @@ async function requestListingDeal(db,input,u){
  const sellerRole=await one(db,"SELECT role FROM wm_roles WHERE user_id=? AND role IN ('owner','trusted')",post.user_id),mode=sellerRole?'direct':'mediated';let adminId=post.user_id;
  // An Admin (or the Owner) who starts a deal looks after it themselves: no Admin to choose or wait for. The seller still agrees first.
  const selfAdmin=mode==='mediated'&&['owner','trusted'].includes(u.role)&&(input.adminId===undefined||input.adminId===u.id);
+ // New steps: the buyer asks the seller first. The Admin is chosen inside the deal box after the seller accepts.
  if(selfAdmin)adminId=u.id;
- else if(mode==='mediated'&&input.adminId!==undefined){need(typeof input.adminId==='string'&&input.adminId!==u.id&&input.adminId!==post.user_id&&await one(db,"SELECT user_id FROM wm_roles WHERE user_id=? AND role IN ('owner','trusted')",input.adminId),'Select an independent trusted admin');await needAdminLimit(db,input.adminId,post.price);adminId=input.adminId}else if(mode==='mediated'){const admin=await one(db,"SELECT r.user_id FROM wm_roles r WHERE r.role IN ('owner','trusted') AND r.user_id NOT IN (?,?) ORDER BY CASE WHEN r.role='owner' THEN 0 WHEN r.user_id=(SELECT owner_id FROM wm_groups WHERE id=?) THEN 1 ELSE 2 END,r.user_id LIMIT 1",u.id,post.user_id,post.group_id);need(admin,'No independent trusted admin is available',409);adminId=admin.user_id}
+ else if(mode==='mediated'&&input.adminId!==undefined){// older app versions still send a chosen Admin up front
+  need(typeof input.adminId==='string'&&input.adminId!==u.id&&input.adminId!==post.user_id&&await one(db,"SELECT user_id FROM wm_roles WHERE user_id=? AND role IN ('owner','trusted')",input.adminId),'Select an independent trusted admin');await needAdminLimit(db,input.adminId,post.price);adminId=input.adminId}
+ else if(mode==='mediated')adminId=null;
  const pair='deal:'+u.id+':'+post.id,time=now(),threadId=uuid(),id=uuid();
  await db.batch([stmt(db,"INSERT OR IGNORE INTO wm_threads(id,buyer_id,seller_id,post_id,pair_key,status,created_at,is_deal) VALUES(?,?,?,?,?,'accepted',?,1)",threadId,u.id,post.user_id,post.id,pair,time),stmt(db,"INSERT OR IGNORE INTO wm_deals(id,thread_id,buyer_id,seller_id,admin_id,price,fee,buyer_ok,status,created_at,post_id,mode,account_name,flow) SELECT ?,t.id,?,?,?,?,0,1,?,?,?,?,?,? FROM wm_threads t WHERE t.pair_key=? AND NOT EXISTS(SELECT 1 FROM wm_deals d WHERE d.thread_id=t.id AND d.status NOT IN ('completed','cancelled'))",id,u.id,post.user_id,adminId,post.price,mode==='direct'?'awaiting_admin':'awaiting_seller',time,post.id,mode,post.title,(await marketRules(db)).protectedDeals?1:0,pair),stmt(db,"INSERT INTO wm_deal_events(deal_id,user_id,action,created_at) SELECT id,?,'requested',? FROM wm_deals WHERE id=?",u.id,time,id)]);
  const result=await one(db,dealSelect+" WHERE d.thread_id=(SELECT id FROM wm_threads WHERE pair_key=?) AND d.status NOT IN ('completed','cancelled') ORDER BY d.created_at DESC LIMIT 1",pair);return result;
@@ -138,7 +141,7 @@ async function requestNeedDeal(db,input,u,post){
 
 function dealManagementFilter(url){
  let sql='',args=[];const status=url.searchParams.get('status')||'current',q=(url.searchParams.get('q')||'').trim().slice(0,100);
- if(status==='current')sql+=" AND d.status NOT IN ('completed','cancelled')";else if(status==='pending')sql+=" AND d.status IN ('proposed','awaiting_seller','awaiting_admin')";
+ if(status==='current')sql+=" AND d.status NOT IN ('completed','cancelled')";else if(status==='pending')sql+=" AND d.status IN ('proposed','awaiting_seller','awaiting_admin','open')";
  else if(status==='previous')sql+=" AND d.status IN ('completed','cancelled')";else if(status==='active')sql+=" AND d.status IN ('active','awaiting_final')";else if(status!=='all'){need(['active','awaiting_final','completed','cancelled','disputed'].includes(status),'Invalid deal status');sql+=' AND d.status=?';args.push(status)}
  if(q){const number=q.match(/^(?:(?:id\s*no|deal|wm|dl)\s*-?\s*)?(\d+)$/i)?.[1];
   sql+=" AND (instr(lower(COALESCE(NULLIF(d.account_name,''),p.title,'')),lower(?))>0 OR d.id=? OR EXISTS(SELECT 1 FROM wm_listing_ids li WHERE li.post_id=COALESCE(d.post_id,t.post_id) AND li.number=?) OR EXISTS(SELECT 1 FROM wm_deal_ids di WHERE di.deal_id=d.id AND di.number=?))";args.push(q,q,/^(?:deal|dl)\s*-?\s*\d+$/i.test(q)?'':number||'',/^(?:id\s*no|wm)\s*-?\s*\d+$/i.test(q)?'':number||'');
@@ -147,8 +150,22 @@ function dealManagementFilter(url){
 async function dealAction(db,d,u,input){
  need(Number.isInteger(input.version)&&input.version===d.version,'Deal changed. Refresh and try again.',409);
  const buyer=u.id===d.buyer_id,seller=u.id===d.seller_id,isAdmin=u.id===d.admin_id&&trusted(u),party=buyer||seller,time=now();
+ // Deal box steps (before any money): choose the Admin, the Admin says no, or a buyer/seller withdraws.
+ const boxOpen=d.mode==='mediated'&&['open','awaiting_admin'].includes(d.status)&&!!d.buyer_ok&&!!d.seller_ok;
+ if(input.action==='choose_admin'){
+  need(party,'Only the buyer or the seller chooses the Admin',403);need(boxOpen&&d.admin_id!==d.buyer_id,'You can choose the Admin after the seller accepts',409);
+  need(typeof input.adminId==='string'&&input.adminId!==d.buyer_id&&input.adminId!==d.seller_id&&await one(db,"SELECT user_id FROM wm_roles WHERE user_id=? AND role IN ('owner','trusted')",input.adminId),'Choose an independent trusted Admin');need(input.adminId!==d.admin_id,'This Admin was already asked',409);await needAdminLimit(db,input.adminId,d.price);
+  const r=await db.batch([stmt(db,"UPDATE wm_deals SET admin_id=?,status='awaiting_admin',version=version+1 WHERE id=? AND version=?",input.adminId,d.id,d.version),stmt(db,"INSERT INTO wm_deal_events(deal_id,user_id,action,created_at) SELECT ?,?,'admin_requested',? WHERE changes()=1",d.id,u.id,time)]);need(r[0].meta.changes===1,'Deal changed. Refresh and try again.',409);return reply({ok:true});
+ }
+ if(['reject','decline'].includes(input.action)&&isAdmin&&boxOpen&&d.status==='awaiting_admin'){
+  const r=await db.batch([stmt(db,"UPDATE wm_deals SET admin_id=NULL,status='open',version=version+1 WHERE id=? AND version=?",d.id,d.version),stmt(db,"INSERT INTO wm_deal_events(deal_id,user_id,action,created_at) SELECT ?,?,'admin_declined',? WHERE changes()=1",d.id,u.id,time)]);need(r[0].meta.changes===1,'Deal changed. Refresh and try again.',409);return reply({ok:true});
+ }
+ if(input.action==='withdraw'){
+  need(party,'Only the buyer or the seller can withdraw',403);need(['awaiting_seller','open','awaiting_admin'].includes(d.status)&&!d.paid_at&&!d.funded_at,'The deal has started. Ask the Admin to cancel instead.',409);
+  const r=await db.batch([stmt(db,"UPDATE wm_deals SET status='cancelled',version=version+1 WHERE id=? AND version=?",d.id,d.version),stmt(db,"INSERT INTO wm_deal_events(deal_id,user_id,action,created_at) SELECT ?,?,'withdraw',? WHERE changes()=1",d.id,u.id,time)]);need(r[0].meta.changes===1,'Deal changed. Refresh and try again.',409);return reply({ok:true});
+ }
  if(d.flow===1){const handled=await protectedDealAction(db,d,u,input,{buyer,seller,isAdmin,owner:u.role==='owner'});if(handled)return handled}
- const pending=['proposed','awaiting_admin','awaiting_seller'].includes(d.status),open=pending||['active','awaiting_final','disputed'].includes(d.status);
+ const pending=['proposed','awaiting_admin','awaiting_seller','open'].includes(d.status),open=pending||['active','awaiting_final','disputed'].includes(d.status);
  let update,event=input.action,cancelReason=null,completionNote=null,updateArgs=[];
  if(input.action==='change_admin'){
   need(party,'Only buyer or seller can propose another Admin',403);need(pending&&d.mode!=='direct','Admin can only change before a mediated deal starts',409);
@@ -156,7 +173,7 @@ async function dealAction(db,d,u,input){
   update="admin_id=?,status='proposed',buyer_ok=?,seller_ok=?";updateArgs=[input.adminId,buyer?1:0,seller?1:0];event='admin_changed';
  }else if(input.action==='confirm'){
   need(party,'Only buyer or seller can agree to terms',403);
-  if(d.status==='awaiting_seller'){need(seller,'Waiting for seller consent',403);update=d.admin_id===d.buyer_id?"seller_ok=1,status='active'":"seller_ok=1,status='awaiting_admin'"}
+  if(d.status==='awaiting_seller'){need(seller,'Waiting for seller consent',403);update=d.admin_id===d.buyer_id?"seller_ok=1,status='active'":!d.admin_id?"seller_ok=1,status='open'":"seller_ok=1,status='awaiting_admin'"}
   else {need(d.status==='proposed','Cannot confirm now',403);update=(buyer?'buyer_ok':'seller_ok')+'=1'}
  }else if(['accept','activate'].includes(input.action)){
   need(isAdmin,'Only the assigned trusted admin can accept',403);
@@ -463,7 +480,7 @@ async function protectedDealAction(db,d,u,input,ctx){
  }else if(input.action==='cancel'){
   // On an Admin-owned listing the Admin is also the seller: once the buyer has paid, only the Owner may cancel.
   const sellerAdmin=d.admin_id===d.seller_id,paid=!!(d.paid_at||d.funded_at)||d.status==='disputed';
-  need(owner&&(d.status==='disputed'||isAdmin)||isAdmin&&!(sellerAdmin&&paid),sellerAdmin&&paid&&isAdmin?'The buyer has paid, so only the Owner can cancel this deal. The buyer can raise a dispute.':'Only the assigned trusted admin can cancel. Send a cancellation request instead.',403);need(['proposed','awaiting_admin','awaiting_seller','active','awaiting_final','disputed'].includes(d.status),'This deal is already closed',409);
+  need(owner&&(d.status==='disputed'||isAdmin)||isAdmin&&!(sellerAdmin&&paid),sellerAdmin&&paid&&isAdmin?'The buyer has paid, so only the Owner can cancel this deal. The buyer can raise a dispute.':'Only the assigned trusted admin can cancel. Send a cancellation request instead.',403);need(['proposed','awaiting_admin','awaiting_seller','open','active','awaiting_final','disputed'].includes(d.status),'This deal is already closed',409);
   update="status='cancelled'";after.push(clearHandover('cancelled'));
  }else if(input.action==='complete'){
   throw new HttpError('Use the deal steps: payment, delivery and buyer check',409);
@@ -1235,14 +1252,15 @@ if(m){
  need(d&&(participant||u.role==='owner'&&action==='action'&&method==='POST'&&d.flow===1&&d.status==='disputed'),'Deal not found',404);
  const extra=d.flow===1&&participant&&method==='GET'?await dealExtras(env,db,d,u):{};
  if(action==='messages'){
-  const opened=['active','awaiting_final','completed','disputed'].includes(d.status)||d.status==='cancelled'&&d.room_opened;
-  need(opened,'Deal room opens after buyer, seller and assigned admin consent',409);
+  const boxForParties=party&&d.mode==='mediated'&&['open','awaiting_admin'].includes(d.status)&&!!d.seller_ok;
+  const opened=boxForParties||['active','awaiting_final','completed','disputed'].includes(d.status)||d.status==='cancelled'&&(d.room_opened||party&&d.seller_ok);
+  need(opened,'The deal box opens after the seller accepts',409);
   if(method==='GET')return reply({deal:{...d,...extra},call:['active','awaiting_final','disputed'].includes(d.status)?await liveRoomFor(db,'deal',id,u):null,messages:await rows(db,"SELECT e.id,e.user_id,e.action text,e.created_at,u.name,u.picture,u.verified,CASE WHEN e.user_id=? AND e.user_id=? THEN 'Seller / Admin' WHEN e.user_id=? THEN 'Admin' WHEN e.user_id=? THEN 'Buyer' ELSE 'Seller' END participant_role,(e.action NOT LIKE 'chat:%') system FROM wm_deal_events e JOIN wm_public_users u ON u.id=e.user_id WHERE deal_id=? AND (action LIKE 'chat:%' OR action IN ("+DEAL_SYSTEM_EVENTS.map(()=>'?').join(',')+")) ORDER BY e.id DESC LIMIT 100",d.seller_id,d.admin_id,d.admin_id,d.buyer_id,id,...DEAL_SYSTEM_EVENTS)});
   if(method==='POST'){
-   need(['active','awaiting_final','disputed'].includes(d.status),'This deal is closed. Messages are read-only.',409);
+   need(boxForParties||['active','awaiting_final','disputed'].includes(d.status),'This deal is closed. Messages are read-only.',409);
    const input=await body(req),message=text(input.text,2000,'message');need(!CALL_LOG.test(message),'Invalid message');
    // This conditional insert also protects against a concurrent Admin cancellation.
-   const result=await one(db,"INSERT INTO wm_deal_events(deal_id,user_id,action,created_at) SELECT id,?,?,? FROM wm_deals WHERE id=? AND status IN ('active','awaiting_final','disputed') RETURNING id",u.id,'chat:'+message,now(),id);
+   const result=await one(db,"INSERT INTO wm_deal_events(deal_id,user_id,action,created_at) SELECT id,?,?,? FROM wm_deals WHERE id=? AND (status IN ('active','awaiting_final','disputed') OR (? AND status IN ('open','awaiting_admin'))) RETURNING id",u.id,'chat:'+message,now(),id,boxForParties?1:0);
    need(!!result?.id,'This deal is closed. Refresh the room.',409);return reply({ok:true},201);
   }
  }
