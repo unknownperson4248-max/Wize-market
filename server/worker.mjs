@@ -645,7 +645,7 @@ async function publicImage(req,object,type,cache='public,max-age=86400'){
  return new Response(req.method==='HEAD'?null:object.body,{headers});
 }
 
-const defaultAppearance={navOrder:['home','friends','post','messages','profile'],navLabels:{home:'Home',messages:'Messages',post:'General post',friends:'Friends',profile:'Profile'},feedTitle:'My feed',density:'comfortable',metaTitle:'',metaDescription:'',slogan:''};
+const defaultAppearance={navOrder:['home','friends','post','messages','profile'],navLabels:{home:'Home',messages:'Messages',post:'General post',friends:'Top up',profile:'Profile'},feedTitle:'My feed',density:'comfortable',metaTitle:'',metaDescription:'',slogan:''};
 async function appearanceConfig(db){const row=await one(db,"SELECT value FROM wm_settings WHERE key='appearance_config'");return row?{...defaultAppearance,...JSON.parse(row.value)}:defaultAppearance}
 async function validateVoiceMessage(db,value,u){const match=typeof value==='string'&&value.match(/^media:(audio\/(?:webm|mp4|ogg)):(\/media\/([a-f0-9-]{36}))$/);if(match)need(await one(db,'SELECT id FROM wm_uploads WHERE id=? AND user_id=? AND type=?',match[3],u.id,match[1]),'Voice upload not found',404)}
 export async function api(req,env,ctx){const db=env.DB,url=new URL(req.url),method=req.method;let p=url.pathname;const control=p.startsWith('/api/control/');if(control){p=p.replace('/api/control/','/api/admin/');if(/^\/api\/admin\/(groups|upload)(?:\/|$)/.test(p))p=p.replace('/api/admin/','/api/');}need(db,'Storage is unavailable',503);if(!['GET','HEAD'].includes(method))need(req.headers.get('origin')===url.origin,'Invalid request origin',403);

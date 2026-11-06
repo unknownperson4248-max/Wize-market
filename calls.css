@@ -476,3 +476,12 @@ body.owner-site-open{overflow:hidden}
 .topup-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 2px}
 .topup-open{border:0;border-radius:9px;padding:7px 12px;font-weight:700;background:rgba(127,127,127,.16);color:inherit;cursor:pointer}
 .topup-frame{display:block;width:100%;height:70vh;border:0;border-radius:12px;background:#fff}
+.topup-card{display:grid;justify-items:center;gap:10px;text-align:center;margin:18px 0;padding:34px 20px;border-radius:20px;border:1px solid rgba(120,170,255,.25);background:linear-gradient(160deg,rgba(60,110,255,.18),rgba(160,60,255,.12))}
+.topup-card h2{margin:0;font-size:24px}
+.topup-gem{font-size:54px;line-height:1}
+.topup-go{display:inline-block;margin-top:6px;padding:13px 26px;border-radius:14px;font-weight:800;font-size:17px;text-decoration:none}
+/* Owner card: buttons on their own row under the name (no overlap on phones) */
+.owner-card{flex-wrap:wrap}
+.owner-card-who{flex:1 1 0;min-width:0}
+.owner-card-actions{display:flex;gap:8px;flex:1 1 100%;position:static}
+.owner-card-actions .btn{flex:1;position:static;justify-content:center}

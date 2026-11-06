@@ -452,15 +452,18 @@ BACK_LAYERS.ownerSitePage='ownerSiteClose';
 if(location.hash==='#rahat')setTimeout(openOwnerSite,300);
 
 // ---- Bottom tab "Top up": WizeFF Top Up website inside WizeNex, in place of the friends list (Follow stays on profiles). ----
-const TOPUP_SITE='https://wizefftopup.com/';
-function paintTopupTab(){for(const b of document.querySelectorAll('[data-tab="friends"]')){const [glyph,label]=b.children;if(label&&label.textContent!=='Top up')label.textContent='Top up';if(glyph&&!glyph.dataset.topup){glyph.dataset.topup='1';glyph.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12l3 5-9 13L3 8z"/><path d="M3 8h18M9 3l3 5 3-5M12 21 9 8M12 21l3-13"/></svg>'}b.setAttribute('aria-label','Top up')}paintFriendRequestBadge(0)}
+const TOPUP_SITE='https://wizefftopup.com/',TOPUP_EMBED=false;
+function paintTopupTab(){for(const b of document.querySelectorAll('[data-tab="friends"]')){const [glyph,label]=b.children;if(label&&['Friends','People',''].includes(label.textContent.trim()))label.textContent='Top up';if(glyph&&!glyph.dataset.topup){glyph.dataset.topup='1';glyph.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12l3 5-9 13L3 8z"/><path d="M3 8h18M9 3l3 5 3-5M12 21 9 8M12 21l3-13"/></svg>'}b.setAttribute('aria-label','Top up')}paintFriendRequestBadge(0)}
 paintTopupTab();
 applySiteFlags=(base=>f=>{base(f);paintTopupTab()})(applySiteFlags);
 refreshFriendRequestBadge=async function(){paintFriendRequestBadge(0)};
 function sizeTopupFrame(){const frame=document.querySelector('#page-friends .topup-frame');if(!frame||$('page-friends').hidden)return;const nav=$('mobileNav'),navH=nav&&getComputedStyle(nav).display!=='none'?nav.getBoundingClientRect().height:0;frame.style.height=Math.max(320,window.innerHeight-frame.getBoundingClientRect().top-navH)+'px'}
 loadFriendsPage=async function(){
  const root=$('friendsPageContent');$('friendsTabs').hidden=true;document.querySelector('#page-friends .friends-heading, #page-friends .page-heading')?.setAttribute('hidden','');
- if(!root.querySelector('.topup-frame')){const bar=node('div',undefined,'topup-bar');bar.append(node('strong','⚡ WizeFF Top Up'),button('↗ Open',()=>window.open(TOPUP_SITE,'_blank','noopener'),'topup-open'));const frame=node('iframe',undefined,'topup-frame');frame.title='WizeFF Top Up';frame.src=TOPUP_SITE;frame.allow='payment; clipboard-write; fullscreen';root.replaceChildren(bar,frame)}
+ // wizefftopup.com does not allow being shown inside another website yet (its own security setting), so a frame shows an error.
+ // Until that site allows wizenex.com, show a launch card. Set TOPUP_EMBED=true once it does.
+ if(TOPUP_EMBED&&!root.querySelector('.topup-frame')){const bar=node('div',undefined,'topup-bar');bar.append(node('strong','⚡ WizeFF Top Up'),button('↗ Open',()=>window.open(TOPUP_SITE,'_blank','noopener'),'topup-open'));const frame=node('iframe',undefined,'topup-frame');frame.title='WizeFF Top Up';frame.src=TOPUP_SITE;frame.allow='payment; clipboard-write; fullscreen';root.replaceChildren(bar,frame)}
+ if(!TOPUP_EMBED&&!root.querySelector('.topup-card')){const card=node('section',undefined,'topup-card');card.append(node('div','💎','topup-gem'),node('h2','WizeFF Top Up'),node('p','Free Fire diamond top up — fast and safe.','hint'));const go=node('a','⚡ Open Top Up','btn topup-go');go.href=TOPUP_SITE;go.target='_blank';go.rel='noopener';card.append(go,node('small','wizefftopup.com','hint'));root.replaceChildren(card)}
  requestAnimationFrame(sizeTopupFrame);
 };
 addEventListener('resize',sizeTopupFrame);
