@@ -290,16 +290,19 @@ const dualBefore=(await call('/api/posts/'+dualId,'GET',undefined,'seller')).dat
 assert.equal((await call('/api/posts/'+dualId+'/edit','POST',{...post,title:'Shared ID updated',price:12000,groupIds:[group,secondGroup],version:dualBefore.version},'seller')).status,200);
 for(const gid of [group,secondGroup]){const range=sql.prepare('SELECT r.min_price,r.max_price FROM wm_post_groups pg JOIN wm_group_ranges r ON r.id=pg.range_id WHERE pg.post_id=? AND pg.group_id=?').get(dualId,gid);assert.ok(range.min_price<=12000&&(range.max_price===null||range.max_price>=12000))}
 assert.equal((await call('/api/deals/'+mediatedId,'GET',undefined,'buyer')).data.deal.price,8500);assert.equal((await call('/api/listing/'+dualId)).data.post.listing_code,mediated.data.deal.listing_code);
-const decline=await call('/api/deals','POST',{postId:dualId},'admin');assert.equal(decline.status,201);assert.equal(decline.data.deal.admin_id,'admin');// an Admin who buys looks after the deal
+const taken=await call('/api/deals','POST',{postId:dualId},'admin');assert.equal(taken.status,409);assert.match(taken.data.error,/already has a deal/);// one ID = one deal
+const spare=await call('/api/posts','POST',{...post,title:'Spare ID',price:'9k'},'seller');assert.equal(spare.status,201,JSON.stringify(spare.data));const decline=await call('/api/deals','POST',{postId:spare.data.id},'admin');assert.equal(decline.status,201);assert.equal(decline.data.deal.admin_id,'admin');// an Admin who buys looks after the deal
 assert.equal((await call('/api/deals/'+decline.data.id+'/action','POST',{action:'decline',version:0},'admin')).status,200);assert.equal((await call('/api/deals/'+decline.data.id,'GET',undefined,'admin')).data.deal.status,'cancelled');
 // Group-only listing can also start a deal; nonmembers are blocked.
-const restricted=await call('/api/posts','POST',{...post,groupId:secondGroup},'seller');assert.equal(restricted.status,201);assert.equal((await call('/api/deals','POST',{postId:restricted.data.id},'outsider')).status,403);assert.equal((await call('/api/deals','POST',{postId:restricted.data.id},'buyer')).status,201);
+const restricted=await call('/api/posts','POST',{...post,groupId:secondGroup},'seller');assert.equal(restricted.status,201);assert.equal((await call('/api/deals','POST',{postId:restricted.data.id},'outsider')).status,403);const capped=await call('/api/deals','POST',{postId:restricted.data.id},'buyer');assert.equal(capped.status,429);assert.match(capped.data.error,/only 2 deals/);// each buyer: 2 deals at a time
+{const row=sql.prepare("SELECT value FROM wm_settings WHERE key='market_rules'").get();sql.prepare("INSERT INTO wm_settings(key,value) VALUES('market_rules',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(JSON.stringify({...(row?JSON.parse(row.value):{}),maxOpenDeals:0}))}
+assert.equal((await call('/api/deals','POST',{postId:restricted.data.id},'buyer')).status,201);
 // Friend sender follows immediately; accepting adds to friends and exposes no pending request to visitors.
 sql.exec("DELETE FROM wm_friend_requests WHERE pair_key='admin:buyer';DELETE FROM wm_follows WHERE user_id='admin' AND target_id='buyer'");assert.equal((await call('/api/friends/request','POST',{userId:'buyer'},'admin')).status,200);assert.ok((await call('/api/profile/admin/connections?kind=following','GET',undefined,'seller')).data.people.some(p=>p.id==='buyer'));assert.ok(!(await call('/api/profile/admin/connections?kind=friends','GET',undefined,'buyer')).data.people.some(p=>p.id==='buyer'));assert.equal((await call('/api/friends/respond','POST',{userId:'admin',accept:true},'buyer')).status,200);assert.ok((await call('/api/profile/admin/connections?kind=friends','GET',undefined,'buyer')).data.people.some(p=>p.id==='buyer'));assert.ok((await call('/api/me','GET',undefined,'admin')).data.user.friends>0);
 console.log('PASS: listing/deal IDs, direct and mediated Admin Accept, seller consent, pending room lock, idempotency, separate inbox, metadata scoping, multi-group single-post ranges, preserved deal price, group-only deal access and immediate follow/friend acceptance.');
 // The independent control-room session can manage its assigned pending deals.
 const panelLogin=await worker.fetch(new Request('https://test.local/api/control/owner-access',{method:'POST',headers:{origin:'https://test.local',cookie:'wm_session='+tokens.owner}}),env);assert.equal(panelLogin.status,200);const panelCookie=panelLogin.headers.get('set-cookie').split(';')[0];const panelRequest=async(path,data)=>worker.fetch(new Request('https://test.local/api/control/'+path,{method:data?'POST':'GET',headers:{origin:'https://test.local',cookie:panelCookie,'content-type':'application/json'},...(data?{body:JSON.stringify(data)}:{})}),env);
-const panelDeals=await panelRequest('deals');assert.equal(panelDeals.status,200);assert.ok((await panelDeals.json()).deals.some(d=>d.id===directId));const panelTarget=(await call('/api/deals','POST',{postId:ownListing.data.id},'seller')).data.id;assert.equal((await panelRequest('deals/'+panelTarget+'/action',{action:'accept',version:0})).status,200);assert.equal((await call('/api/deals/'+panelTarget,'GET',undefined,'seller')).data.deal.status,'active');console.log('PASS: control-room metadata and assigned Admin Accept use the separate owner session.');
+const panelDeals=await panelRequest('deals');assert.equal(panelDeals.status,200);assert.ok((await panelDeals.json()).deals.some(d=>d.id===directId));const panelListing=await call('/api/posts','POST',{...post,title:'Admin panel ID',price:'10k'},'owner');const panelTarget=(await call('/api/deals','POST',{postId:panelListing.data.id},'seller')).data.id;assert.equal((await panelRequest('deals/'+panelTarget+'/action',{action:'accept',version:0})).status,200);assert.equal((await call('/api/deals/'+panelTarget,'GET',undefined,'seller')).data.deal.status,'active');console.log('PASS: control-room metadata and assigned Admin Accept use the separate owner session.');
 // Security regression: members can request cancellation but cannot close a deal by API.
 const currentDeal=async id=>(await call('/api/deals/'+id,'GET',undefined,'buyer')).data.deal;
 const act=async(id,action,user,extra={})=>{const d=(await call('/api/deals/'+id,'GET',undefined,user)).data.deal;return call('/api/deals/'+id+'/action','POST',{action,version:d.version,...extra},user)};
@@ -323,7 +326,7 @@ const postSearch=(await call('/api/deal-management?status=all&q='+encodeURICompo
 const dealSearch=(await call('/api/deal-management?status=all&q='+encodeURIComponent('Deal - '+dealSerial),'GET',undefined,'owner')).data.deals;assert.deepEqual(dealSearch.map(d=>d.id),[mediatedId]);
 assert.equal((await call('/api/deal-management?status=invalid','GET',undefined,'owner')).status,400);assert.ok((await call('/api/deal-management?status=completed','GET',undefined,'owner')).data.deals.every(d=>d.status==='completed'));
 assert.equal((await call('/api/deal-management?status=active','GET',undefined,'buyer')).status,403);assert.equal((await call('/api/deals/'+directId+'/history','GET',undefined,'admin')).status,404);
-const independentDirect=await call('/api/deals','POST',{postId:ownListing.data.id},'admin');assert.equal(independentDirect.status,201);
+const independentListing=await call('/api/posts','POST',{...post,title:'Admin second ID',price:'10k'},'owner');const independentDirect=await call('/api/deals','POST',{postId:independentListing.data.id},'admin');assert.equal(independentDirect.status,201);
 // Owner can inspect all audit events but not a room assigned to a different Admin.
 const trustedListing=await call('/api/posts','POST',{...post,title:'Trusted admin account'},'admin');assert.equal(trustedListing.status,201);const trustedDeal=(await call('/api/deals','POST',{postId:trustedListing.data.id},'buyer')).data.id;
 assert.equal((await call('/api/deals/'+trustedDeal+'/history','GET',undefined,'owner')).status,200);assert.equal((await call('/api/deals/'+trustedDeal+'/messages','GET',undefined,'owner')).status,404);assert.equal((await call('/api/deals/'+trustedDeal+'/action','POST',{action:'cancel',version:0},'owner')).status,404);
@@ -659,7 +662,7 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  const previousAI=env.AI;env.AI=safeAI;sql.exec('DELETE FROM wm_limits; DELETE FROM wm_suspensions');env.WM_DATA_KEY='test-data-key-0123456789abcdef0123456789abcdef';
  for(const id of ['pseller','pbuyer','newbie','vip']){sql.prepare('INSERT INTO users VALUES(?,?,?,?,?,?,?)').run(id,id,id+'@example.com',id,'',Date.now(),Date.now());const token=Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('hex');tokens[id]=token;sql.prepare('INSERT INTO sessions VALUES(?,?,?,?)').run(await hash(token),id,Date.now()+1000000,Date.now())}
  sql.prepare('INSERT INTO wm_verifications(user_id,granted_by,created_at) VALUES(?,?,?)').run('vip','owner',Date.now());
- const strict={...legacyRules,protectedDeals:true,requireGameUid:true,relistCooldownHours:24,dailyPostsUnverified:1,activePostsUnverified:3,dailyPostsVerified:10,activePostsVerified:30,dailyNeedPosts:3,expireDays:30,hideSold:true,nameRules:true,blockDuplicates:true};
+ const strict={...legacyRules,protectedDeals:true,requireGameUid:true,relistCooldownHours:24,dailyPostsUnverified:1,activePostsUnverified:3,dailyPostsVerified:10,activePostsVerified:30,dailyNeedPosts:3,expireDays:30,hideSold:true,nameRules:true,blockDuplicates:true,maxOpenDeals:0};
  assert.equal((await call('/api/admin/market-rules','POST',strict,'admin')).status,403);
  assert.equal((await call('/api/admin/market-rules','POST',{...strict,holdHours:-1},'owner')).status,400);
  assert.equal((await call('/api/admin/market-rules','POST',{...strict,hideSold:'yes'},'owner')).status,400);
@@ -1520,7 +1523,7 @@ assert.equal(pk.owner.id,'owner');
  assert.equal((await call('/api/deals/'+d.id+'/action','POST',{action:'accept',version:d.version},'admin')).status,200);d=get();assert.equal(d.status,'active');
  assert.equal((await call('/api/deals/'+d.id+'/messages','GET',undefined,'admin')).status,200);
  // withdraw before the Admin joins
- await mk('boxbuyer2');const r2=await call('/api/deals','POST',{postId:made.data.id},'boxbuyer2');assert.equal(r2.status,201,JSON.stringify(r2.data));
+ await mk('boxbuyer2');await mk('boxseller2');const made2=await call('/api/posts','POST',{title:'Box flow ID two',details:'Level 41',price:3100,kind:'Game ID',media:[],gameCategory:'efootball'},'boxseller2');assert.equal(made2.status,201,JSON.stringify(made2.data));const r2=await call('/api/deals','POST',{postId:made2.data.id},'boxbuyer2');assert.equal(r2.status,201,JSON.stringify(r2.data));
  {const d2=sql.prepare('SELECT * FROM wm_deals WHERE id=?').get(r2.data.id);assert.equal(d2.status,'awaiting_seller');assert.equal((await call('/api/deals/'+d2.id+'/action','POST',{action:'withdraw',version:d2.version},'boxbuyer2')).status,200);assert.equal(sql.prepare('SELECT status FROM wm_deals WHERE id=?').get(d2.id).status,'cancelled')}
  console.log('PASS: deal box first: seller accepts → box opens → one side suggests an Admin → the other agrees → the Admin accepts and joins (saying no reopens the choice).');
 }
@@ -1539,8 +1542,8 @@ assert.equal(pk.owner.id,'owner');
  assert.equal(d.status,'active');assert.equal(d.admin_id,'owner');
  assert.ok((await call('/api/deals?status=current','GET',undefined,'owner')).data.deals.some(x=>x.id===d.id));
  // an older deal that already named the Owner also starts at once when the seller accepts
- await mk('oobuyer2');sql.prepare("UPDATE wm_settings SET value=json_set(value,'$.ownerOnly',json('false')) WHERE key='market_rules'").run();const old=await call('/api/deals','POST',{postId:made.data.id,adminId:'owner'},'oobuyer2');sql.prepare("UPDATE wm_settings SET value=json_set(value,'$.ownerOnly',json('true')) WHERE key='market_rules'").run();let od=sql.prepare('SELECT * FROM wm_deals WHERE id=?').get(old.data.id);assert.equal(od.admin_id,'owner');assert.equal(od.status,'awaiting_seller');
- assert.equal((await call('/api/deals/'+od.id+'/action','POST',{action:'confirm',version:od.version},'ooseller')).status,200);od=sql.prepare('SELECT * FROM wm_deals WHERE id=?').get(od.id);assert.equal(od.status,'active');
+ await mk('oobuyer2');await mk('ooseller2');const madeOld=await call('/api/posts','POST',{title:'Owner only ID two',details:'Level 31',price:2100,kind:'Game ID',media:[],gameCategory:'efootball'},'ooseller2');assert.equal(madeOld.status,201,JSON.stringify(madeOld.data));sql.prepare("UPDATE wm_settings SET value=json_set(value,'$.ownerOnly',json('false')) WHERE key='market_rules'").run();const old=await call('/api/deals','POST',{postId:madeOld.data.id,adminId:'owner'},'oobuyer2');sql.prepare("UPDATE wm_settings SET value=json_set(value,'$.ownerOnly',json('true')) WHERE key='market_rules'").run();let od=sql.prepare('SELECT * FROM wm_deals WHERE id=?').get(old.data.id);assert.equal(od.admin_id,'owner');assert.equal(od.status,'awaiting_seller');
+ assert.equal((await call('/api/deals/'+od.id+'/action','POST',{action:'confirm',version:od.version},'ooseller2')).status,200);od=sql.prepare('SELECT * FROM wm_deals WHERE id=?').get(od.id);assert.equal(od.status,'active');
  assert.equal((await call('/api/verification','POST',{kind:'trusted',whatsapp:'01811113333',documentId:'x'},'oobuyer')).status,403);
  assert.equal((await call('/api/admin/member-access','POST',{userId:'oobuyer',verified:false,trustedSeller:false,role:'trusted'},'owner')).status,403);
  assert.equal((await call('/api/admin/market-rules','POST',{...rules,ownerOnly:false},'owner')).status,200);
@@ -1564,4 +1567,18 @@ assert.equal(pk.owner.id,'owner');
  assert.equal((await call('/api/friends/request','POST',{userId:'pnbuyer'},'pnseller')).status,200);await wait();
  assert.ok(pushes('pnbuyer').some(p=>p.ref_id.startsWith('fr-')));
  console.log('PASS: phone notifications for deal steps, deal @mentions and friend requests (chat without a mention stays quiet).');
+}
+{// Website switches: close groups (nothing deleted) and Follow only (no friend requests)
+ const rules=(await call('/api/market-rules')).data.rules,before=sql.prepare('SELECT count(*) n FROM wm_groups').get().n;
+ assert.equal((await call('/api/admin/market-rules','POST',{...rules,groupsOff:true,followOnly:true},'owner')).status,200);
+ assert.deepEqual((await call('/api/groups','GET',undefined,'owner')).data.groups,[]);
+ assert.equal((await call('/api/groups','POST',{name:'Closed group'},'owner')).status,403);
+ assert.equal(sql.prepare('SELECT count(*) n FROM wm_groups').get().n,before);
+ assert.equal((await call('/api/friends/request','POST',{userId:'vip'},'admin')).status,403);
+ sql.exec("DELETE FROM wm_follows WHERE user_id='admin' AND target_id='vip'");
+ assert.equal((await call('/api/follow','POST',{userId:'vip',follow:true},'admin')).status,200);
+ assert.equal((await call('/api/profile/admin/connections?kind=following','GET',undefined,'admin')).data.people.find(p=>p.id==='vip')?.followed,true);
+ assert.equal((await call('/api/admin/market-rules','POST',{...rules,groupsOff:false,followOnly:false},'owner')).status,200);
+ assert.ok((await call('/api/groups','GET',undefined,'owner')).data.groups.length>0);
+ console.log('PASS: website switches (groups closed without deleting data, Follow only).');
 }

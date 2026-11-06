@@ -387,3 +387,66 @@ window.addEventListener('popstate',e=>{
 // Ask once (gently) to turn on phone notifications: messages, @mentions, deal steps, calls and notices.
 setTimeout(()=>{try{if(!me||!('Notification' in window)||!('PushManager' in window)||Notification.permission!=='default')return;if(Number(localStorage.getItem('wm_notify_ask')||0)>Date.now())return}catch{return}
  const bar=node('div',undefined,'notify-ask');bar.append(node('span','🔔 Get notifications on your phone for messages, mentions and deals.'),button('Turn on',async()=>{bar.remove();try{await enableCallAlerts()}catch(e){toast(e.message)}},'btn'),button('Later',()=>{bar.remove();try{localStorage.setItem('wm_notify_ask',String(Date.now()+3*86400000))}catch{}},'btn ghost'));document.body.append(bar)},6000);
+
+// ---- Website switches (Website settings): groups closed, Follow instead of friend requests. Rahat Wize website inside the app. ----
+const SITE_FLAGS_KEY='wm_site_flags';
+function groupsClosed(){return document.documentElement.classList.contains('groups-off')}
+function followOnlyMode(){return document.documentElement.classList.contains('follow-only')}
+function applySiteFlags(f){
+ const h=document.documentElement;h.classList.toggle('groups-off',!!f.groupsOff);h.classList.toggle('follow-only',!!f.followOnly);
+ for(const b of document.querySelectorAll('[data-tab="friends"]')){const label=b.children[1];if(label)label.textContent=f.followOnly?'People':'Friends'}
+ if(f.followOnly)paintFriendRequestBadge(0);
+}
+try{applySiteFlags(JSON.parse(localStorage.getItem(SITE_FLAGS_KEY)||'{}'))}catch{}
+(async()=>{try{const {rules}=await fetch('/api/market-rules',{cache:'no-store'}).then(r=>r.json());const f={groupsOff:!!rules.groupsOff,followOnly:!!rules.followOnly},changed=followOnlyMode()!==f.followOnly;try{localStorage.setItem(SITE_FLAGS_KEY,JSON.stringify(f))}catch{}applySiteFlags(f);if(changed&&active==='friends')void loadPage()}catch{}})();
+const openGroupCreationBase=openGroupCreation;openGroupCreation=function(){if(groupsClosed())return toast('Groups are closed on this website.');return openGroupCreationBase()};
+const openCreateGroupChatBase=openCreateGroupChat;openCreateGroupChat=function(...a){if(groupsClosed())return toast('Groups are closed on this website.');return openCreateGroupChatBase(...a)};
+const refreshFriendBadgeBase=refreshFriendRequestBadge;refreshFriendRequestBadge=async function(){if(followOnlyMode())return paintFriendRequestBadge(0);return refreshFriendBadgeBase()};
+
+// Follow button (used everywhere the friend button was: profiles, search, People page).
+const friendButtonBase=friendButton;
+friendButton=function(person,onChange){
+ if(!followOnlyMode())return friendButtonBase(person,onChange);
+ if(me&&person.id===me.id)return node('span','You','hint');
+ const b=button('',async()=>{if(!requireLogin())return;b.disabled=true;try{const follow=!person.followed;await api('/follow',{userId:person.id,follow});person.followed=follow;paint();if(follow)toast('Following '+person.name.split(' ')[0]+'.');if(onChange)await onChange()}catch(err){toast(err.message)}finally{b.disabled=false}},'friend-action follow-action');
+ const paint=()=>{b.textContent=person.followed?'Following ✓':'+ Follow';b.classList.toggle('following',!!person.followed)};paint();return b;
+};
+
+// People page: Following, Followers and people to follow.
+let followView='',followQuery='',followData=null,followKey='';
+const loadFriendsPageBase=loadFriendsPage;
+loadFriendsPage=async function(){
+ if(!followOnlyMode())return loadFriendsPageBase();if(!me)return;const userId=me.id,root=$('friendsPageContent');$('friendsTabs').hidden=true;if(!followData)root.replaceChildren(node('p','Loading…','hint'));
+ const [a,b,c]=await Promise.all([api('/profile/'+userId+'/connections?kind=following'),api('/profile/'+userId+'/connections?kind=followers'),api('/friends/suggestions').catch(()=>({people:[]}))]);if(me?.id!==userId)return;
+ const data={following:a.people||[],followers:b.people||[],suggestions:(c.people||[]).filter(p=>!p.followed)},key=JSON.stringify(data);if(key===followKey&&root.querySelector('.follow-page'))return;followKey=key;followData=data;
+ if(!followView)followView=data.following.length?'following':'suggestions';renderFollowPage();
+};
+function renderFollowPage(){
+ const d=followData,root=$('friendsPageContent');if(!d)return;const page=node('div',undefined,'follow-page');
+ const chips=node('div',undefined,'fb-chips');for(const [view,label]of [['following','Following · '+d.following.length],['followers','Followers · '+d.followers.length],['suggestions','People to follow']]){const c=button(label,()=>{followView=view;renderFollowPage()},'fb-chip'+(followView===view?' active':''));c.setAttribute('aria-pressed',String(followView===view));chips.append(c)}
+ const search=node('input',undefined,'input fb-search');search.type='search';search.placeholder='🔍 Search people';search.value=followQuery;
+ const list=node('div',undefined,'follow-list');
+ const paint=()=>{const q=followQuery.trim().toLowerCase(),people=d[followView].filter(p=>!q||(p.name+' '+(p.username||'')).toLowerCase().includes(q));list.replaceChildren();
+  if(!people.length)list.append(node('p',{following:'You are not following anyone yet. Tap People to follow.',followers:'No followers yet.',suggestions:'No new people right now. Use search to find a member.'}[followView],'hint'));
+  for(const p of people){const row=node('div',undefined,'fb-friend-row');const copy=node('div',undefined,'fb-copy');copy.append(button(p.name,()=>showProfile(p.id),'fb-name'),node('small',p.username?'@'+p.username:'Member','hint'));row.append(fbFace(p,52),copy,friendButton(p,async()=>{followKey=''}));list.append(row)}};
+ search.oninput=()=>{followQuery=search.value;paint()};paint();
+ page.append(node('h2','People'),chips,search,list);root.replaceChildren(page);
+}
+
+// Profile menu: "People" instead of "Friends", and the Owner's website.
+const OWNER_SITE='https://rahatwize.com/';
+const profileMenuItemsBase=profileMenuItems;
+profileMenuItems=function(){const items=profileMenuItemsBase();if(followOnlyMode())for(const it of items)if(Array.isArray(it)&&it[0]==='Friends')it[0]='People';const i=items.findIndex(it=>Array.isArray(it)&&it[0]==='My deals');items.splice(i+1,0,['Rahat Wize website','globe',openOwnerSite]);return items};
+Object.assign(socialGlyphs,{globe:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/>'});
+const paintOwnerCardBase=paintOwnerCard;paintOwnerCard=function(){paintOwnerCardBase();const row=document.querySelector('#page-home .owner-card .owner-card-actions');if(row&&!row.querySelector('.owner-site-button'))row.append(button('🌐 My website',openOwnerSite,'btn owner-site-button'))};
+// The website opens full screen inside WizeNex; back (button or phone) returns to the app.
+function openOwnerSite(){
+ let page=$('ownerSitePage');
+ if(!page){page=node('div',undefined,'owner-site-page');page.id='ownerSitePage';page.hidden=true;const bar=node('div',undefined,'owner-site-bar');const close=button('‹ Back',closeOwnerSite,'owner-site-back');close.id='ownerSiteClose';
+  bar.append(close,node('strong','Rahat Wize'),button('↗',()=>window.open(OWNER_SITE,'_blank','noopener'),'owner-site-out'));
+  const frame=node('iframe');frame.title='Rahat Wize website';frame.allow='autoplay; fullscreen; clipboard-write';frame.setAttribute('allowfullscreen','');frame.loading='eager';page.append(bar,frame);document.body.append(page)}
+ const frame=page.querySelector('iframe');if(!frame.src)frame.src=OWNER_SITE;page.hidden=false;document.body.classList.add('owner-site-open');
+}
+function closeOwnerSite(){const page=$('ownerSitePage');if(page)page.hidden=true;document.body.classList.remove('owner-site-open')}
+BACK_LAYERS.ownerSitePage='ownerSiteClose';
+if(location.hash==='#rahat')setTimeout(openOwnerSite,300);

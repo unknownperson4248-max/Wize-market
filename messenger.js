@@ -463,7 +463,7 @@ function openChatRowSheet(item){
  const add=(icon,label,fn,danger=false)=>{const b=button('',()=>{closeMessageSheet();void fn()},'chat-sheet-row'+(danger?' danger':''));b.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true">'+SHEET_ICONS[icon]+'</svg><span></span>';b.querySelector('span').textContent=label;sheet.append(b)};
  const pins=pinnedChats(),pinned=pins.includes(key);add('pin',pinned?'Unpin':'Pin',()=>{setPinnedChats(pinned?pins.filter(k=>k!==key):[key,...pins]);orderPinnedChats();toast(pinned?'Chat unpinned.':'📌 Chat pinned to the top.')});
  const arch=menuButtons.find(b=>/archive/i.test(b.textContent));if(arch)add('archive',arch.textContent.trim().replace(/ chat$/i,''),()=>arch.click());
- if(kind==='private'){add('users','Create group chat with '+name.split(' ')[0],()=>openCreateGroupChat({kind,id,name,avatar:row.querySelector('.avatar')}))}
+ if(kind==='private'&&!groupsClosed()){add('users','Create group chat with '+name.split(' ')[0],()=>openCreateGroupChat({kind,id,name,avatar:row.querySelector('.avatar')}))}
  const muted=!!row.querySelector('.chat-muted-icon:not([hidden])');add(muted?'bell':'mute',muted?'Unmute':'Mute',()=>conversationAction({kind,id,name},muted?'unmute':'mute'));
  if(kind==='group'){const g=(typeof groups!=='undefined'?groups:[]).find(x=>x.id===id);if(g)add('leave','Leave group',()=>void leaveGroupFlow(g),true)}
  const block=menuButtons.find(b=>/block/i.test(b.textContent));if(block)add('block',block.textContent.trim(),()=>block.click(),true);

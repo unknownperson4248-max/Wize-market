@@ -453,3 +453,22 @@ html body #chatPanel #groupSettingsPanel>.group-info-popover{background:#3a3b3e!
 .vt-actions{display:flex;flex-wrap:wrap;gap:8px}.vt-actions .btn{flex:1 1 auto}
 .notify-ask{position:fixed;left:12px;right:12px;bottom:calc(92px + env(safe-area-inset-bottom));z-index:90;display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:12px 14px;border-radius:16px;background:#1a2440;border:1px solid #a891ff66;box-shadow:0 10px 30px #0008;font-size:14px}
 .notify-ask span{flex:1 1 200px}.notify-ask .btn{min-height:0;padding:8px 14px}
+
+/* Website switches: groups closed (nothing is deleted, only hidden) */
+.groups-off #groupSectionTitle,.groups-off #groupList,.groups-off #crosspostGroups,.groups-off #postGroup,.groups-off #chatGroupPost{display:none!important}
+/* People page (Follow only) */
+.follow-page{display:grid;gap:12px}
+.follow-page h2{margin:4px 0 0}
+.follow-list{display:grid;gap:6px}
+.follow-list .fb-friend-row{align-items:center}
+.follow-action{min-width:104px;border:0;border-radius:10px;padding:9px 14px;font-weight:700;background:var(--brand,#1877f2);color:#fff;cursor:pointer}
+.follow-action.following{background:rgba(127,127,127,.18);color:inherit}
+.follow-action:disabled{opacity:.6}
+/* Owner's website shown full screen inside WizeNex */
+.owner-site-page{position:fixed;inset:0;z-index:2000;display:flex;flex-direction:column;background:#000}
+.owner-site-page[hidden]{display:none}
+.owner-site-bar{display:flex;align-items:center;gap:10px;padding:calc(8px + env(safe-area-inset-top)) 12px 8px;background:#0b0b0f;color:#fff;border-bottom:1px solid rgba(255,255,255,.08)}
+.owner-site-bar strong{flex:1;text-align:center;font-size:15px}
+.owner-site-bar button{background:rgba(255,255,255,.1);color:#fff;border:0;border-radius:9px;padding:7px 12px;font-weight:700;cursor:pointer}
+.owner-site-page iframe{flex:1;width:100%;border:0;background:#000}
+body.owner-site-open{overflow:hidden}
