@@ -1,0 +1,436 @@
+/* Protected deal steps, secure handover, listing labels, trust badges. Uses the existing sky palette. */
+.trust-pill{display:inline-flex;align-items:center;gap:3px;margin-left:6px;padding:2px 7px 2px 4px;border-radius:999px;border:1px solid;font-size:11px;font-weight:700;line-height:1.2;vertical-align:middle;white-space:nowrap;flex:none;cursor:default}
+button.trust-pill{cursor:pointer;min-height:0;height:auto;width:auto;box-shadow:none;margin-top:0;margin-bottom:0;font-family:inherit;letter-spacing:0;text-transform:none}
+.trust-pill .social-icon{width:13px;height:13px;display:inline-flex}
+.trust-pill .social-icon svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2}
+.trust-pill.verified{color:#78f0b4;background:#0d2f24;border-color:#2bd38a66}
+.trust-pill.admin{color:#ffd56b;background:#33270b;border-color:#f2c14e80}
+
+.deal-room #dealRoomSummary{max-height:52dvh;overflow:auto;overscroll-behavior:contain}
+.deal-progress{margin-top:8px;padding:10px;border:1px solid var(--line);border-radius:12px;background:#0a1b2c;display:grid;gap:8px}
+.deal-steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:2px;counter-reset:step}
+.deal-step{display:grid;justify-items:center;gap:3px;position:relative;text-align:center;min-width:0}
+.deal-step:not(:first-child)::before{content:'';position:absolute;top:6px;right:50%;width:100%;height:2px;background:#29485f;z-index:0}
+.deal-step.done:not(:first-child)::before{background:#2bd38a}
+.deal-step-dot{width:14px;height:14px;border-radius:50%;border:2px solid #4b6f8c;background:#071321;position:relative;z-index:1}
+.deal-step.done .deal-step-dot{background:#2bd38a;border-color:#2bd38a}
+.deal-step.current .deal-step-dot{border-color:var(--mint);box-shadow:0 0 0 3px #79d4ff33}
+.deal-step small{font-size:10px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.deal-step.done small,.deal-step.current small{color:var(--text)}
+.deal-next-step{margin:0;font-size:13px;line-height:1.45;color:var(--text)}
+p.hint.deal-next-step{color:var(--mint)}
+.deal-facts{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;margin:0;font-size:12px}
+.deal-facts dt{color:var(--muted)}
+.deal-facts dd{margin:0;overflow-wrap:anywhere;font-weight:600}
+.deal-proof-row,.deal-step-actions{display:flex;flex-wrap:wrap;gap:6px}
+.deal-step-actions .btn,.deal-proof-row .btn{min-height:38px;padding:8px 12px;font-size:13px}
+.handover-box{border:1px solid #3b5a73;border-radius:10px;padding:8px 10px;background:#0c2236}
+.handover-box summary{display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:700;font-size:13px;list-style:none}
+.handover-box summary::-webkit-details-marker{display:none}
+.handover-box summary small{margin-left:auto;color:var(--muted);font-weight:500}
+.handover-box summary .social-icon{width:16px;height:16px}
+.handover-status{list-style:none;margin:8px 0;padding:0;display:grid;gap:3px;font-size:12px;color:var(--muted)}
+.handover-status li::before{content:'○ ';color:#4b6f8c}
+.handover-status li.ok{color:var(--text)}
+.handover-status li.ok::before{content:'● ';color:#2bd38a}
+.handover-box .hint{margin:6px 0 0;font-size:12px}
+.deal-system-line{align-self:center;display:flex;gap:8px;align-items:baseline;max-width:92%;padding:5px 10px;border-radius:999px;background:#0f2a40;border:1px solid #29485f;font-size:12px;color:#b8d3e7;text-align:center}
+.deal-system-line time{color:var(--muted);font-size:11px;flex:none}
+
+.deal-step-modal{z-index:140}
+.deal-room-open #toast{z-index:150}
+.deal-step-form{width:min(460px,100%);max-height:88dvh;overflow:auto;display:grid;gap:8px}
+.deal-step-form .page-heading{margin:0}
+.deal-step-form .page-heading h2{margin:0;font-size:20px;line-height:1.25;flex:1;min-width:0}
+.deal-step-form label{font-size:13px;font-weight:600}
+.deal-check{display:flex;gap:9px;align-items:flex-start;font-weight:500!important;line-height:1.4;padding:6px 0}
+.deal-check input{width:18px;height:18px;flex:none;margin-top:1px;accent-color:#2bd38a}
+.deal-step-note{margin:0;padding:8px 10px;border-radius:10px;background:#33270b;border:1px solid #f2c14e55;color:#ffe3a1;font-size:13px}
+.secret-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:#071321}
+.secret-row small{grid-column:1/-1;color:var(--muted)}
+.secret-row code{font-size:15px;overflow-wrap:anywhere;user-select:all}
+.trust-head{display:flex;align-items:center;gap:10px}
+
+.listing-labels{display:flex;flex-wrap:wrap;gap:5px;margin:4px 0}
+.listing-label{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;border:1px solid}
+.listing-label.updated{color:#9fd8ff;border-color:#4bafff66;background:#0d2a44}
+.listing-label.expired{color:#ffc9a8;border-color:#ff8b3c66;background:#3a1d0d}
+button.listing-label.add-uid{color:#ffd56b;border-color:#f2c14e80;background:#33270b;cursor:pointer;min-height:0}
+.private-tag{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;font-size:10px;font-weight:700;color:#78f0b4;background:#0d2f24;border:1px solid #2bd38a55;vertical-align:middle}
+.chat-safety-note{margin:0 0 6px;padding:8px 10px;border-radius:10px;background:#33270b;border:1px solid #f2c14e55;color:#ffe3a1;font-size:12px;line-height:1.4}
+.terms-notice h2{margin-top:18px}
+@media(max-width:380px){.deal-step small{font-size:9px}.trust-pill{font-size:10px;padding:1px 6px 1px 3px}}
+
+/* Badges: gold Owner / Admin pill and a blue verified tick, both with a moving shine that typed emoji cannot copy. */
+.trust-badges{display:inline-flex;align-items:center;gap:4px;margin-left:6px;padding:0;border:0;background:none;vertical-align:middle;flex:none;min-height:0;height:auto;width:auto;box-shadow:none;font:inherit;color:inherit;cursor:default}
+button.trust-badges{cursor:pointer}
+.trust-badges .trust-pill{margin-left:0;position:relative;overflow:hidden}
+.verified-tick{position:relative;overflow:hidden;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;flex:none;background:radial-gradient(circle at 32% 28%,#7fd0ff,#1877f2 58%,#0b57c9);box-shadow:0 0 0 1.5px #071321,0 0 8px #1877f280}
+.verified-tick svg{position:relative;z-index:1;width:12px;height:12px;fill:none;stroke:#fff;stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.trust-badges .trust-pill::after,.verified-tick::after{content:'';position:absolute;inset:0;background:linear-gradient(105deg,transparent 30%,#ffffffb3 50%,transparent 70%);transform:translateX(-130%);animation:wm-shine 3.6s ease-in-out infinite;pointer-events:none}
+.verified-tick::after{animation-delay:.4s}
+@keyframes wm-shine{0%{transform:translateX(-130%)}55%,100%{transform:translateX(130%)}}
+.profile-name h1+.trust-badges .verified-tick,.gaming-profile .trust-badges .verified-tick{width:20px;height:20px}
+.gaming-profile .trust-badges .verified-tick svg{width:14px;height:14px}
+
+/* Avatar rings by role (static on small avatars to keep the feed light). */
+.avatar.ring-verified{outline:2px solid #3b9dff;outline-offset:1px}
+.avatar.ring-admin{outline:2px solid #f2c14e;outline-offset:1px}
+.avatar.ring-owner{outline:2px solid #ffb547;outline-offset:1px;box-shadow:0 0 10px #ff9d2e55}
+
+/* Profile picture: a normal circle with a thin ring in the badge colour (no crown, light shadow). */
+.gaming-portrait{border-radius:50%!important;padding:3px!important;box-shadow:0 4px 14px #0007!important;background:var(--frame,#3a6d8f)!important}
+.gaming-portrait::before,.gaming-portrait::after{content:none!important}
+.gaming-portrait>.avatar,.gaming-portrait .avatar img{border-radius:50%!important}
+.gaming-portrait>.avatar{border-color:#071321!important}
+.gaming-portrait.frame-owner{--frame:#f2b233}
+.gaming-portrait.frame-admin{--frame:#8c4cff}
+.gaming-portrait.frame-verified{--frame:#1877f2}
+.gaming-portrait.frame-member{--frame:#3a6d8f}
+.gaming-portrait>.avatar{position:relative;z-index:1}
+.gaming-portrait>button,.gaming-portrait .portrait-camera{z-index:2}
+
+/* Taller, Facebook-like cover photo. */
+.social-profile .gaming-cover{height:clamp(240px,28vw,340px)!important}
+@media(max-width:720px){.social-profile .gaming-cover{height:min(58vw,300px)!important}}
+
+/* Boost next to Share. */
+.social-post-footer .boost-button{justify-self:end;display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;border:1px solid #f2c14e66;background:#33270b;color:#ffd56b;font-weight:700}
+.social-post-footer .boost-button .social-icon{width:16px;height:16px}
+.boost-label{font-size:12px}
+@media(prefers-reduced-motion:reduce){.trust-badges .trust-pill::after,.verified-tick::after{animation:none}}
+
+/* Deal popup, Deals count, deal rows in All chat, Start deal in chat. */
+.deal-popup{position:fixed;z-index:160;left:50%;top:max(12px,env(safe-area-inset-top));transform:translateX(-50%);width:min(440px,calc(100% - 24px));display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:8px;padding:12px 12px 12px 14px;border-radius:16px;background:#0f2a44;border:1px solid #4bafff88;box-shadow:0 12px 32px #000a;animation:wm-drop .25s ease-out}
+.deal-popup-copy{display:grid;gap:2px;min-width:0}
+.deal-popup-copy strong{font-size:14px}
+.deal-popup-copy span{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.deal-popup .btn{min-height:38px;padding:8px 14px}
+.deal-popup-close{padding:6px 10px!important}
+@keyframes wm-drop{from{transform:translate(-50%,-14px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
+.deal-alert-count{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;margin-left:6px;border-radius:999px;background:#ff4d5e;color:#fff;font-size:11px;font-weight:800;line-height:1;vertical-align:middle}
+#mobileNav [data-tab] .deal-alert-count,#desktopNav [data-tab] .deal-alert-count{position:absolute;top:2px;right:18%;margin:0;box-shadow:0 0 0 2px #071321}
+#mobileNav [data-tab],#desktopNav [data-tab]{position:relative}
+.deal-chat-row .chat-row-label strong{color:#ffd56b}
+.chat-start-deal{margin-left:auto;min-height:36px;padding:7px 12px;font-size:13px;white-space:nowrap;flex:none}
+.deal-pick{width:100%;justify-content:flex-start;text-align:left}
+.deal-direct{display:grid;gap:6px;margin-top:8px}
+@media(prefers-reduced-motion:reduce){.deal-popup{animation:none}}
+.social-post-footer.has-boost{display:grid!important;grid-template-columns:repeat(3,auto) minmax(0,1fr)!important;align-items:center;column-gap:18px}
+.social-post-footer.has-boost .boost-button{justify-self:end;grid-column:4;grid-row:1}
+
+/* Badge levels: Owner gold, Admin purple, Verified blue tick, Not verified grey. */
+.trust-pill.staff{color:#e2d2ff;background:#2a1650;border-color:#a06dff99}
+.trust-pill.plain{color:#9fb2c8;background:#132233;border-color:#3a5068;font-weight:600}
+.trust-badges .trust-pill.plain::after{content:none}
+.admin-choice-section{margin:14px 0 6px;font-size:14px;color:var(--text)}
+.admin-choice-name{display:flex;align-items:center;flex-wrap:wrap;gap:2px}
+.admin-search{margin-bottom:6px}
+.deal-id-pick{display:grid;grid-template-columns:64px minmax(0,1fr);gap:10px;align-items:center;padding:8px;border:1px solid var(--line);border-radius:12px;background:#0a1b2c}
+.deal-id-pick img,.deal-id-pick .deal-id-thumb{width:64px;height:64px;border-radius:10px;object-fit:cover;background:#071321}
+.deal-id-pick .btn{grid-column:1/-1}
+.deal-id-pick strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Sign in / Sign up window and guest buttons on My feed. */
+.auth-tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:4px;border:1px solid var(--line);border-radius:14px;margin:12px 0}
+.auth-tab{min-height:40px;border-radius:10px;border:0;background:none;color:var(--muted);font-weight:700}
+.auth-tab[aria-selected=true]{background:#1e5e8f;color:#fff}
+.auth-form{display:grid;gap:6px}
+.auth-form label{font-size:13px;font-weight:600}
+.auth-method{display:flex;gap:16px;margin-bottom:4px}
+.auth-method label{display:flex;align-items:center;gap:6px;font-weight:600}
+.auth-divider{display:flex;align-items:center;gap:10px;margin:14px 0 8px;color:var(--muted);font-size:12px}
+.auth-divider::before,.auth-divider::after{content:'';flex:1;height:1px;background:var(--line)}
+.auth-help{margin-top:8px}
+/* Logged out: Sign in / Sign up sit where Search and Refresh are; after login Search and Refresh come back. */
+.guest-auth{display:none;gap:8px;margin-left:auto;align-items:center}
+body.logged-out .guest-auth{display:flex}
+body.logged-out #openMarketSearch,body.logged-out #feedOptions{display:none!important}
+.guest-auth .btn{min-height:40px;padding:8px 16px;white-space:nowrap}
+#loginModal{z-index:130}
+#loginModal .dialog{max-height:92dvh;overflow:auto}
+.auth-field{display:grid;gap:6px}
+.auth-field[hidden],#authGoogle[hidden],.auth-tabs[hidden]{display:none}
+.auth-link{justify-self:end;background:none;border:0;color:#79d4ff;font-weight:700;padding:4px 0;min-height:0;cursor:pointer}
+.auth-intro{margin:0 0 6px}
+#verificationModal{z-index:130}
+#verificationModal .dialog{max-height:92dvh;overflow:auto}
+
+/* One background colour from top to bottom (like Facebook); no black or lighter blocks in headers and info pages. */
+body{background:var(--bg)!important}
+.chat-open #chatPanel,.chat-open #chatMessages,.chat-open #chatPanel>.page-heading,.chat-open #groupSettingsPanel,.chat-open .peer-info-panel,.info-nav,.peer-info-panel .info-nav,#groupPostComposer>.info-nav{background:var(--bg)!important}
+#groupSettingsPanel .info-row,.peer-info-panel .info-row{padding:16px!important;margin:6px 0;border-radius:12px}
+.danger-row{color:#ff8a8a!important}
+.info-shortcut>span{font-size:23px}
+/* ID ranges: chips are visible; when a range is open the posts use the whole chat area like a feed. */
+#groupTools #groupRangeChips{display:flex!important;gap:6px;overflow-x:auto;padding:4px 0 10px;scrollbar-width:none}
+#groupRangeChips .range-chip{flex:none}
+.chat-open #chatPanel.group-browsing #groupTools{flex:1;max-height:none;overflow-y:auto;overscroll-behavior:contain}
+.chat-open #chatPanel.group-browsing #groupListings{max-height:none;overflow:visible}
+.chat-open #chatPanel.group-browsing #chatMessages,.chat-open #chatPanel.group-browsing #chatForm,.chat-open #chatPanel.group-browsing #chatActions{display:none!important}
+#chatPanel.group-browsing #groupListings .social-post{margin:12px 0}
+
+/* Boost countdown */
+.boost-button.boost-waiting{opacity:.85;color:#9fc3dd!important}
+.boost-button.boost-waiting .boost-label{font-variant-numeric:tabular-nums;font-size:11px;white-space:nowrap}
+.boost-button.boost-waiting svg{display:none}
+
+/* Profile links (Facebook-style rows under the bio) */
+.profile-links{display:flex;flex-direction:column;gap:2px;width:100%;box-sizing:border-box;margin:6px 0 0;padding:12px 16px 0;border-top:1px solid #ffffff12;text-align:left;align-self:stretch}
+.profile-links-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px}
+.profile-links-head strong{font-size:17px;color:#eef6ff}
+.profile-links-edit{border:0;background:none;font-size:18px;padding:6px 8px;border-radius:10px;cursor:pointer}
+.profile-links-edit:hover,.profile-links-edit:focus-visible{background:#ffffff12}
+.profile-link{display:flex;align-items:center;gap:10px;min-width:0;padding:7px 4px;border-radius:10px;text-decoration:none;color:#d8ecff}
+.profile-link:hover,.profile-link:focus-visible{background:#ffffff0d}
+.profile-link-icon{flex:none;width:30px;height:30px;display:grid;place-items:center;border-radius:50%;background:#16334c;font-size:15px}
+.profile-link-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;font-weight:600;color:#7cc4ff}
+.profile-links-editor{margin-top:16px}
+.profile-link-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr) auto;gap:6px;margin:6px 0;align-items:center}
+.profile-link-row .input{margin:0}
+.profile-link-remove{padding:8px 10px}
+@media(max-width:560px){.profile-link-row{grid-template-columns:minmax(0,1fr) auto}.profile-link-row input[type=url]{grid-column:1;grid-row:2}}
+
+/* Chat messages: photo, name and badge on top, the message under them, in a light box (mine on the right).
+   Every message shows its time; a date line starts each day (Today / Yesterday / date). */
+.chat-open #chatMessages{gap:8px;padding:12px 12px 16px}
+#chatMessages>.bubble{position:relative;align-self:flex-start;max-width:min(88%,560px);margin:0;padding:8px 12px 6px;border:1px solid #ffffff10!important;border-radius:16px;background:#ffffff08!important;color:#e8f3ff!important;box-shadow:none;line-height:1.45}
+#chatMessages>.bubble.mine{align-self:flex-end;background:#2f86e01c!important;border-color:#4a9be633!important}
+#chatMessages>.bubble .message-author{display:flex;align-items:center;flex-wrap:wrap;gap:4px 7px;margin:0 0 3px;padding:0;border:0;background:none;color:#d6e8f8;text-align:left}
+#chatMessages>.bubble .message-author>.avatar{display:grid;place-items:center;width:28px;height:28px;margin:0;font-size:11px}
+#chatMessages>.bubble .message-author>strong{font-size:13px;font-weight:700;color:#d6e8f8}
+#chatMessages>.bubble .message-author .trust-badges{margin-left:0}
+#chatMessages>.bubble>p,#chatMessages>.bubble>.chat-media,#chatMessages>.bubble>.chat-post-card,#chatMessages>.bubble>audio{margin-left:35px!important}
+#chatMessages>.bubble>p{margin:0;font-size:15px;color:inherit!important}
+#chatMessages>.bubble>.chat-media{display:block;margin-top:4px;max-width:calc(100% - 35px);border-radius:12px}
+#chatMessages>.bubble>.chat-post-card{box-sizing:border-box;width:calc(100% - 35px);max-width:calc(100% - 35px);margin-top:4px;margin-bottom:6px}
+#chatMessages>.bubble .message-time{display:block;margin-top:2px;font-size:10px;text-align:right;color:#8ea9c3!important}
+#chatMessages>.bubble:has(.social-menu){padding-right:34px}
+#chatMessages>.bubble>.social-menu{top:5px;right:3px}
+#chatMessages>.bubble.message-removed{background:transparent!important;border:1px dashed #3d5873!important;color:#8ea6bf!important}
+.chat-time-divider{align-self:center;margin:12px 0 4px;padding:3px 12px;border-radius:999px;background:#ffffff0a;font-size:11px;font-weight:700;letter-spacing:.2px;color:#9db4ca}
+
+/* Photo editor (chat pictures) */
+.composer-file .edit-composer-file{position:absolute;left:4px;bottom:4px;border:0;border-radius:10px;background:#000000b3;color:#fff;font-size:10px;padding:3px 6px}
+.photo-editor{position:fixed;inset:0;z-index:160;background:#000;display:flex;flex-direction:column;color:#fff;user-select:none;-webkit-user-select:none}
+.photo-editor-top{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:max(10px,env(safe-area-inset-top)) 12px 8px}
+.photo-editor-top strong{font-size:15px}
+.photo-editor-top .btn{min-height:40px;padding:8px 14px}
+.photo-editor-stage{flex:1;min-height:0;display:grid;place-items:center;overflow:hidden;padding:6px}
+.photo-editor-frame{position:relative;line-height:0;touch-action:none}
+.photo-editor-frame canvas{display:block;max-width:calc(100vw - 16px);max-height:calc(100dvh - 215px);touch-action:none;cursor:crosshair}
+.photo-editor-frame.cropping canvas{cursor:default}
+.photo-crop-box{position:absolute;border:2px solid #fff;box-shadow:0 0 0 9999px #000a;cursor:move;touch-action:none}
+.photo-crop-box[hidden]{display:none}
+.photo-crop-handle{position:absolute;width:24px;height:24px;border-radius:50%;background:#fff;border:3px solid #0a7cff;box-sizing:border-box}
+.photo-crop-handle.nw{left:-12px;top:-12px;cursor:nwse-resize}.photo-crop-handle.ne{right:-12px;top:-12px;cursor:nesw-resize}.photo-crop-handle.sw{left:-12px;bottom:-12px;cursor:nesw-resize}.photo-crop-handle.se{right:-12px;bottom:-12px;cursor:nwse-resize}
+.photo-editor-options{display:flex;justify-content:center;align-items:center;gap:10px;flex-wrap:wrap;min-height:50px;padding:4px 12px}
+.photo-swatch{width:28px;height:28px;border-radius:50%;border:2px solid #ffffff66;padding:0}
+.photo-swatch.active{border-color:#fff;transform:scale(1.15)}
+.photo-size{min-width:38px;height:32px;border-radius:16px;border:1px solid #ffffff55;background:#ffffff14;color:#fff;font-weight:700}
+.photo-size.active{background:#0a7cff;border-color:#0a7cff}
+.photo-editor-hint{width:100%;text-align:center;font-size:12px;color:#c9d8e6}
+.photo-editor-tools{display:flex;justify-content:space-around;gap:4px;padding:8px 8px max(12px,env(safe-area-inset-bottom));border-top:1px solid #ffffff1f}
+.photo-editor-tools button{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:56px;padding:6px 8px;border:0;border-radius:12px;background:none;color:#d9e8f6;font-size:11px}
+.photo-editor-tools button>span{font-size:21px;line-height:1.1}
+.photo-editor-tools button.active{background:#ffffff1f;color:#fff}
+.photo-editor-tools button.empty{opacity:.35}
+
+/* Profile: one background colour for the whole page - header, name/bio, Posts/Saved row and posts (like Facebook). */
+.social-profile,.gaming-profile,.profile-page .profile-hero,.social-profile .gaming-profile-body{background:var(--bg)!important;border-color:transparent!important;box-shadow:none!important}
+body #profileTabs,body .profile-tabs{background:var(--bg)!important;border:0!important;border-top:1px solid #ffffff12!important;border-bottom:1px solid #ffffff12!important;border-radius:0!important;box-shadow:none!important}
+body #profileTabs .profile-tab[aria-selected=true],body .profile-tabs .profile-tab[aria-selected=true]{border-color:transparent!important;box-shadow:none!important}
+/* Chat: photo, name and badge for the other person (private and group); badge next to the name in the private chat header. */
+.chat-subtitle{display:flex;align-items:center;min-height:20px;margin-top:1px}
+.chat-subtitle[hidden]{display:none}
+.chat-subtitle .trust-badges{transform:scale(.85);transform-origin:left center}
+
+
+/* Post type chooser: Sell · Normal · Need (Normal sits a little higher in the middle). */
+.create-fan{width:300px;height:128px}
+.fan-option{--fan-x:-96px;width:92px;top:22px}
+.fan-option.normal{--fan-x:0px;top:0;animation-delay:.015s}
+.fan-option.need{--fan-x:96px}
+.fan-option.normal .fan-icon{background:linear-gradient(145deg,#b38cff,#6a3fe0)!important;border-color:#d9c7ff!important;color:#fff!important;box-shadow:0 0 15px #8a5cff66!important}
+.post-intent-label.normal{background:#2d2350;color:#d4c4ff;border-color:#5b4a99}
+.social-post[data-intent=normal] .post-copy h2{font-size:18px}
+/* Template tip under the post form heading */
+.post-template-tip{margin:-4px 0 12px;padding:10px 12px;border-radius:12px;background:#12304a;border:1px solid #2c557a;color:#cfe8ff;font-size:13px;line-height:1.5;white-space:pre-line}
+/* Feed notice from the Owner */
+.site-notice{display:flex;align-items:center;gap:10px;margin:0 0 14px;padding:10px 12px;border-radius:14px;background:#123150;border:1px solid #2f5f8a;color:#e3f2ff}
+.site-notice p{flex:1;margin:0;font-size:13px;line-height:1.45;white-space:pre-line;overflow-wrap:anywhere}
+.site-notice a{flex:none;color:#7cc4ff;font-weight:700;font-size:13px}
+.site-notice-icon{flex:none;font-size:18px}
+.site-notice-close{flex:none;border:0;background:none;color:#a9c4dc;font-size:20px;line-height:1;padding:2px 4px;cursor:pointer}
+/* Verification custom questions */
+#verificationQuestions:empty{display:none}
+#verificationQuestions .input{margin-bottom:6px}
+/* Dim the page behind the post type chooser so the three options are easy to read. */
+body.create-menu-open::after{content:'';position:fixed;inset:0;z-index:140;background:#020a14b3;pointer-events:none;animation:fade-in .15s ease-out both}
+@keyframes fade-in{from{opacity:0}to{opacity:1}}
+
+/* Profile: groups the member made */
+.profile-groups{display:flex;flex-direction:column;gap:8px;width:100%;box-sizing:border-box;margin:6px 0 0;padding:12px 16px 0;border-top:1px solid #ffffff12;text-align:left;align-self:stretch}
+.profile-groups-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.profile-groups-head strong{font-size:16px;color:#eef6ff}
+.profile-groups-head small{font-size:12px;color:#8ea9c3}
+.profile-group{display:flex;align-items:center;gap:12px;min-width:0;padding:10px 12px;border-radius:14px;background:#ffffff08;border:1px solid #ffffff10}
+.profile-group-logo{flex:none;width:46px!important;height:46px!important;border-radius:12px!important;overflow:hidden;margin:0}
+.profile-group-logo img{width:100%;height:100%;object-fit:cover}
+.profile-group-copy{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.profile-group-copy strong{font-size:14px;color:#e8f3ff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.profile-group-copy small{font-size:12px;color:#8ea9c3}
+.profile-group-action{flex:none;min-width:72px;padding:8px 14px}
+
+/* "? Get verified" next to your own name (like the dashed badge on Instagram) */
+.verify-prompt{display:inline-flex;align-items:center;gap:6px;margin-left:8px;padding:3px 10px 3px 3px;border:1px dashed #6fb3ec;border-radius:999px;background:#0f2a44;color:#bfe1ff;font-size:12px;font-weight:700;line-height:1;cursor:pointer;flex:none;vertical-align:middle}
+.verify-prompt-icon{display:grid;place-items:center;width:20px;height:20px;border-radius:50%;border:1.5px dashed #8cc8ff;color:#d8eeff;font-size:12px;font-weight:800}
+.verify-prompt:hover,.verify-prompt:focus-visible{background:#163a5c;border-style:solid}
+.verify-prompt.pending{border-color:#c9a24a;color:#f6dc9a;background:#2c2310}
+.verify-prompt.pending .verify-prompt-icon{border-color:transparent;font-size:13px}
+
+/* One ring around a photo: gold Owner, purple Admin, blue Verified (no extra gradient or border rings). */
+.avatar.ring-owner{outline:2px solid #f5b342!important;outline-offset:2px!important;box-shadow:none!important}
+.avatar.ring-admin{outline:2px solid #9b6bff!important;outline-offset:2px!important;box-shadow:none!important}
+.avatar.ring-verified{outline:2px solid #3b9dff!important;outline-offset:2px!important;box-shadow:none!important}
+.social-author>.post-avatar-button,.post-avatar-button{padding:0!important;background:none!important;box-shadow:none!important;border:0!important}
+.post-avatar-button .avatar{border:0!important;box-shadow:none!important;margin:2px}
+/* Messages (toasts) at the top of the screen, short and easy to notice. */
+#toast{top:max(12px,env(safe-area-inset-top))!important;bottom:auto!important;padding:9px 16px;border-radius:999px;font-size:13px;font-weight:600;line-height:1.35;text-align:center;max-width:min(92vw,420px);width:max-content;box-shadow:0 10px 28px #000a;z-index:300!important;animation:toast-drop .18s ease-out}
+@keyframes toast-drop{from{opacity:0;transform:translate(-50%,-10px)}to{opacity:1;transform:translate(-50%,0)}}
+/* ✏️ Edit profile next to Share on the cover */
+.profile-cover-edit{position:absolute;right:52px;top:10px;z-index:6;display:grid;place-items:center;width:35px;height:35px;padding:0;border:1px solid #697cac77;border-radius:11px;background:#09152bdb;color:#e7f2ff;cursor:pointer}
+.profile-cover-edit .social-icon{width:18px;height:18px}
+#myPosts>.profile-groups .profile-groups-head{display:none}
+/* Groups tab on the profile */
+#myPosts>.profile-groups{border-top:0;padding:4px 0 0;margin:0}
+/* The profile page used to stick out 13px on each side on phones (it could slide sideways and cut the edges). */
+@media(max-width:720px){.profile-page #page-profile{margin-left:0!important;margin-right:0!important}}
+
+/* Admin picker for many Admins: the list scrolls, search stays on top, the send button stays visible. */
+#listingAdminChoices{max-height:min(52dvh,520px);overflow:auto;margin:12px 0;padding-right:2px;overscroll-behavior:contain}
+#listingAdminChoices .admin-search{position:sticky;top:0;z-index:2;margin:0 0 6px;box-shadow:0 6px 12px #0c2236}
+#listingAdminChoices .admin-choice[hidden],#listingAdminChoices .admin-choice-section[hidden],.admin-search-empty[hidden]{display:none}
+.admin-choice .admin-info{flex:none;width:34px;height:34px;padding:0;border:1px solid #3b6584;border-radius:50%;background:#0f2a42;font-size:15px;cursor:pointer}
+.admin-choice .avatar{flex:none}
+
+
+/* Deal card: people open their profiles */
+.deal-person-face{padding:0;border:0;background:none;cursor:pointer;border-radius:50%}
+.deal-person-link{padding:0;border:0;background:none;color:#9fd2ff;font:inherit;font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.deal-profile-row{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 2px}
+.deal-profile-button{padding:7px 12px;font-size:12px}
+/* Profile menu with icons (like Facebook) */
+#profileMenuItems .profile-drawer-item{display:flex;align-items:center;gap:14px;padding:12px;font-size:15px;list-style:none}
+#profileMenuItems .profile-drawer-item::-webkit-details-marker{display:none}
+#profileMenuItems .drawer-icon{flex:none;width:24px;height:24px;color:#cfe4f7}
+#profileMenuItems .drawer-icon svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+#profileMenuItems .drawer-label{flex:1}
+#profileMenuItems .drawer-chevron{flex:none;font-size:18px;color:#8ea9c3;transition:transform .15s}
+#profileMenuItems .profile-drawer-group[open] .drawer-chevron{transform:rotate(180deg)}
+#profileMenuItems .profile-drawer-group{border-top:1px solid #ffffff12;border-bottom:1px solid #ffffff12;margin:6px 0}
+#profileMenuItems .profile-drawer-sub{padding:0 0 6px 18px}
+#profileMenuItems .profile-drawer-sub .profile-drawer-item{font-size:14px;padding:10px 12px}
+
+/* Login page: Google first, then email / number */
+#loginModal #authGoogle{display:flex;flex-direction:column;align-items:center;gap:6px;margin:14px 0 4px}
+#loginModal #authGoogle[hidden]{display:none}
+#loginModal .auth-divider{width:100%}
+#guestAuth #guestLogin{min-width:96px}
+/* Google's button sits in an iframe; on a dark page the browser paints a white box behind it unless the iframe uses the light scheme. */
+#googleButton,#googleButton iframe{color-scheme:light}
+
+/* Animated profile ring is back (thin, no crown): a slowly turning ring - blue Verified, purple Admin, gold Owner. */
+.gaming-portrait.frame-owner,.gaming-portrait.frame-admin,.gaming-portrait.frame-verified{position:relative;background:none!important;overflow:visible}
+.gaming-portrait.frame-owner::before,.gaming-portrait.frame-admin::before,.gaming-portrait.frame-verified::before{content:''!important;position:absolute;inset:0;border-radius:50%;z-index:0;animation:wm-spin 5s linear infinite}
+.gaming-portrait.frame-verified::before{background:conic-gradient(#9fdcff,#1877f2,#d6f0ff,#0b57c9,#9fdcff)}
+.gaming-portrait.frame-admin::before{background:conic-gradient(#e2ccff,#8c4cff,#f3e8ff,#5b21b6,#e2ccff)}
+.gaming-portrait.frame-owner::before{background:conic-gradient(#fff1b8,#f2b233,#fff7d6,#c98612,#fff1b8)}
+/* Blue tick: the shine plus a soft glow pulse. */
+.verified-tick{animation:wm-tick-glow 2.6s ease-in-out infinite}
+@keyframes wm-tick-glow{0%,100%{box-shadow:0 0 0 1.5px #071321,0 0 5px #1877f270}50%{box-shadow:0 0 0 1.5px #071321,0 0 12px #3b9dffcc}}
+@media(prefers-reduced-motion:reduce){.gaming-portrait::before,.verified-tick{animation:none!important}}
+@keyframes wm-spin{to{transform:rotate(360deg)}}
+
+.admin-discover-toggle{width:100%;margin:12px 0 4px}
+.admin-discover{margin-top:6px}
+.admin-discover[hidden],.admin-discover-toggle[hidden]{display:none}
+
+/* Admin agreement box on a pending deal */
+.admin-agreement{margin:10px 0;padding:12px;border-radius:16px;background:#ffffff08;border:1px solid #3b6584}
+.admin-agreement.agreed{border-color:#2bd38a66;background:#0d2f2414}
+.admin-agreement-title{display:block;font-size:14px;margin-bottom:8px}
+.admin-agreement-person{display:flex;align-items:center;gap:10px}
+.admin-agreement-person>.avatar{width:42px;height:42px;flex:none;border-radius:50%;overflow:hidden;margin:0}
+.admin-agreement-person>.avatar img{width:100%;height:100%;object-fit:cover}
+.admin-agreement-name{flex:1;min-width:0}
+.admin-agreement-chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 2px}
+.agree-chip{padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700;background:#3a2f12;color:#f6dc9a}
+.agree-chip.ok{background:#0d3b2a;color:#7ff0b8}
+.admin-agreement .action-row{margin-top:8px}
+
+/* Login page: compact and standard (centered logo, short title, icons inside the fields). */
+#loginModal .dialog.auth-card{position:relative;width:min(400px,100%);max-width:400px!important;padding:24px 22px 20px!important;border-radius:24px;max-height:94dvh;overflow:auto;box-sizing:border-box}
+#loginModal .auth-close{position:absolute;top:12px;right:12px;width:36px;height:36px;padding:0;border-radius:50%;border:1px solid var(--line);background:#ffffff08;color:#cfe4f7;font-size:20px;line-height:1;cursor:pointer}
+#loginModal .auth-head{display:flex;flex-direction:column;align-items:center;text-align:center;gap:4px;margin:2px 26px 14px}
+#loginModal .auth-logo{width:54px!important;height:54px!important;font-size:27px!important;margin:0 0 8px!important;transform:none!important;border-radius:16px!important;box-shadow:0 10px 28px #3b9dff33}
+#loginModal #loginTitle{font-size:22px;line-height:1.25;margin:0;overflow-wrap:anywhere}
+#loginModal .auth-sub{margin:0;font-size:14px;color:var(--muted)}
+#loginModal .auth-sub strong{color:#bfe1ff;font-weight:800;letter-spacing:.3px}
+#loginModal .auth-tabs{margin:0 0 12px}
+#loginModal #authGoogle{gap:4px;margin:0}
+#loginModal #googleStatus{margin:0;font-size:12px}
+#loginModal #googleStatus[hidden]{display:none}
+#loginModal .auth-divider{margin:10px 0 8px}
+#loginModal .auth-form{gap:10px}
+#loginModal .auth-form label{font-size:13px;margin:0}
+#loginModal .auth-field{gap:5px}
+#loginModal .auth-method{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:4px;margin:0;border:1px solid var(--line);border-radius:14px}
+#loginModal .auth-method-option{position:relative;display:flex;align-items:center;justify-content:center;gap:8px;min-height:40px;border-radius:10px;color:var(--muted);font-weight:700;font-size:14px;cursor:pointer}
+#loginModal .auth-method-option input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+#loginModal .auth-method-option.is-active{background:#16334c;color:#fff;box-shadow:inset 0 0 0 1px #3b9dff66}
+#loginModal .auth-method-option:focus-within{outline:2px solid #79d4ff;outline-offset:1px}
+#loginModal .auth-svg{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+#loginModal .auth-input{position:relative}
+#loginModal .auth-input>.auth-svg,#loginModal .auth-input-icon{position:absolute;left:14px;top:50%;transform:translateY(-50%);display:grid;place-items:center;color:#8ea9c3;pointer-events:none}
+#loginModal .auth-input .input{width:100%;min-height:46px;margin:0;padding-left:44px;border-radius:14px;box-sizing:border-box}
+#loginModal .auth-input:has(.auth-eye) .input{padding-right:46px}
+#loginModal .auth-eye{position:absolute;right:5px;top:50%;transform:translateY(-50%);width:38px;height:38px;padding:0;display:grid;place-items:center;border:0;border-radius:10px;background:none;color:#8ea9c3;cursor:pointer}
+#loginModal .auth-eye[aria-pressed=true]{color:#79d4ff}
+#loginModal .auth-link{font-size:13px;margin-top:-4px}
+#loginModal #authStatus:empty{display:none}
+#loginModal .auth-submit{width:100%;min-height:48px;border-radius:14px;font-size:16px;font-weight:800}
+.logged-out #loginModal .dialog.auth-card{padding:24px 22px 20px!important}
+@media(max-width:420px){#loginModal .dialog.auth-card{padding:20px 16px 16px!important}}
+.admin-agreement-person>.avatar{width:44px!important;height:44px!important;min-width:44px;font-size:15px}
+.admin-agreement .admin-info{flex:none;width:34px;height:34px;padding:0;display:grid;place-items:center;border:1px solid #3b6584;border-radius:50%;background:#0f2a42;font-size:15px;cursor:pointer}
+.social-profile .gaming-cover{height:auto!important;aspect-ratio:2/1!important;min-height:0!important;max-height:none!important;margin-bottom:0!important}.social-profile .gaming-cover+.gaming-profile-body{margin-top:0!important}.social-profile .profile-cover-art{object-position:center!important}.crop-dialog #cropPreviewFrame{touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}.crop-dialog #cropPreviewFrame:active{cursor:grabbing}
+.auth-logo-img{display:block;width:72px;height:72px;border-radius:20px;margin:0 auto 10px;object-fit:cover;box-shadow:0 10px 30px #8b3dff55,0 0 0 1px #b57bff44}
+/* Default banner: plain colours, and an Add banner button on your own profile */
+.gaming-cover.no-cover{background:radial-gradient(ellipse at 20% 10%,#3b1d6e 0%,transparent 60%),radial-gradient(ellipse at 90% 100%,#16406b 0%,transparent 55%),linear-gradient(135deg,#0d1730,#0b1424 60%,#120a26)!important;display:flex;align-items:center;justify-content:center}
+.add-banner-button{display:inline-flex;align-items:center;gap:8px;margin-bottom:12%;padding:10px 18px;border-radius:999px;border:1.5px dashed #a891ffaa;background:#0b142499;color:#efe6ff;font:inherit;font-weight:700;cursor:pointer;backdrop-filter:blur(6px);transition:transform .15s,background .15s}
+.add-banner-button:hover{background:#1a2440cc}.add-banner-button:active{transform:scale(.97)}
+.add-banner-plus{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:#a891ff;color:#0b1424;font-size:16px;line-height:1}
+#authStatus .auth-create-link{display:inline-flex;margin-top:8px;padding:8px 16px;min-height:0;font-size:14px}
+.profile-id-row{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin:6px 0 2px}
+.verified-member-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:999px;background:#1d9bf022;border:1px solid #1d9bf066;color:#7cc4ff;font-size:12px;font-weight:700}
+.profile-id-chip{display:inline-flex;align-items:center;padding:3px 10px;min-height:0;border-radius:999px;border:1px solid var(--line,#263247);background:#111a2a;color:var(--muted,#8c9bb3);font:inherit;font-size:12px;font-weight:600;letter-spacing:.04em;cursor:pointer}
+.profile-id-chip:active{transform:scale(.97)}
+.notice-bell{position:relative;display:grid;place-items:center;width:40px;height:40px;margin-left:auto;margin-right:6px;border-radius:50%;border:1px solid var(--line,#263247);background:#111a2a;color:var(--text,#f3f6ff);cursor:pointer;flex:none}
+.notice-bell svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.notice-bell.on-cover{position:absolute;top:12px;right:64px;z-index:3;background:#0b1424cc;backdrop-filter:blur(6px)}
+.notice-dot{position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:#e5534b;color:#fff;font-size:11px;font-weight:800;line-height:18px;text-align:center}
+.notice-box{max-height:80vh;overflow:auto;text-align:left}.notice-title{font-size:17px}
+.notice-row{display:flex;gap:10px;padding:10px;border-radius:12px;background:#111a2a;border:1px solid var(--line,#263247)}.notice-row.unread{border-color:#a891ff88;background:#1a1640}
+.notice-row.accepted .notice-text strong{color:#8fe0a0}.notice-row.rejected .notice-text strong{color:#ffb3ae}
+.notice-icon{font-size:20px;line-height:1.2}.notice-text{display:grid;gap:3px;min-width:0}.notice-text p{margin:0;font-size:13px;color:#c9d3e6;overflow-wrap:anywhere}.notice-open{justify-self:start;min-height:0!important;padding:5px 12px!important;font-size:13px!important;margin-top:4px}
+.deal-next-chip{display:block;width:100%;margin:6px 0;padding:8px 12px;border-radius:12px;border:1px solid #a891ff55;background:#a891ff14;color:#e2d9ff;font:inherit;font-size:14px;font-weight:600;text-align:left;cursor:pointer}
+.deal-room .page-heading{display:flex;align-items:center;gap:8px}.deal-room-calls{display:flex;gap:6px;margin-left:auto}
+.deal-call-btn{width:40px;height:40px;border-radius:50%;border:1px solid var(--line,#263247);background:#111a2a;font-size:18px;cursor:pointer;display:grid;place-items:center;padding:0}
+.deal-mention-pop{display:grid;gap:4px;margin:0 0 6px;padding:6px;border-radius:12px;background:#111a2a;border:1px solid var(--line,#263247)}
+.deal-mention-item{display:flex;justify-content:space-between;gap:10px;padding:8px 10px;border:0;border-radius:8px;background:transparent;color:var(--text,#f3f6ff);font:inherit;text-align:left;cursor:pointer}.deal-mention-item:hover{background:#1c2740}.deal-mention-item small{color:var(--muted,#8c9bb3)}
+.deal-mention{color:#9ecbff}
+.owner-card{display:flex;align-items:center;gap:12px;margin:6px 0 12px;padding:12px 14px;border-radius:16px;border:1px solid #e3b34155;background:linear-gradient(135deg,#2a1f0a66,#111a2a)}
+.owner-card-pic{flex:none;padding:0;border:0;background:none;cursor:pointer}.owner-card-pic .avatar,.owner-card-pic img{width:48px;height:48px}
+.owner-card-who{display:grid;gap:3px;min-width:0;flex:1}.owner-card-name{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.owner-card-who small{color:#d9c79a;font-size:12px}
+.owner-card-actions .btn{min-height:0;padding:8px 14px;font-size:14px;white-space:nowrap}

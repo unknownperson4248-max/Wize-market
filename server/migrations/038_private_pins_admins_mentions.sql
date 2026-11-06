@@ -1,0 +1,5 @@
+-- Pins only I can see, extra group admins, and @mentions. Additive only: three new tables.
+CREATE TABLE IF NOT EXISTS wm_chat_private_pins(kind TEXT NOT NULL CHECK(kind IN ('private','group')),chat_id TEXT NOT NULL,message_id INTEGER NOT NULL,user_id TEXT NOT NULL REFERENCES users(id),created_at INTEGER NOT NULL,PRIMARY KEY(kind,chat_id,user_id,message_id));
+CREATE TABLE IF NOT EXISTS wm_group_admins(group_id TEXT NOT NULL REFERENCES wm_groups(id),user_id TEXT NOT NULL REFERENCES users(id),added_by TEXT NOT NULL REFERENCES users(id),created_at INTEGER NOT NULL,PRIMARY KEY(group_id,user_id));
+CREATE TABLE IF NOT EXISTS wm_message_mentions(group_id TEXT NOT NULL REFERENCES wm_groups(id),message_id INTEGER NOT NULL,user_id TEXT NOT NULL REFERENCES users(id),actor_id TEXT NOT NULL REFERENCES users(id),everyone INTEGER NOT NULL DEFAULT 0,created_at INTEGER NOT NULL,seen_at INTEGER,PRIMARY KEY(group_id,message_id,user_id));
+CREATE INDEX IF NOT EXISTS wm_message_mentions_user ON wm_message_mentions(user_id,seen_at,created_at);

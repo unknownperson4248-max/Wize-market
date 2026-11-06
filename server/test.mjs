@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {readFileSync} from 'node:fs';
-import worker,{api,verifyGoogle,listingPrice,hasExternalContact,brandedPage} from './worker.mjs';
+import worker,{seoPage,api,verifyGoogle,listingPrice,hasExternalContact,brandedPage,previewPage,normalizeGameUid,nameProblem,nameSkeleton,cleanAccountName,signInName,loginId} from './worker.mjs';
 const sql=new DatabaseSync(':memory:');sql.exec('PRAGMA foreign_keys=ON; CREATE TABLE users(id TEXT PRIMARY KEY,google_sub TEXT UNIQUE,email TEXT,name TEXT,picture TEXT,created_at INTEGER,updated_at INTEGER);CREATE TABLE sessions(token_hash TEXT PRIMARY KEY,user_id TEXT REFERENCES users(id),expires_at INTEGER,created_at INTEGER);');sql.exec(readFileSync(new URL('./schema.sql',import.meta.url),'utf8'));
 const prepare=q=>({values:[],bind(...v){this.values=v;return this},async first(){return sql.prepare(q).get(...this.values)||null},async all(){return {results:sql.prepare(q).all(...this.values)}},async run(){const r=sql.prepare(q).run(...this.values);return {meta:{changes:Number(r.changes)}}}});const db={prepare,async batch(stmts){sql.exec('BEGIN');try{const r=[];for(const s of stmts)r.push(await s.run());sql.exec('COMMIT');return r}catch(e){sql.exec('ROLLBACK');throw e}}};const objects=new Map();const env={DB:db,MEDIA:{put:async(k,v)=>objects.set(k,v),get:async k=>objects.has(k)?{body:objects.get(k),size:objects.get(k).length}:null}};
-const hash=async x=>Buffer.from(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(x))).toString('hex');const tokens={};for(const id of ['owner','admin','buyer','seller','outsider']){sql.prepare('INSERT INTO users VALUES(?,?,?,?,?,?,?)').run(id,id,id+'@example.com',id,'',Date.now(),Date.now());const token=Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('hex');tokens[id]=token;sql.prepare('INSERT INTO sessions VALUES(?,?,?,?)').run(await hash(token),id,Date.now()+1000000,Date.now())}sql.exec("INSERT INTO wm_roles VALUES('owner','owner'),('admin','trusted')");const logoId=crypto.randomUUID();sql.prepare('INSERT INTO wm_uploads VALUES(?,?,?,?,?)').run(logoId,'admin','image/png',16,Date.now());objects.set(logoId,new Uint8Array([137,80,78,71,13,10,26,10,0,0,0,0,1,2,3,4]));
+const hash=async x=>Buffer.from(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(x))).toString('hex');const tokens={};for(const id of ['owner','admin','buyer','seller','outsider']){sql.prepare('INSERT INTO users VALUES(?,?,?,?,?,?,?)').run(id,id,id+'@example.com',id,'',Date.now(),Date.now());const token=Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('hex');tokens[id]=token;sql.prepare('INSERT INTO sessions VALUES(?,?,?,?)').run(await hash(token),id,Date.now()+1000000,Date.now())}sql.exec("INSERT INTO wm_roles VALUES('owner','owner'),('admin','trusted')");const legacyRules={protectedDeals:false,holdHours:24,autoConfirmHours:72,requireGameUid:false,relistCooldownHours:0,dailyPostsUnverified:1000,activePostsUnverified:1000,dailyPostsVerified:1000,activePostsVerified:5000,dailyNeedPosts:1000,dailyNormalPosts:1000,bumpHours:24,expireDays:0,hideSold:false,nameRules:false,chatWarnings:true,blockDuplicates:false};sql.prepare("INSERT INTO wm_settings(key,value) VALUES('market_rules',?)").run(JSON.stringify(legacyRules));const logoId=crypto.randomUUID();sql.prepare('INSERT INTO wm_uploads VALUES(?,?,?,?,?)').run(logoId,'admin','image/png',16,Date.now());objects.set(logoId,new Uint8Array([137,80,78,71,13,10,26,10,0,0,0,0,1,2,3,4]));
 async function call(path,method='GET',data,id,origin='https://test.local'){const req=new Request('https://test.local'+path,{method,headers:{origin,'content-type':'application/json',...(id?{cookie:'wm_session='+tokens[id]}:{})},...(data!==undefined?{body:JSON.stringify(data)}:{})});const res=await worker.fetch(req,env);let value;try{value=await res.json()}catch{}return {status:res.status,data:value}}
-assert.equal((await call('/api/groups','POST',{name:'Not allowed',price:5000},'buyer')).status,403);
+// Members can only make chat groups (no price ranges, not listed for deals); buy-sell groups are for trusted admins.
+{const cg=await call('/api/groups','POST',{name:'Member chat',price:5000},'buyer');assert.equal(cg.status,201);assert.equal(cg.data.chatGroup,true);assert.equal(sql.prepare('SELECT count(*) n FROM wm_group_ranges WHERE group_id=?').get(cg.data.id).n,0)}
 assert.equal((await call('/api/threads','POST',{},undefined)).status,401);
 assert.equal((await call('/api/groups','POST',{name:'CSRF',price:1},'admin','https://evil.local')).status,403);
 let r=await call('/api/groups','POST',{name:'ID buy sell',logoId},'admin');assert.equal(r.status,201);const group=r.data.id;const groupRanges=(await call('/api/groups/'+group,'GET',undefined,'admin')).data.ranges;const firstRange=groupRanges[0].id;await call('/api/groups/'+group+'/join','POST',{},'buyer');assert.equal((await call('/api/groups/'+group+'/messages','GET',undefined,'outsider')).status,403);assert.equal((await call('/api/groups/'+group+'/messages','POST',{text:'Hello group'},'buyer')).status,201);
@@ -72,7 +73,8 @@ const safeAI={run:async()=>({response:{decision:'safe',confidence:.99,category:'
 let directPost=await call('/api/posts','POST',{...post,title:'Instant publication'},'seller');assert.equal(directPost.data.status,'approved');assert.ok((await call('/api/feed')).data.posts.some(p=>p.id===directPost.data.id));
 env.AI={run:async()=>({response:'{"decision":"unsafe","confidence":0.99,"category":"explicit_sexual"}'})};
 const beforeSuspension=Date.now();const blockedPost=await call('/api/posts','POST',{...post,title:'Safety fixture'},'buyer');assert.equal(blockedPost.data.status,'rejected');assert.ok(blockedPost.data.suspendedUntil>=beforeSuspension+10800000);assert.equal((await call('/api/posts','POST',post,'buyer')).status,423);assert.equal((await call('/api/threads/'+thread+'/messages','POST',{text:'blocked'},'buyer')).status,423);assert.equal((await call('/api/me','GET',undefined,'buyer')).data.user.suspension.reason,'Explicit sexual content is not allowed');assert.ok(!(await call('/api/feed')).data.posts.some(p=>p.id===blockedPost.data.id));
-assert.equal((await call('/api/safety/appeal','POST',{},'buyer')).status,200);sql.prepare('UPDATE wm_suspensions SET until_at=? WHERE user_id=?').run(Date.now()-1,'buyer');env.AI=safeAI;assert.equal((await call('/api/posts','POST',{...post,title:'After expiry'},'buyer')).data.status,'approved');
+assert.equal((await call('/api/safety/appeal','POST',{message:'Please check my post again.'},'buyer')).status,403);// timed suspensions end on their own; only bans can be appealed
+sql.prepare('UPDATE wm_suspensions SET until_at=? WHERE user_id=?').run(Date.now()-1,'buyer');env.AI=safeAI;assert.equal((await call('/api/posts','POST',{...post,title:'After expiry'},'buyer')).data.status,'approved');
 env.AI={run:async()=>({response:{decision:'unsafe',confidence:.7,category:'explicit_sexual'}})};assert.equal((await call('/api/posts','POST',post,'seller')).data.status,'pending');assert.equal((await call('/api/me','GET',undefined,'seller')).data.user.suspension,null);
 env.AI={run:async()=>{throw Error('Scanner offline')}};assert.equal((await call('/api/posts','POST',post,'seller')).data.status,'pending');assert.equal((await call('/api/me','GET',undefined,'seller')).data.user.suspension,null);env.AI=safeAI;
 // Standalone admin credentials and sessions are separate from normal Google sessions.
@@ -212,7 +214,7 @@ assert.equal((await call('/api/admin/report-action','POST',{reportId:reportData.
 assert.equal((await call('/api/posts/'+multiId+'/share','POST',{share:false},'buyer')).status,200);assert.equal((await call('/api/reports','POST',{reason:'other',details:'Website layout issue'},'buyer')).status,201);
 // Seller/blue badges remain separate from privileged admin roles; only owner can edit access.
 const badgeSettings={userId:'buyer',verified:true,trustedSeller:true,role:'member'};for(const id of ['buyer','admin','seller'])assert.equal((await call('/api/admin/member-access','POST',badgeSettings,id)).status,403);
-assert.equal((await call('/api/admin/member-access','POST',badgeSettings,'owner')).status,200);const buyerBadges=(await call('/api/me','GET',undefined,'buyer')).data.user;assert.equal(buyerBadges.role,'member');assert.equal(buyerBadges.verified,1);assert.equal(buyerBadges.trusted_seller,1);assert.equal((await call('/api/groups','POST',{name:'Badge alone is not access'},'buyer')).status,403);
+assert.equal((await call('/api/admin/member-access','POST',badgeSettings,'owner')).status,200);const buyerBadges=(await call('/api/me','GET',undefined,'buyer')).data.user;assert.equal(buyerBadges.role,'member');assert.equal(buyerBadges.verified,1);assert.equal(buyerBadges.trusted_seller,1);assert.equal((await call('/api/groups','POST',{name:'Badge alone is not access'},'buyer')).data.chatGroup,true);// a badge alone still only makes a chat group
 assert.equal((await call('/api/admin/member-access','POST',{...badgeSettings,userId:'owner',role:'member'},'owner')).status,403);assert.equal((await call('/api/admin/member-access','POST',{...badgeSettings,role:'owner'},'owner')).status,403);
 assert.ok((await call('/api/admin/users?q=Rahat','GET',undefined,'owner')).data.users.some(u=>u.name==='Rahat Custom'));assert.equal((await call('/api/admin/users?q=Rahat','GET',undefined,'owner')).data.users[0].email,'buyer@example.com');
 assert.equal((await call('/api/admin/member-access','POST',{...badgeSettings,verified:false,trustedSeller:false},'owner')).status,200);assert.equal((await call('/api/profile/buyer','GET',undefined,'buyer')).data.profile.trusted_seller,0);
@@ -268,16 +270,19 @@ assert.equal((await call('/api/deals','POST',{postId:ownListing.data.id},'owner'
 // A single public post is placed in joined groups, preserving its Listing ID and interactions.
 await call('/api/groups/'+group+'/join','POST',{},'seller');const secondGroup=(await call('/api/groups','POST',{name:'Second market',logoId},'admin')).data.id;await call('/api/groups/'+secondGroup+'/join','POST',{},'seller');await call('/api/groups/'+secondGroup+'/join','POST',{},'buyer');
 const dual=await call('/api/posts','POST',{...post,title:'Shared ID',price:'8.5k',groupIds:[group,secondGroup]},'seller');assert.equal(dual.status,201,JSON.stringify(dual.data));const dualId=dual.data.id;
-for(const gid of [group,secondGroup]){const groupFeed=await call('/api/feed?group='+gid,'GET',undefined,'buyer');assert.equal(groupFeed.status,200);assert.equal(groupFeed.data.posts.filter(p=>p.id===dualId).length,1);const placement=sql.prepare('SELECT range_id FROM wm_post_groups WHERE post_id=? AND group_id=?').get(dualId,gid);assert.ok((await call('/api/feed?group='+gid+'&range='+placement.range_id,'GET',undefined,'buyer')).data.posts.some(p=>p.id===dualId))}
+for(const gid of [group,secondGroup]){const groupFeed=await call('/api/feed?group='+gid,'GET',undefined,'buyer');assert.equal(groupFeed.status,200);// A feed post also sent to groups stays in the feed: group lists show only IDs posted inside the group.
+assert.equal(groupFeed.data.posts.filter(p=>p.id===dualId).length,0);const placement=sql.prepare('SELECT range_id FROM wm_post_groups WHERE post_id=? AND group_id=?').get(dualId,gid);assert.ok(placement);assert.ok(!(await call('/api/feed?group='+gid+'&range='+placement.range_id,'GET',undefined,'buyer')).data.posts.some(p=>p.id===dualId))}
 assert.ok((await call('/api/feed')).data.posts.some(p=>p.id===dualId));
 assert.equal((await call('/api/posts','POST',{...post,groupIds:[group,group]},'seller')).status,400);
 assert.equal((await call('/api/posts','POST',{...post,groupIds:[group]},'outsider')).status,403);
-let mediated=await call('/api/deals','POST',{postId:dualId},'buyer');assert.equal(mediated.status,201);const mediatedId=mediated.data.id;assert.equal(mediated.data.deal.mode,'mediated');assert.equal(mediated.data.deal.admin_id,'owner');
+let mediated=await call('/api/deals','POST',{postId:dualId},'buyer');assert.equal(mediated.status,201);const mediatedId=mediated.data.id;assert.equal(mediated.data.deal.mode,'mediated');assert.equal(mediated.data.deal.admin_id,null);// new steps: no Admin until the deal box is open
 assert.equal(mediated.data.deal.status,'awaiting_seller');
-assert.equal((await call('/api/deals/'+mediatedId+'/action','POST',{action:'accept',version:0},'owner')).status,409);
+assert.equal((await call('/api/deals/'+mediatedId+'/action','POST',{action:'accept',version:0},'owner')).status,404);// no Admin yet: the Owner is not part of this deal
 assert.equal((await call('/api/deals/'+mediatedId+'/action','POST',{action:'confirm',version:0},'seller')).status,200);
-assert.equal((await call('/api/deals/'+mediatedId,'GET',undefined,'seller')).data.deal.status,'awaiting_admin');assert.equal((await call('/api/deals/'+mediatedId+'/messages','GET',undefined,'seller')).status,409);
-assert.equal((await call('/api/deals/'+mediatedId+'/action','POST',{action:'accept',version:1},'owner')).status,200);
+assert.equal((await call('/api/deals/'+mediatedId,'GET',undefined,'seller')).data.deal.status,'open');assert.equal((await call('/api/deals/'+mediatedId+'/messages','GET',undefined,'seller')).status,200);
+assert.equal((await call('/api/deals/'+mediatedId+'/action','POST',{action:'choose_admin',adminId:'owner',version:1},'buyer')).status,200);
+assert.equal((await call('/api/deals/'+mediatedId+'/action','POST',{action:'agree_admin',version:2},'seller')).status,200);
+assert.equal((await call('/api/deals/'+mediatedId+'/action','POST',{action:'accept',version:3},'owner')).status,200);
 assert.equal((await call('/api/deals/'+mediatedId+'/messages','POST',{text:'Mediated room'},'owner')).status,201);
 assert.equal((await call('/api/deal-management','GET',undefined,'buyer')).status,403);assert.ok((await call('/api/deal-management','GET',undefined,'owner')).data.deals.some(d=>d.id===mediatedId));
 assert.ok(!(await call('/api/deal-management','GET',undefined,'admin')).data.deals.some(d=>d.id===directId));
@@ -285,15 +290,19 @@ const dualBefore=(await call('/api/posts/'+dualId,'GET',undefined,'seller')).dat
 assert.equal((await call('/api/posts/'+dualId+'/edit','POST',{...post,title:'Shared ID updated',price:12000,groupIds:[group,secondGroup],version:dualBefore.version},'seller')).status,200);
 for(const gid of [group,secondGroup]){const range=sql.prepare('SELECT r.min_price,r.max_price FROM wm_post_groups pg JOIN wm_group_ranges r ON r.id=pg.range_id WHERE pg.post_id=? AND pg.group_id=?').get(dualId,gid);assert.ok(range.min_price<=12000&&(range.max_price===null||range.max_price>=12000))}
 assert.equal((await call('/api/deals/'+mediatedId,'GET',undefined,'buyer')).data.deal.price,8500);assert.equal((await call('/api/listing/'+dualId)).data.post.listing_code,mediated.data.deal.listing_code);
-const decline=await call('/api/deals','POST',{postId:dualId},'admin');assert.equal(decline.status,201);assert.equal((await call('/api/deals/'+decline.data.id+'/action','POST',{action:'decline',version:0},'owner')).status,200);assert.equal((await call('/api/deals/'+decline.data.id,'GET',undefined,'admin')).data.deal.status,'cancelled');
+const taken=await call('/api/deals','POST',{postId:dualId},'admin');assert.equal(taken.status,409);assert.match(taken.data.error,/already has a deal/);// one ID = one deal
+const spare=await call('/api/posts','POST',{...post,title:'Spare ID',price:'9k'},'seller');assert.equal(spare.status,201,JSON.stringify(spare.data));const decline=await call('/api/deals','POST',{postId:spare.data.id},'admin');assert.equal(decline.status,201);assert.equal(decline.data.deal.admin_id,'admin');// an Admin who buys looks after the deal
+assert.equal((await call('/api/deals/'+decline.data.id+'/action','POST',{action:'decline',version:0},'admin')).status,200);assert.equal((await call('/api/deals/'+decline.data.id,'GET',undefined,'admin')).data.deal.status,'cancelled');
 // Group-only listing can also start a deal; nonmembers are blocked.
-const restricted=await call('/api/posts','POST',{...post,groupId:secondGroup},'seller');assert.equal(restricted.status,201);assert.equal((await call('/api/deals','POST',{postId:restricted.data.id},'outsider')).status,403);assert.equal((await call('/api/deals','POST',{postId:restricted.data.id},'buyer')).status,201);
+const restricted=await call('/api/posts','POST',{...post,groupId:secondGroup},'seller');assert.equal(restricted.status,201);assert.equal((await call('/api/deals','POST',{postId:restricted.data.id},'outsider')).status,403);const capped=await call('/api/deals','POST',{postId:restricted.data.id},'buyer');assert.equal(capped.status,429);assert.match(capped.data.error,/only 2 deals/);// each buyer: 2 deals at a time
+{const row=sql.prepare("SELECT value FROM wm_settings WHERE key='market_rules'").get();sql.prepare("INSERT INTO wm_settings(key,value) VALUES('market_rules',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(JSON.stringify({...(row?JSON.parse(row.value):{}),maxOpenDeals:0}))}
+assert.equal((await call('/api/deals','POST',{postId:restricted.data.id},'buyer')).status,201);
 // Friend sender follows immediately; accepting adds to friends and exposes no pending request to visitors.
 sql.exec("DELETE FROM wm_friend_requests WHERE pair_key='admin:buyer';DELETE FROM wm_follows WHERE user_id='admin' AND target_id='buyer'");assert.equal((await call('/api/friends/request','POST',{userId:'buyer'},'admin')).status,200);assert.ok((await call('/api/profile/admin/connections?kind=following','GET',undefined,'seller')).data.people.some(p=>p.id==='buyer'));assert.ok(!(await call('/api/profile/admin/connections?kind=friends','GET',undefined,'buyer')).data.people.some(p=>p.id==='buyer'));assert.equal((await call('/api/friends/respond','POST',{userId:'admin',accept:true},'buyer')).status,200);assert.ok((await call('/api/profile/admin/connections?kind=friends','GET',undefined,'buyer')).data.people.some(p=>p.id==='buyer'));assert.ok((await call('/api/me','GET',undefined,'admin')).data.user.friends>0);
 console.log('PASS: listing/deal IDs, direct and mediated Admin Accept, seller consent, pending room lock, idempotency, separate inbox, metadata scoping, multi-group single-post ranges, preserved deal price, group-only deal access and immediate follow/friend acceptance.');
 // The independent control-room session can manage its assigned pending deals.
 const panelLogin=await worker.fetch(new Request('https://test.local/api/control/owner-access',{method:'POST',headers:{origin:'https://test.local',cookie:'wm_session='+tokens.owner}}),env);assert.equal(panelLogin.status,200);const panelCookie=panelLogin.headers.get('set-cookie').split(';')[0];const panelRequest=async(path,data)=>worker.fetch(new Request('https://test.local/api/control/'+path,{method:data?'POST':'GET',headers:{origin:'https://test.local',cookie:panelCookie,'content-type':'application/json'},...(data?{body:JSON.stringify(data)}:{})}),env);
-const panelDeals=await panelRequest('deals');assert.equal(panelDeals.status,200);assert.ok((await panelDeals.json()).deals.some(d=>d.id===directId));const panelTarget=(await call('/api/deals','POST',{postId:ownListing.data.id},'seller')).data.id;assert.equal((await panelRequest('deals/'+panelTarget+'/action',{action:'accept',version:0})).status,200);assert.equal((await call('/api/deals/'+panelTarget,'GET',undefined,'seller')).data.deal.status,'active');console.log('PASS: control-room metadata and assigned Admin Accept use the separate owner session.');
+const panelDeals=await panelRequest('deals');assert.equal(panelDeals.status,200);assert.ok((await panelDeals.json()).deals.some(d=>d.id===directId));const panelListing=await call('/api/posts','POST',{...post,title:'Admin panel ID',price:'10k'},'owner');const panelTarget=(await call('/api/deals','POST',{postId:panelListing.data.id},'seller')).data.id;assert.equal((await panelRequest('deals/'+panelTarget+'/action',{action:'accept',version:0})).status,200);assert.equal((await call('/api/deals/'+panelTarget,'GET',undefined,'seller')).data.deal.status,'active');console.log('PASS: control-room metadata and assigned Admin Accept use the separate owner session.');
 // Security regression: members can request cancellation but cannot close a deal by API.
 const currentDeal=async id=>(await call('/api/deals/'+id,'GET',undefined,'buyer')).data.deal;
 const act=async(id,action,user,extra={})=>{const d=(await call('/api/deals/'+id,'GET',undefined,user)).data.deal;return call('/api/deals/'+id+'/action','POST',{action,version:d.version,...extra},user)};
@@ -317,7 +326,7 @@ const postSearch=(await call('/api/deal-management?status=all&q='+encodeURICompo
 const dealSearch=(await call('/api/deal-management?status=all&q='+encodeURIComponent('Deal - '+dealSerial),'GET',undefined,'owner')).data.deals;assert.deepEqual(dealSearch.map(d=>d.id),[mediatedId]);
 assert.equal((await call('/api/deal-management?status=invalid','GET',undefined,'owner')).status,400);assert.ok((await call('/api/deal-management?status=completed','GET',undefined,'owner')).data.deals.every(d=>d.status==='completed'));
 assert.equal((await call('/api/deal-management?status=active','GET',undefined,'buyer')).status,403);assert.equal((await call('/api/deals/'+directId+'/history','GET',undefined,'admin')).status,404);
-const independentDirect=await call('/api/deals','POST',{postId:ownListing.data.id},'admin');assert.equal(independentDirect.status,201);
+const independentListing=await call('/api/posts','POST',{...post,title:'Admin second ID',price:'10k'},'owner');const independentDirect=await call('/api/deals','POST',{postId:independentListing.data.id},'admin');assert.equal(independentDirect.status,201);
 // Owner can inspect all audit events but not a room assigned to a different Admin.
 const trustedListing=await call('/api/posts','POST',{...post,title:'Trusted admin account'},'admin');assert.equal(trustedListing.status,201);const trustedDeal=(await call('/api/deals','POST',{postId:trustedListing.data.id},'buyer')).data.id;
 assert.equal((await call('/api/deals/'+trustedDeal+'/history','GET',undefined,'owner')).status,200);assert.equal((await call('/api/deals/'+trustedDeal+'/messages','GET',undefined,'owner')).status,404);assert.equal((await call('/api/deals/'+trustedDeal+'/action','POST',{action:'cancel',version:0},'owner')).status,404);
@@ -415,7 +424,7 @@ assert.equal((await call('/api/admin/pwa','GET',undefined,'buyer')).status,403);
 const branding={name:'QA Market App',shortName:'QA Market',description:'Install our community marketplace'};assert.equal((await call('/api/admin/pwa','POST',branding,'owner')).status,200);assert.equal((await (await worker.fetch(new Request('https://test.local/manifest.webmanifest'),env)).json()).name,branding.name);
 const iconUploads={};for(const [key,size]of [['icon192Id',192],['icon512Id',512],['iconMaskableId',512]]){const id=crypto.randomUUID(),png=new Uint8Array(32);png.set([137,80,78,71,13,10,26,10]);const v=new DataView(png.buffer);v.setUint32(16,size);v.setUint32(20,size);objects.set(id,png);sql.prepare('INSERT INTO wm_uploads VALUES(?,?,?,?,?)').run(id,'owner','image/png',png.length,Date.now());iconUploads[key]=id}
 assert.equal((await call('/api/admin/pwa','POST',{...branding,icons:iconUploads},'owner')).status,200);const customizedManifest=await (await worker.fetch(new Request('https://test.local/manifest.webmanifest'),env)).json();assert.equal(customizedManifest.icons[0].src,'/app-icon/'+iconUploads.icon192Id+'.png');assert.equal((await worker.fetch(new Request('https://test.local'+customizedManifest.icons[0].src),env)).headers.get('cache-control'),'public,max-age=31536000,immutable');assert.equal((await worker.fetch(new Request('https://test.local/app-icon/'+mediaId+'.png'),env)).status,404);
-assert.equal((await call('/api/admin/pwa','POST',{...branding,icons:{...iconUploads,icon192Id:iconUploads.icon512Id}},'owner')).status,400);assert.equal((await call('/api/admin/pwa','POST',{...branding,resetIcons:true},'owner')).status,200);assert.equal((await call('/api/pwa')).data.icons[0].src,'/icons/app-192.png');
+assert.equal((await call('/api/admin/pwa','POST',{...branding,icons:{...iconUploads,icon192Id:iconUploads.icon512Id}},'owner')).status,400);assert.equal((await call('/api/admin/pwa','POST',{...branding,resetIcons:true},'owner')).status,200);assert.match((await call('/api/pwa')).data.icons[0].src,/^\/icons\/app-192\.png(\?v=[0-9a-f]+)?$/);
 const originalMediaGet=env.MEDIA.get;env.MEDIA.get=async key=>{const result=await originalMediaGet(key);if(result)result.httpEtag='"test-image-etag"';return result};const cachedImage=await worker.fetch(new Request('https://test.local/group-logo/'+group),env);assert.ok(cachedImage.headers.get('cache-control').includes('max-age'));assert.equal((await worker.fetch(new Request('https://test.local/group-logo/'+group,{headers:{'if-none-match':'"test-image-etag"'}}),env)).status,304);env.MEDIA.get=originalMediaGet;
 console.log('PASS: personal archive/delete/mute isolation, symmetric private block enforcement, blocked group join/post protection, public blocked-feed filtering, private-block metadata, owner-only configurable PWA manifest/icons and conditional image caching.');
 // Blocking ordinary contact must not stop the assigned-Admin deal resolution channel.
@@ -609,7 +618,7 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
  const unrelated=(await call('/api/deal-admins?postId='+sale,'GET',undefined,other)).data;assert.equal(unrelated.recommended.length,0);assert.equal(unrelated.owner.id,'owner');
  assert.equal((await call('/api/deals','POST',{postId:sale,adminId:b},b)).status,400);assert.equal((await call('/api/deals','POST',{postId:sale,adminId:other},b)).status,400);
  const created=await call('/api/deals','POST',{postId:sale,adminId:a},b);assert.equal(created.status,201);const d=created.data.deal;assert.equal(d.admin_id,a);assert.equal(d.status,'awaiting_seller');assert.equal(d.buyer_ok,1);assert.equal(d.seller_ok,0);
- assert.equal((await call('/api/deal-admins?dealId='+d.id,'GET',undefined,other)).status,404);assert.equal((await call('/api/deals/'+d.id+'/action','POST',{action:'change_admin',adminId:'owner',version:0},a)).status,403);
+ assert.equal((await call('/api/deal-admins?dealId='+d.id,'GET',undefined,other)).status,404);assert.equal((await call('/api/deals/'+d.id+'/action','POST',{action:'change_admin',adminId:'owner',version:0},a)).status,404);// the Admin does not see the deal before the seller accepts
  assert.equal((await call('/api/deals/'+d.id+'/action','POST',{action:'change_admin',adminId:'owner',version:0},s)).status,200);let changed=(await call('/api/deals/'+d.id,'GET',undefined,b)).data.deal;assert.equal(changed.admin_id,'owner');assert.equal(changed.status,'proposed');assert.equal(changed.seller_ok,1);assert.equal(changed.buyer_ok,0);
  assert.equal((await call('/api/deals/'+d.id+'/action','POST',{action:'accept',version:1},'owner')).status,409);assert.equal((await call('/api/deals/'+d.id+'/action','POST',{action:'confirm',version:1},b)).status,200);assert.equal((await call('/api/deals/'+d.id+'/action','POST',{action:'accept',version:2},'owner')).status,200);assert.equal((await call('/api/deals/'+d.id+'/action','POST',{action:'change_admin',adminId:a,version:3},b)).status,409);
  const history=(await call('/api/deals/'+d.id+'/history','GET',undefined,b)).data.events;assert.ok(history.some(e=>e.action==='admin_changed'));
@@ -647,4 +656,929 @@ console.log('PASS: website/app metadata uses saved branding with HTML escaping.'
 // Migration 020 keeps existing message text, read cursors and thread records.
 {
  const before=readFileSync(new URL('./schema.sql',import.meta.url),'utf8').replace('archived_at INTEGER,post_id TEXT REFERENCES wm_posts(id));','archived_at INTEGER);');const migrated=new DatabaseSync(':memory:');migrated.exec('CREATE TABLE users(id TEXT PRIMARY KEY,name TEXT,picture TEXT,created_at INTEGER,updated_at INTEGER);'+before);migrated.exec("INSERT INTO users(id,name) VALUES('b','Buyer'),('s','Seller');INSERT INTO wm_threads(id,buyer_id,seller_id,pair_key,created_at) VALUES('t','b','s','b:s',1);INSERT INTO wm_messages(thread_id,user_id,text,created_at) VALUES('t','b','Keep original message',1);INSERT INTO wm_chat_reads VALUES('s','private','t',1,1);");migrated.exec(readFileSync(new URL('./migrations/020_message_post_references.sql',import.meta.url),'utf8'));assert.equal(migrated.prepare('SELECT text FROM wm_messages').get().text,'Keep original message');assert.equal(migrated.prepare('SELECT post_id FROM wm_messages').get().post_id,null);assert.equal(migrated.prepare('SELECT last_read_id FROM wm_chat_reads').get().last_read_id,1);migrated.close();console.log('PASS: migration 020 preserves existing messages and read state.');
+}
+// Protected deal steps, secure handover, listing rules, safe names, trust card and share previews (migration 021).
+{
+ const previousAI=env.AI;env.AI=safeAI;sql.exec('DELETE FROM wm_limits; DELETE FROM wm_suspensions');env.WM_DATA_KEY='test-data-key-0123456789abcdef0123456789abcdef';
+ for(const id of ['pseller','pbuyer','newbie','vip']){sql.prepare('INSERT INTO users VALUES(?,?,?,?,?,?,?)').run(id,id,id+'@example.com',id,'',Date.now(),Date.now());const token=Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('hex');tokens[id]=token;sql.prepare('INSERT INTO sessions VALUES(?,?,?,?)').run(await hash(token),id,Date.now()+1000000,Date.now())}
+ sql.prepare('INSERT INTO wm_verifications(user_id,granted_by,created_at) VALUES(?,?,?)').run('vip','owner',Date.now());
+ const strict={...legacyRules,protectedDeals:true,requireGameUid:true,relistCooldownHours:24,dailyPostsUnverified:1,activePostsUnverified:3,dailyPostsVerified:10,activePostsVerified:30,dailyNeedPosts:3,expireDays:30,hideSold:true,nameRules:true,blockDuplicates:true,maxOpenDeals:0};
+ assert.equal((await call('/api/admin/market-rules','POST',strict,'admin')).status,403);
+ assert.equal((await call('/api/admin/market-rules','POST',{...strict,holdHours:-1},'owner')).status,400);
+ assert.equal((await call('/api/admin/market-rules','POST',{...strict,hideSold:'yes'},'owner')).status,400);
+ assert.equal((await call('/api/admin/market-rules','POST',strict,'owner')).status,200);assert.equal((await call('/api/market-rules')).data.rules.protectedDeals,true);
+ // Game UID: required, private, normalized (Bangla digits, spaces, dashes) and one active listing per UID.
+ assert.equal(normalizeGameUid(' ১২৩-৪৫৬ ৭৮৯ '),'123456789');assert.throws(()=>normalizeGameUid('12'));
+ const listing={title:'FF level 70 ID',details:'Evo guns and rare bundles',price:5000,kind:'Game ID',media:[],gameCategory:'free-fire'};
+ let r;
+ assert.equal((await call('/api/posts/precheck','POST',{...listing,postIntent:'sell',gameUid:'১২৩ ৪৫৬ ৭৮৯'},'pseller')).status,200);
+ r=await call('/api/posts','POST',{...listing,gameUid:'123-456-789'},'pseller');assert.equal(r.status,201);const pListing=r.data.id;
+ const stored=sql.prepare('SELECT uid_hash game_uid_hash,uid_enc game_uid_enc,uid_hint game_uid_hint FROM wm_post_uids WHERE post_id=?').get(pListing);assert.deepEqual({...sql.prepare('SELECT game_uid_hash,game_uid_enc,game_uid_hint FROM wm_posts WHERE id=?').get(pListing)},{game_uid_hash:null,game_uid_enc:null,game_uid_hint:''});assert.match(stored.game_uid_hash,/^[a-f0-9]{64}$/);assert.ok(stored.game_uid_enc.startsWith('v1.')&&!stored.game_uid_enc.includes('123456789'));assert.equal(stored.game_uid_hint,'789');
+ const publicCopy=(await call('/api/listing/'+pListing,'GET',undefined,'buyer')).data.post;assert.equal(publicCopy.game_uid_hash,undefined);assert.equal(publicCopy.game_uid_enc,undefined);assert.equal(publicCopy.game_uid_hint,undefined);assert.equal(publicCopy.has_game_uid,true);
+ const guestCopy=(await call('/api/feed')).data.posts.find(p=>p.id===pListing);assert.ok(guestCopy);assert.equal(guestCopy.game_uid_hint,undefined);assert.equal(guestCopy.game_uid_hash,undefined);
+ assert.equal((await call('/api/my-posts','GET',undefined,'pseller')).data.posts.find(p=>p.id===pListing).game_uid_hint,'789');
+ r=await call('/api/posts','POST',{...listing,title:'Second ID',gameUid:'99887766'},'pseller');assert.equal(r.status,429);assert.match(r.data.error,/Verified members can post more/);
+ assert.equal((await call('/api/posts/precheck','POST',{...listing,postIntent:'sell',gameUid:'99887766'},'pseller')).status,429);
+ assert.equal((await call('/api/posts','POST',{postIntent:'need',title:'Need FF ID under 5k',details:'',kind:'Community post',media:[]},'pseller')).status,201);
+ r=await call('/api/posts','POST',{...listing,gameUid:'123456789'},'vip');assert.equal(r.status,409);assert.match(r.data.error,/already listed by another member/);
+ r=await call('/api/posts','POST',{...listing,gameCategory:'efootball',gameUid:'123456789'},'vip');assert.equal(r.status,201);const vipListing=r.data.id;
+ r=await call('/api/posts','POST',{...listing,title:'Same again',gameCategory:'efootball',gameUid:'123 456 789'},'vip');assert.equal(r.status,409);assert.match(r.data.error,/You already posted this game ID/);
+ // Active Sell Post limit for unverified members (daily limit aged out in between).
+ for(let i=0;i<3;i++){assert.equal((await call('/api/posts','POST',{...listing,title:'Newbie '+i,gameUid:'5550000'+i},'newbie')).status,201);sql.prepare("UPDATE wm_posts SET created_at=created_at-2*86400000 WHERE user_id='newbie'").run()}
+ r=await call('/api/posts','POST',{...listing,title:'Newbie 4',gameUid:'55500009'},'newbie');assert.equal(r.status,429);assert.match(r.data.error,/Active Sell Post limit reached: 3/);
+ // Bump: once per interval, needs a UID on game listings, moves the post up without changing its content version.
+ r=await call('/api/posts/'+vipListing+'/bump','POST',{},'vip');assert.equal(r.status,429);
+ assert.equal((await call('/api/posts/'+vipListing+'/bump','POST',{},'newbie')).status,404);
+ sql.prepare('UPDATE wm_posts SET created_at=created_at-25*3600000 WHERE id=?').run(vipListing);const vipVersion=sql.prepare('SELECT version FROM wm_posts WHERE id=?').get(vipListing).version;
+  assert.equal((await call('/api/posts/'+vipListing+'/bump','POST',{},'vip')).status,200);assert.equal(sql.prepare('SELECT version FROM wm_posts WHERE id=?').get(vipListing).version,vipVersion);
+ sql.exec('DELETE FROM wm_post_interest');// smart feed: without likes or opens, a fresh Boost is first
+ assert.equal((await call('/api/feed?limit=30')).data.posts[0].id,vipListing);
+ // Expired listings leave the feed (unless the smart feed brings a few back; switched off here) but stay on the owner's profile until renewed.
+ assert.equal((await call('/api/admin/market-rules','POST',{...strict,resurfacePercent:0},'owner')).status,200);
+ sql.prepare('UPDATE wm_posts SET created_at=created_at-31*86400000,bumped_at=NULL,renewed_at=NULL WHERE id=?').run(vipListing);
+ assert.equal((await call('/api/feed?limit=30')).data.posts.some(p=>p.id===vipListing),false);assert.ok((await call('/api/my-posts','GET',undefined,'vip')).data.posts.some(p=>p.id===vipListing));
+ assert.equal((await call('/api/posts/'+vipListing+'/bump','POST',{},'vip')).status,200);assert.equal((await call('/api/feed?limit=30')).data.posts[0].id,vipListing);
+ // Sold listings leave the feed and the UID cannot be relisted during the cooldown.
+ const vipPost=(await call('/api/posts/'+vipListing,'GET',undefined,'vip')).data.post;sql.prepare("UPDATE wm_post_uids SET uid_hash='efootball-uid-hash' WHERE post_id=?").run(vipListing);
+ assert.equal((await call('/api/posts/'+vipListing+'/availability','POST',{availability:'sold',version:vipPost.version},'vip')).status,200);
+ assert.equal((await call('/api/feed?limit=30')).data.posts.some(p=>p.id===vipListing),false);assert.ok(sql.prepare("SELECT until_at FROM wm_uid_cooldowns WHERE uid_hash='efootball-uid-hash'").get().until_at>Date.now());
+ const deletable=(await call('/api/posts','POST',{...listing,title:'To delete',gameCategory:'custom',customGameName:'Clash Arena',gameUid:'CA-7788'},'vip'));assert.equal(deletable.status,201);
+ assert.equal((await call('/api/posts/'+deletable.data.id+'/delete','POST',{version:0},'vip')).status,200);
+ r=await call('/api/posts','POST',{...listing,title:'Relist',gameCategory:'custom',customGameName:'clash arena',gameUid:'ca7788'},'vip');assert.equal(r.status,409);assert.match(r.data.error,/sold or removed recently/);
+ // Protected deal: payment report, Admin payment confirmation with private proof, handover, delivery, checklist, hold, final.
+ const picks=(await call('/api/deal-admins?postId='+pListing,'GET',undefined,'pbuyer')).data;assert.equal(picks.mode,'mediated');assert.ok(picks.owner&&picks.allAdmins.some(x=>x.id==='admin'&&Number.isInteger(x.deals_done)));assert.ok(picks.allAdmins.every(x=>!['pbuyer','pseller'].includes(x.id)));assert.ok(Array.isArray(picks.myGroupAdmins));
+ r=await call('/api/deals','POST',{postId:pListing,adminId:'admin'},'pbuyer');assert.equal(r.status,201);const pd=r.data.id;assert.equal(r.data.deal.flow,1);
+ // Deal popup alerts: the seller hears about the new request; the Admin only after the buyer and the seller agree on that Admin; the requester does not; guests get 401.
+ assert.ok((await call('/api/deal-alerts','GET',undefined,'pseller')).data.alerts.some(a=>a.deal_id===pd&&a.title==='New deal request'&&/^Deal - \d+$/.test(a.deal_code)));
+ assert.equal((await call('/api/deal-alerts','GET',undefined,'admin')).data.alerts.some(a=>a.deal_id===pd),false);
+ assert.equal((await call('/api/deal-alerts','GET',undefined,'pbuyer')).data.alerts.some(a=>a.deal_id===pd),false);assert.equal((await call('/api/deal-alerts')).status,401);
+ const sellerAlert=(await call('/api/deal-alerts','GET',undefined,'pseller')).data.alerts.find(a=>a.deal_id===pd);assert.equal((await call('/api/notifications/read','POST',{ids:[sellerAlert.id]},'pseller')).status,200);assert.equal((await call('/api/deal-alerts','GET',undefined,'pseller')).data.alerts.some(a=>a.id===sellerAlert.id),false);
+ const deal=async(who='pbuyer')=>(await call('/api/deals/'+pd,'GET',undefined,who)).data.deal;
+ const act=async(who,action,extra={})=>call('/api/deals/'+pd+'/action','POST',{action,version:(await deal()).version,...extra},who);
+ assert.equal((await act('admin','accept')).status,404);// the Admin is not in the deal before the seller accepts
+ // The seller suggests another Admin: the buyer must agree again; nobody's Admin hears about it before both agree.
+ assert.equal((await act('pseller','change_admin',{adminId:'owner'})).status,200);let pending=await deal();assert.equal(pending.admin_id,'owner');assert.equal(pending.buyer_ok,0);assert.equal(pending.seller_ok,1);assert.equal(pending.admin_role,'owner');
+ assert.ok((await call('/api/deal-alerts','GET',undefined,'pbuyer')).data.alerts.some(a=>a.deal_id===pd&&a.title==='Another Admin was suggested'));assert.equal((await call('/api/deal-alerts','GET',undefined,'owner')).data.alerts.some(a=>a.deal_id===pd),false);
+ assert.equal((await act('owner','accept')).status,409);
+ assert.equal((await act('pbuyer','change_admin',{adminId:'admin'})).status,200);pending=await deal();assert.deepEqual([pending.admin_id,pending.buyer_ok,pending.seller_ok,pending.status],['admin',1,0,'proposed']);
+ assert.equal((await act('pseller','confirm')).status,200);
+ assert.ok((await call('/api/deal-alerts','GET',undefined,'admin')).data.alerts.some(a=>a.deal_id===pd&&a.title==='New deal request'));assert.ok((await call('/api/deal-alerts','GET',undefined,'pbuyer')).data.alerts.some(a=>a.deal_id===pd&&a.title==='Both agreed on the Admin'));
+ assert.equal((await act('admin','accept')).status,200);
+ let current=await deal();assert.equal(current.status,'active');assert.equal(current.secure_handover,true);assert.equal(current.game_uid,'123456789');assert.equal(current.handover.waiting,false);assert.deepEqual(current.checklist_items.length,5);
+ assert.equal((await call('/api/deals/'+pd,'GET',undefined,'outsider')).status,404);assert.equal((await call('/api/deals/'+pd,'GET',undefined,'owner')).status,404);
+ assert.equal((await act('pseller','mark_delivered')).status,409);assert.equal((await act('pbuyer','confirm_payment',{})).status,403);
+ assert.equal((await act('pbuyer','complete')).status,409);
+ const png=new Uint8Array([137,80,78,71,13,10,26,10,0,0,0,0,1,2,3,4]);
+ const proofFor=(dealId,who,kind)=>worker.fetch(new Request('https://test.local/api/deals/'+dealId+'/proof',{method:'POST',headers:{origin:'https://test.local','content-type':'image/png','x-proof-kind':kind,cookie:'wm_session='+tokens[who]},body:png}),env),proofReq=(who,kind)=>proofFor(pd,who,kind);
+ assert.equal((await act('pbuyer','mark_paid',{note:'sent'})).status,400);
+ assert.equal((await proofReq('admin','payment')).status,403);const proofRes=await proofReq('pbuyer','payment');assert.equal(proofRes.status,201);const proofId=(await proofRes.json()).id;
+ assert.equal((await act('pbuyer','mark_paid',{proofId:crypto.randomUUID()})).status,400);
+ assert.equal((await act('pbuyer','mark_paid',{proofId})).status,200);assert.equal((await act('pbuyer','mark_paid',{proofId})).status,409);
+ assert.equal((await call('/api/deals/'+pd+'/handover','POST',{action:'ready'},'pbuyer')).status,409);
+ assert.ok((await call('/api/deal-alerts','GET',undefined,'admin')).data.alerts.some(a=>a.deal_id===pd&&a.title==='Buyer sent the money'));
+ assert.equal((await act('admin','confirm_payment')).status,200);
+ current=await deal();assert.ok(current.activity_at>0);assert.ok(current.funded_at);assert.equal(current.payment_trx,'');assert.equal(current.payment_proof_id,proofId);assert.equal(current.proofs.length,1);
+ const proofUrl='https://test.local/api/deals/'+pd+'/proofs/'+proofId;assert.equal((await deal('pseller')).proofs.length,0);assert.equal((await worker.fetch(new Request(proofUrl,{headers:{cookie:'wm_session='+tokens.pseller}}),env)).status,404);
+ for(const who of ['pbuyer','admin','owner']){const view=await worker.fetch(new Request(proofUrl,{headers:{cookie:'wm_session='+tokens[who]}}),env);assert.equal(view.status,200,who);assert.equal(view.headers.get('cache-control'),'private,no-store')}
+ assert.equal((await worker.fetch(new Request(proofUrl,{headers:{cookie:'wm_session='+tokens.outsider}}),env)).status,404);assert.equal((await worker.fetch(new Request('https://test.local/media/'+proofId),env)).status,404);
+ const handover=(who,data)=>call('/api/deals/'+pd+'/handover',data?'POST':'GET',data,who);
+ assert.equal((await handover('pseller',{action:'submit',method:'Facebook',login:'fb@example.com',password:'Secret#1'})).status,409);
+ assert.equal((await handover('pseller',{action:'ready'})).status,403);assert.equal((await handover('pbuyer',{action:'ready'})).status,200);
+ assert.equal((await handover('pseller',{action:'submit',method:'Facebook'})).status,400);
+ assert.equal((await handover('pseller',{action:'submit',method:'Facebook',login:'fb@example.com',password:'Secret#1'})).status,200);
+ const sealedRow=sql.prepare('SELECT payload FROM wm_deal_handover WHERE deal_id=?').get(pd);assert.ok(sealedRow.payload.startsWith('v1.')&&!sealedRow.payload.includes('Secret')&&!sealedRow.payload.includes('fb@'));
+ assert.equal((await handover('admin',{action:'reveal'})).status,403);const adminView=await handover('admin');assert.equal(adminView.data.handover.waiting,true);assert.equal(JSON.stringify(adminView.data).includes('Secret'),false);
+ assert.equal((await handover('owner')).status,200);assert.equal((await handover('outsider')).status,404);assert.equal((await handover('owner',{action:'reveal'})).status,404);
+ const revealed=await handover('pbuyer',{action:'reveal'});assert.equal(revealed.status,200);assert.equal(revealed.data.details.password,'Secret#1');assert.equal(revealed.data.details.login,'fb@example.com');
+ assert.equal((await handover('pbuyer',{action:'reveal'})).status,409);assert.equal(sql.prepare('SELECT payload FROM wm_deal_handover WHERE deal_id=?').get(pd).payload,null);assert.ok((await handover('pseller')).data.handover.revealed_at);
+ assert.equal((await act('pseller','mark_delivered')).status,200);
+ assert.equal((await act('pbuyer','buyer_confirm',{checklist:['login_checked']})).status,400);
+ const checklistRes=await proofReq('pbuyer','checklist');assert.equal(checklistRes.status,201);const checklistProof=(await checklistRes.json()).id;
+ assert.equal((await act('pbuyer','buyer_confirm',{checklist:current.checklist_items,proofId:checklistProof})).status,200);
+ const checklistUrl='https://test.local/api/deals/'+pd+'/proofs/'+checklistProof;
+ assert.equal((await worker.fetch(new Request(checklistUrl,{headers:{cookie:'wm_session='+tokens.pseller}}),env)).status,404);assert.equal((await deal('pseller')).proofs.some(p=>p.kind==='checklist'),false);
+ for(const who of ['pbuyer','admin','owner'])assert.equal((await worker.fetch(new Request(checklistUrl,{headers:{cookie:'wm_session='+tokens[who]}}),env)).status,200,who);assert.ok((await deal('admin')).proofs.some(p=>p.kind==='checklist'));
+ current=await deal();assert.equal(current.status,'awaiting_final');assert.ok(current.hold_until>Date.now());
+ r=await act('admin','finalize');assert.equal(r.status,409);assert.match(r.data.error,/Safety hold/);
+ sql.prepare('UPDATE wm_deals SET delivered_at=delivered_at-25*3600000,buyer_done_at=buyer_done_at-25*3600000 WHERE id=?').run(pd);
+ assert.equal((await act('pseller','finalize')).status,403);assert.equal((await act('admin','finalize',{payout:'Paid seller via bKash 7X9'})).status,200);
+ const done=sql.prepare('SELECT status,payout_note,admin_done FROM wm_deals WHERE id=?').get(pd);assert.equal(done.status,'completed');assert.equal(done.payout_note,'Paid seller via bKash 7X9');
+ assert.ok(sql.prepare('SELECT cleared_at FROM wm_deal_handover WHERE deal_id=?').get(pd).cleared_at>0);assert.equal(sql.prepare('SELECT availability FROM wm_posts WHERE id=?').get(pListing).availability,'sold');
+ assert.ok(sql.prepare('SELECT until_at FROM wm_uid_cooldowns WHERE uid_hash=?').get(stored.game_uid_hash).until_at>Date.now());
+ const room=(await call('/api/deals/'+pd+'/messages','GET',undefined,'pbuyer')).data,steps=room.messages.filter(m=>m.system).map(m=>m.text);
+ for(const step of ['requested','accept','payment_sent','payment_received','handover_ready','handover_submitted','handover_revealed','delivered','buyer_confirmed','finalize'])assert.ok(steps.includes(step),step);
+ assert.equal(JSON.stringify(room).includes('Secret#1'),false);
+ // Admin-owned listing: the buyer stays protected; no one-sided completion before the buyer's check window ends.
+ r=await call('/api/posts','POST',{...listing,title:'Admin own protected ID',gameUid:'777000111'},'admin');assert.equal(r.status,201);const adminListing=r.data.id;
+ r=await call('/api/deals','POST',{postId:adminListing},'newbie');assert.equal(r.status,201);const ad=r.data.id;assert.equal(r.data.deal.mode,'direct');
+ const adeal=async()=>(await call('/api/deals/'+ad,'GET',undefined,'newbie')).data.deal;const aact=async(who,action,extra={})=>call('/api/deals/'+ad+'/action','POST',{action,version:(await adeal()).version,...extra},who);
+ assert.equal((await aact('admin','accept')).status,200);const adProof=await proofFor(ad,'newbie','payment');assert.equal(adProof.status,201);assert.equal((await aact('newbie','mark_paid',{proofId:(await adProof.json()).id})).status,200);r=await aact('admin','cancel');assert.equal(r.status,403);assert.match(r.data.error,/only the Owner can cancel/);assert.equal((await aact('admin','confirm_payment',{trx:'NG55'})).status,200);assert.equal((await aact('admin','mark_delivered')).status,200);
+ sql.prepare('UPDATE wm_deals SET delivered_at=delivered_at-25*3600000 WHERE id=?').run(ad);
+ r=await aact('admin','finalize',{doubleConfirm:true,reason:'Buyer is silent'});assert.equal(r.status,409);assert.match(r.data.error,/auto-confirms/);
+ r=await aact('admin','dispute',{reason:'Buyer says the account was recovered'});assert.equal(r.status,200);
+ assert.equal((await aact('admin','resolve_dispute')).status,403);
+ r=await call('/api/deals/'+ad+'/action','POST',{action:'resolve_dispute',redeliver:true,version:(await adeal()).version},'owner');assert.equal(r.status,200);
+ current=await adeal();assert.equal(current.status,'active');assert.equal(current.delivered_at,null);assert.equal(current.dispute_reason,'Buyer says the account was recovered');
+ assert.equal((await call('/api/deals/'+ad+'/action','POST',{action:'finalize',version:current.version},'owner')).status,404);
+ assert.equal((await aact('admin','mark_delivered')).status,200);sql.prepare('UPDATE wm_deals SET delivered_at=delivered_at-73*3600000 WHERE id=?').run(ad);
+ assert.equal((await aact('admin','finalize')).status,200);assert.equal(sql.prepare('SELECT status,buyer_done FROM wm_deals WHERE id=?').get(ad).status,'completed');
+ assert.equal(sql.prepare("SELECT user_id FROM wm_deal_events WHERE deal_id=? AND action='auto_confirmed'").get(ad).user_id,'newbie');
+ // Existing (flow 0) deals keep their original rules.
+ assert.equal(sql.prepare('SELECT count(*) n FROM wm_deals WHERE flow=0').get().n>0,true);
+ // Safe display names and usernames (Bangla names stay intact; emoji, symbols and badge words are blocked).
+ assert.equal(nameSkeleton('Аdm1n'),'admin');assert.equal(cleanAccountName('Rahat ✅✔️ 🔵'),'Rahat');assert.equal(cleanAccountName('✅✅'),'Member');assert.equal(nameProblem('মোঃ রাহাত হাসান'),null);assert.ok(nameProblem('Official Store'));
+ assert.equal((await call('/api/profile/details','POST',{name:'Rahat ✅',bio:''},'newbie')).status,400);
+ assert.equal((await call('/api/profile/details','POST',{name:'Rahat Adm1n',bio:''},'newbie')).status,400);
+ assert.equal((await call('/api/profile/details','POST',{name:'রাহাত ইসলাম',bio:''},'newbie')).status,200);assert.equal((await call('/api/me','GET',undefined,'newbie')).data.user.name,'রাহাত ইসলাম');
+ assert.equal((await call('/api/profile/settings','POST',{username:'verified_seller'},'newbie')).status,400);assert.equal((await call('/api/username?value=real_admin','GET',undefined,'newbie')).data.available,false);
+ // Trust card: role, verification date and deal record from the database.
+ const trust=(await call('/api/profile/admin/trust','GET',undefined,'buyer')).data.trust;assert.equal(trust.role,'trusted');assert.ok(trust.completed_admin>=1);assert.ok(trust.disputed>=1);
+ const vipTrust=(await call('/api/profile/vip/trust','GET',undefined,'buyer')).data.trust;assert.equal(vipTrust.verified,true);assert.ok(vipTrust.verified_at>0);assert.equal((await call('/api/profile/vip/trust')).status,401);
+ // Share previews for public posts only, HTML-escaped.
+ sql.prepare("UPDATE wm_posts SET title=? WHERE id=?").run('FF <script> "ID"',pListing);sql.prepare("UPDATE wm_posts SET availability='available' WHERE id=?").run(pListing);
+ const preview=await previewPage(env,new Request('https://test.local/post/'+pListing),'/post/'+pListing,'<html><head><title>Wize</title></head></html>');
+ assert.match(preview,/<meta property="og:title" content="FF &lt;script&gt; &quot;ID&quot; · ৳5,000">/);assert.match(preview,/<title>FF &lt;script&gt; &quot;ID&quot; · Wize<\/title>/);assert.equal(preview.includes('<script>'),false);
+ assert.equal(await previewPage(env,new Request('https://test.local/post/'+crypto.randomUUID()),'/post/'+crypto.randomUUID(),'<head>'),'<head>');
+ // An edit cannot turn a post into a game ID listing without a UID.
+ r=await call('/api/posts','POST',{title:'Chat about bundles',details:'General talk',price:null,kind:'Community post',media:[],gameCategory:'community'},'vip');assert.equal(r.status,201);const chatPost=r.data.id;
+ r=await call('/api/posts/'+chatPost+'/edit','POST',{title:'Now selling',details:'Game ID',price:5000,kind:'Game ID',media:[],gameCategory:'free-fire',version:0},'vip');assert.equal(r.status,200);assert.equal((await call('/api/market-rules')).data.rules.requireGameUid,false);
+ // Renewing an expired post or re-opening a sold one cannot create a second live listing for the same UID.
+ r=await call('/api/posts','POST',{...listing,title:'Old expired ID',gameUid:'31313131'},'vip');assert.equal(r.status,201);const expiredPost=r.data.id;sql.prepare('UPDATE wm_posts SET created_at=created_at-31*86400000 WHERE id=?').run(expiredPost);
+ assert.equal((await call('/api/posts','POST',{...listing,title:'Same UID new owner',gameUid:'31313131'},'pbuyer')).status,201);
+ r=await call('/api/posts/'+expiredPost+'/bump','POST',{},'vip');assert.equal(r.status,409);assert.match(r.data.error,/another active post/);
+ r=await call('/api/posts','POST',{...listing,title:'Sold then reopened',gameUid:'42424242'},'vip');assert.equal(r.status,201);const reopened=r.data.id;
+ assert.equal((await call('/api/posts/'+reopened+'/availability','POST',{availability:'sold',version:0},'vip')).status,200);sql.prepare('DELETE FROM wm_uid_cooldowns WHERE uid_hash=(SELECT uid_hash FROM wm_post_uids WHERE post_id=?)').run(reopened);
+ assert.equal((await call('/api/posts','POST',{...listing,title:'Relisted by owner',gameUid:'42424242'},'owner')).status,201);
+ r=await call('/api/posts/'+reopened+'/availability','POST',{availability:'available',version:1},'vip');assert.equal(r.status,409);assert.match(r.data.error,/another active post/);
+ // A cancel that loses a version race leaves the handover and the buyer's cancellation request untouched.
+ r=await call('/api/posts','POST',{...listing,title:'Race test ID',gameUid:'64646464'},'vip');assert.equal(r.status,201);const racePost=r.data.id;
+ r=await call('/api/deals','POST',{postId:racePost,adminId:'admin'},'pbuyer');const rd=r.data.id;const rdeal=async()=>(await call('/api/deals/'+rd,'GET',undefined,'pbuyer')).data.deal;const ract=async(who,action,extra={})=>call('/api/deals/'+rd+'/action','POST',{action,version:(await rdeal()).version,...extra},who);
+ assert.equal((await ract('vip','confirm')).status,200);assert.equal((await ract('admin','accept')).status,200);assert.equal((await ract('admin','confirm_payment',{trx:'RACE1'})).status,200);
+ assert.equal((await call('/api/deals/'+rd+'/handover','POST',{action:'ready'},'pbuyer')).status,200);assert.equal((await call('/api/deals/'+rd+'/handover','POST',{action:'submit',method:'Google',login:'race@example.com',password:'p'},'vip')).status,200);
+ assert.equal((await ract('pbuyer','request_cancel',{reason:'Changed my mind'})).status,200);
+ const realBatch=db.batch;db.batch=async stmts=>{db.batch=realBatch;sql.prepare('UPDATE wm_deals SET version=version+1 WHERE id=?').run(rd);return realBatch(stmts)};
+ assert.equal((await ract('admin','cancel')).status,409);db.batch=realBatch;
+ assert.ok(sql.prepare('SELECT payload FROM wm_deal_handover WHERE deal_id=?').get(rd).payload);assert.equal(sql.prepare('SELECT resolved_at FROM wm_deal_cancel_requests WHERE deal_id=?').get(rd).resolved_at,null);assert.equal((await rdeal()).status,'active');
+ // Simple finish: seller hands over, buyer confirms, seller confirms the money from the Admin -> completed.
+ assert.equal((await ract('vip','seller_paid')).status,409);assert.equal((await ract('admin','reject_cancel')).status,200);assert.equal((await ract('vip','mark_delivered')).status,200);
+ r=await ract('vip','seller_paid');assert.equal(r.status,409);assert.match(r.data.error,/auto-confirms/);
+ assert.equal((await ract('pbuyer','buyer_confirm',{})).status,400);assert.equal((await ract('pbuyer','buyer_confirm',{received:true})).status,200);assert.equal((await rdeal()).status,'awaiting_final');
+ assert.equal((await ract('pbuyer','seller_paid')).status,403);assert.equal((await ract('admin','seller_paid')).status,403);assert.equal((await ract('vip','seller_paid')).status,200);
+ assert.equal((await rdeal()).status,'completed');assert.ok(sql.prepare('SELECT cleared_at FROM wm_deal_handover WHERE deal_id=?').get(rd).cleared_at>0);assert.ok(sql.prepare("SELECT 1 FROM wm_deal_events WHERE deal_id=? AND action='seller_paid'").get(rd));
+ // Simplest path: money sent -> money received -> buyer got the ID -> Admin completes (seller's "ID given" is optional).
+ r=await call('/api/posts','POST',{...listing,title:'Admin completes ID',gameUid:'95959595'},'vip');assert.equal(r.status,201);const simple=(await call('/api/deals','POST',{postId:r.data.id,adminId:'admin'},'buyer')).data.id;
+ const sdeal=async()=>(await call('/api/deals/'+simple,'GET',undefined,'buyer')).data.deal,sact=async(who,action,extra={})=>call('/api/deals/'+simple+'/action','POST',{action,version:(await sdeal()).version,...extra},who);
+ assert.equal((await sact('vip','confirm')).status,200);assert.equal((await sact('admin','accept')).status,200);assert.equal((await sact('buyer','buyer_confirm',{received:true})).status,409);
+ const sProof=await proofFor(simple,'buyer','payment');assert.equal((await sact('buyer','mark_paid',{proofId:(await sProof.json()).id})).status,200);assert.equal((await sact('admin','confirm_payment')).status,200);
+ assert.equal((await sact('admin','finalize')).status,409);assert.equal((await sact('buyer','buyer_confirm',{received:true})).status,200);
+ sql.prepare('UPDATE wm_deals SET buyer_done_at=buyer_done_at-25*3600000 WHERE id=?').run(simple);assert.equal((await sact('admin','finalize')).status,200);assert.equal((await sdeal()).status,'completed');
+ r=await call('/api/posts','POST',{...listing,title:'Admin quick ID',gameUid:'87878787'},'admin');assert.equal(r.status,201);const quick=(await call('/api/deals','POST',{postId:r.data.id},'buyer')).data.id;
+ const qdeal=async()=>(await call('/api/deals/'+quick,'GET',undefined,'buyer')).data.deal,qact=async(who,action,extra={})=>call('/api/deals/'+quick+'/action','POST',{action,version:(await qdeal()).version,...extra},who);
+ assert.equal((await qact('admin','accept')).status,200);const qProof=await proofFor(quick,'buyer','payment');assert.equal((await qact('buyer','mark_paid',{proofId:(await qProof.json()).id})).status,200);
+ assert.equal((await qact('admin','confirm_payment')).status,200);assert.equal((await qact('admin','mark_delivered')).status,200);assert.equal((await qact('buyer','buyer_confirm',{received:true})).status,200);assert.equal((await qdeal()).status,'completed');
+ // Google sign-in names: emoji removed, badge words replaced unless it is the Owner.
+ assert.equal(await signInName(db,{name:'Wize Official ✅ Admin',sub:'pbuyer'}),'Member');assert.equal(await signInName(db,{name:'Rahat 🔥',sub:'pbuyer'}),'Rahat');assert.equal(await signInName(db,{name:'Rahat Wize',sub:'owner'}),'Rahat Wize');
+ // Phone / email + password accounts: normalised logins, hashed passwords, generic errors, throttling, working session.
+ assert.equal(loginId('phone','০১৭১২-৩৪৫ ৬৭৮'),'8801712345678');assert.equal(loginId('phone','+880 1712 345678'),'8801712345678');assert.equal(loginId('email',' Rafi@Example.COM '),'rafi@example.com');assert.throws(()=>loginId('phone','12345'));
+ const authCall=async(path,data)=>worker.fetch(new Request('https://test.local/api/auth/'+path,{method:'POST',headers:{origin:'https://test.local','content-type':'application/json','cf-connecting-ip':'198.51.100.'+Math.floor(Math.random()*200)},body:JSON.stringify(data)}),env);
+ assert.equal((await authCall('signup',{method:'phone',login:'01712345678',password:'short',name:'Rafi Hasan'})).status,400);
+ assert.equal((await authCall('signup',{method:'phone',login:'01712345678',password:'goodpass123',name:'Rafi ✅ Admin'})).status,400);
+ let signup=await authCall('signup',{method:'phone',login:'+8801712345678',password:'goodpass123',name:'Rafi Hasan'});assert.equal(signup.status,201);assert.match(signup.headers.get('set-cookie'),/^wm_session=[a-f0-9]{64}; HttpOnly; Secure; SameSite=Lax/);assert.equal((await signup.json()).user.name,'Rafi Hasan');
+ const stored2=sql.prepare("SELECT c.login,c.kind,c.password_hash,u.google_sub FROM wm_credentials c JOIN users u ON u.id=c.user_id WHERE c.login='8801712345678'").get();assert.equal(stored2.kind,'phone');assert.match(stored2.password_hash,/^[a-f0-9]{64}$/);assert.ok(!stored2.password_hash.includes('goodpass'));assert.match(stored2.google_sub,/^password:/);
+ assert.equal((await authCall('signup',{method:'phone',login:'01712345678',password:'another123',name:'Someone'})).status,409);
+ assert.equal((await authCall('signin',{login:'01712345678',password:'wrongpass1'})).status,401);{const none=await authCall('signin',{login:'01999999999',password:'whatever1'});assert.equal(none.status,404);assert.match((await none.json()).error,/Create account/)}
+ const signin=await authCall('signin',{login:'০১৭১২৩৪৫৬৭৮',password:'goodpass123'});assert.equal(signin.status,200);const sessionCookie=signin.headers.get('set-cookie').split(';')[0];
+ const meNow=await worker.fetch(new Request('https://test.local/api/me',{headers:{cookie:sessionCookie}}),env);assert.equal((await meNow.json()).user.name,'Rafi Hasan');
+ assert.equal((await authCall('signup',{method:'email',login:'Mim@Example.com',password:'mimpass123',name:'মিম আক্তার'})).status,201);assert.equal((await authCall('signin',{login:'mim@example.com',password:'mimpass123'})).status,200);
+ const throttled=[];for(let i=0;i<6;i++)throttled.push((await authCall('signin',{login:'mim@example.com',password:'nope-'+i})).status);assert.ok(throttled.includes(429),throttled.join(','));
+ assert.equal((await worker.fetch(new Request('https://test.local/api/auth/signin',{method:'POST',headers:{origin:'https://evil.local','content-type':'application/json'},body:JSON.stringify({login:'mim@example.com',password:'mimpass123'})}),env)).status,403);
+ // Owner-assisted password reset: request -> Owner makes a one-time link -> member sets a new password.
+ assert.equal((await authCall('forgot',{method:'phone',login:'01712345678'})).status,200);assert.equal((await authCall('forgot',{method:'email',login:'nobody@example.com'})).status,200);
+ assert.equal((await call('/api/admin/reset-requests','GET',undefined,'admin')).status,403);
+ const resetRequests=(await call('/api/admin/reset-requests','GET',undefined,'owner')).data.requests,rafiRequest=resetRequests.find(x=>x.login==='8801712345678');
+ assert.ok(rafiRequest&&rafiRequest.user_id&&rafiRequest.has_password&&rafiRequest.name==='Rafi Hasan');assert.ok(resetRequests.some(x=>x.login==='nobody@example.com'&&!x.user_id));
+ assert.equal((await call('/api/admin/password-accounts?q=rafi','GET',undefined,'owner')).data.accounts[0].login,'8801712345678');assert.equal((await call('/api/admin/password-accounts?q=1712345','GET',undefined,'owner')).data.accounts.length,1);
+ assert.equal((await call('/api/admin/reset-link','POST',{userId:'buyer'},'owner')).status,404);assert.equal((await call('/api/admin/reset-link','POST',{userId:rafiRequest.user_id},'admin')).status,403);
+ const resetLink=(await call('/api/admin/reset-link','POST',{userId:rafiRequest.user_id},'owner')).data;assert.match(resetLink.link,/^https:\/\/test\.local\/#reset=[a-f0-9]{64}$/);assert.equal(resetLink.login,'8801712345678');
+ const resetToken=resetLink.link.split('#reset=')[1];assert.equal(sql.prepare('SELECT count(*) n FROM wm_password_resets WHERE token_hash=?').get(resetToken).n,0);assert.equal(sql.prepare('SELECT count(*) n FROM wm_password_resets WHERE token_hash=?').get(await hash(resetToken)).n,1);
+ assert.equal((await call('/api/admin/reset-requests','GET',undefined,'owner')).data.requests.some(x=>x.user_id===rafiRequest.user_id),false);
+ assert.equal((await authCall('reset',{token:resetToken,password:'short'})).status,400);assert.equal((await authCall('reset',{token:'f'.repeat(64),password:'brandnew123'})).status,410);
+ const resetDone=await authCall('reset',{token:resetToken,password:'brandnew123'});assert.equal(resetDone.status,200);assert.match(resetDone.headers.get('set-cookie'),/^wm_session=[a-f0-9]{64}/);
+ assert.equal((await authCall('reset',{token:resetToken,password:'another123'})).status,410);
+ assert.equal((await (await worker.fetch(new Request('https://test.local/api/me',{headers:{cookie:sessionCookie}}),env)).json()).user,null);
+ assert.equal((await authCall('signin',{login:'01712345678',password:'goodpass123'})).status,401);assert.equal((await authCall('signin',{login:'01712345678',password:'brandnew123'})).status,200);
+ const olderToken=(await call('/api/admin/reset-link','POST',{userId:rafiRequest.user_id},'owner')).data.link.split('#reset=')[1];
+ const staleToken=(await call('/api/admin/reset-link','POST',{userId:rafiRequest.user_id},'owner')).data.link.split('#reset=')[1];assert.equal((await authCall('reset',{token:olderToken,password:'brandnew789'})).status,410);sql.prepare('UPDATE wm_password_resets SET expires_at=? WHERE token_hash=?').run(Date.now()-1,await hash(staleToken));assert.equal((await authCall('reset',{token:staleToken,password:'brandnew456'})).status,410);
+ // Verification needs the NID photo, a WhatsApp number and the live location; only the Owner sees them.
+ const nidUpload=await worker.fetch(new Request('https://test.local/api/private-evidence',{method:'POST',headers:{origin:'https://test.local','content-type':'image/png','x-evidence-kind':'verification',cookie:'wm_session='+tokens.newbie},body:png}),env);assert.equal(nidUpload.status,201);const nidId=(await nidUpload.json()).id;
+ assert.equal((await call('/api/verification','POST',{kind:'seller',documentId:nidId},'newbie')).status,400);
+ assert.equal((await call('/api/verification','POST',{kind:'seller',whatsapp:'01811111111',location:{lat:123,lng:90.4,accuracy:20},documentId:nidId},'newbie')).status,400);
+ // Live location is no longer asked: NID photo + WhatsApp number are enough.
+ assert.equal((await call('/api/verification','POST',{kind:'seller',whatsapp:'০১৮১১-১১১১১১',documentId:nidId},'newbie')).status,201);
+ const verificationRow=(await call('/api/admin/verifications','GET',undefined,'owner')).data.requests.find(v=>v.user_id==='newbie');assert.equal(verificationRow.whatsapp,'8801811111111');assert.equal(verificationRow.location_lat,null);assert.equal(verificationRow.location_at,null);
+ const ownView=(await call('/api/verification','GET',undefined,'newbie')).data.requests[0];assert.equal(ownView.location_lat,undefined);assert.equal(ownView.whatsapp,undefined);assert.equal((await call('/api/admin/verifications','GET',undefined,'admin')).status,403);
+ // Groups: add one of my published IDs to a group I joined; leaving clears my copy and my membership.
+ assert.equal((await call('/api/groups/'+group+'/join','POST',{},'vip')).status,200);assert.equal((await call('/api/groups/'+group+'/join','POST',{},'owner')).status,200);
+ r=await call('/api/posts','POST',{...listing,title:'Group share ID',price:7000,gameUid:'21212121'},'owner');assert.equal(r.status,201);const sharedId=r.data.id;
+ r=await call('/api/groups/'+group+'/share-post','POST',{postId:sharedId},'owner');assert.equal(r.status,200);assert.equal(r.data.added,true);assert.equal((await call('/api/groups/'+group+'/share-post','POST',{postId:sharedId},'owner')).data.added,false);
+ // Feed IDs added to a group are kept as placements but the group list shows only IDs posted inside the group.
+ assert.ok(!(await call('/api/feed?group='+group,'GET',undefined,'vip')).data.posts.some(p=>p.id===sharedId));
+ assert.equal((await call('/api/groups/'+group+'/share-post','POST',{postId:sharedId},'outsider')).status>=400,true);assert.equal((await call('/api/groups/'+group+'/share-post','POST',{postId:pListing},'vip')).status,404);
+ assert.equal((await call('/api/groups/'+group+'/leave','POST',{},'admin')).status,409);// the creator must hand the group to an admin first
+ assert.equal((await call('/api/groups/'+group+'/messages','POST',{text:'before leaving'},'vip')).status,201);assert.equal((await call('/api/groups/'+group+'/leave','POST',{},'vip')).status,200);
+ assert.equal(sql.prepare('SELECT count(*) n FROM wm_group_members WHERE group_id=? AND user_id=?').get(group,'vip').n,0);assert.ok((await call('/api/groups/'+group+'/messages','GET',undefined,'vip')).status>=400);
+ assert.equal((await call('/api/groups/'+group+'/join','POST',{},'vip')).status,200);assert.equal((await call('/api/groups/'+group+'/messages','GET',undefined,'vip')).data.messages.some(m=>m.text==='before leaving'),false);
+ // Same post again is blocked with a Boost hint (spaces, symbols and letter case do not matter); a changed price is a new post.
+ r=await call('/api/posts','POST',{...listing,title:'Dup check ID',details:'Level 70, 5 rare bundles',price:5500,gameUid:'73737301'},'owner');assert.equal(r.status,201);const dupFirst=r.data.id;
+ r=await call('/api/posts/precheck','POST',{postIntent:'sell',kind:'Game ID',price:'5500',gameCategory:'free-fire',gameUid:'73737302',title:'  dup CHECK id!! ',details:'Level 70 , 5 rare bundles.'},'owner');assert.equal(r.status,409);assert.match(r.data.error,/Boost/);assert.match(r.data.error,/ID No - \d+/);
+ assert.equal((await call('/api/posts','POST',{...listing,title:'Dup check ID',details:'Level 70, 5 rare bundles',price:5500,gameUid:'73737302'},'owner')).status,409);
+ assert.equal((await call('/api/posts','POST',{...listing,title:'Dup check ID',details:'Level 70, 5 rare bundles',price:5600,gameUid:'73737303'},'owner')).status,201);
+ // Boost wait: the answer says how long is left and gives the next boost time for the countdown.
+ sql.prepare('UPDATE wm_posts SET created_at=created_at-25*3600000 WHERE id=?').run(dupFirst);r=await call('/api/posts/'+dupFirst+'/bump','POST',{},'owner');assert.equal(r.status,200);assert.equal(r.data.next_boost_at-r.data.bumped_at,legacyRules.bumpHours*3600000);
+ r=await call('/api/posts/'+dupFirst+'/bump','POST',{},'owner');assert.equal(r.status,429);assert.match(r.data.error,/again in 2[34]h\./);
+ // Feed shows one member after another: the same member appears twice in a row only when nobody else is left on the page.
+ const mixed=(await call('/api/feed?limit=30','GET',undefined,'vip')).data.posts,who=p=>p.shared_by_id||p.user_id;assert.ok(new Set(mixed.map(who)).size>1);
+ for(let i=0;i+1<mixed.length;i++)if(who(mixed[i])===who(mixed[i+1]))assert.ok(mixed.slice(i).every(p=>who(p)===who(mixed[i])),'feed mixes members');
+ // Profile links: only the Owner and Admins can add them; web addresses are checked; saving without links keeps them.
+ r=await call('/api/profile/details','POST',{name:'owner',bio:'',links:[{label:'My Facebook page',url:'facebook.com/wize'},{label:'',url:'https://www.youtube.com/@wize'}]},'owner');assert.equal(r.status,200);
+ assert.deepEqual((await call('/api/profile/owner','GET',undefined,'vip')).data.profile.links,[{label:'My Facebook page',url:'https://facebook.com/wize'},{label:'youtube.com',url:'https://www.youtube.com/@wize'}]);
+ assert.equal((await call('/api/profile/details','POST',{name:'vip',bio:'',links:[{label:'x',url:'https://x.com/a'}]},'vip')).status,403);assert.deepEqual((await call('/api/profile/vip','GET',undefined,'owner')).data.profile.links,[]);
+ for(const bad of ['javascript:alert(1)','https://user:pw@evil.com','localhost','']) assert.equal((await call('/api/profile/details','POST',{name:'owner',bio:'',links:[{label:'bad',url:bad}]},'owner')).status,400,bad);
+ assert.equal((await call('/api/profile/details','POST',{name:'owner',bio:'',links:Array.from({length:6},(_,i)=>({label:'l'+i,url:'https://a.com/'+i}))},'owner')).status,400);
+ assert.equal((await call('/api/profile/details','POST',{name:'owner',bio:'hello'},'owner')).status,200);assert.equal((await call('/api/profile/owner','GET',undefined,'vip')).data.profile.links.length,2);
+ sql.prepare("UPDATE wm_profile_details SET links=? WHERE user_id='vip'").run(JSON.stringify([{label:'old',url:'https://old.example.com'}]));assert.deepEqual((await call('/api/profile/vip','GET',undefined,'owner')).data.profile.links,[]);
+ // Normal Posts: no price or game, their own daily limit (Sell limits do not count them), no deals, and they stay Normal when edited.
+ assert.equal((await call('/api/admin/market-rules','POST',{...strict,dailyNormalPosts:2},'owner')).status,200);
+ r=await call('/api/posts','POST',{postIntent:'normal',title:'Scammer alert: fake bKash screenshot',kind:'Game ID',price:'5000',gameCategory:'free-fire',media:[]},'newbie');assert.equal(r.status,201);const normalId=r.data.id;
+ assert.deepEqual({...sql.prepare('SELECT post_intent,kind,price,game_category,details FROM wm_posts WHERE id=?').get(normalId)},{post_intent:'sell',kind:'Community post',price:null,game_category:'community',details:''});
+ assert.equal((await call('/api/posts','POST',{postIntent:'normal',title:'Fun post two',details:'GG everyone',media:[]},'newbie')).status,201);
+ r=await call('/api/posts','POST',{postIntent:'normal',title:'Fun post three',media:[]},'newbie');assert.equal(r.status,429);assert.match(r.data.error,/Normal Post limit reached: 2 new posts/);
+ assert.equal((await call('/api/posts/precheck','POST',{postIntent:'normal',kind:'Community post',title:'Fun post four'},'newbie')).status,429);
+ assert.equal((await call('/api/posts','POST',{postIntent:'normal',title:'Owner notice one',media:[]},'owner')).status,201);
+ assert.ok((await call('/api/deals','POST',{postId:normalId,adminId:'owner'},'buyer')).status>=400);
+ r=await call('/api/posts/'+normalId+'/edit','POST',{postIntent:'normal',title:'Scammer alert (updated)',details:'Check the TrxID before you send an ID',kind:'Game ID',price:'9000',gameCategory:'free-fire',media:[],version:sql.prepare('SELECT version FROM wm_posts WHERE id=?').get(normalId).version},'newbie');assert.equal(r.status,200);
+ assert.deepEqual({...sql.prepare('SELECT kind,price,title FROM wm_posts WHERE id=?').get(normalId)},{kind:'Community post',price:null,title:'Scammer alert (updated)'});
+ assert.equal((await call('/api/posts/'+normalId+'/edit','POST',{postIntent:'need',title:'x',media:[],version:sql.prepare('SELECT version FROM wm_posts WHERE id=?').get(normalId).version},'newbie')).status,400);
+ // Texts & templates: public read with defaults, Owner-only save, checked links/lengths, custom verification questions.
+ r=await call('/api/site-content');assert.equal(r.status,200);assert.equal(r.data.content.poweredBy,'Powered by @Rahat Wize');assert.equal(r.data.content.templates.normal.heading,'Share something with the community');assert.deepEqual(r.data.content.verification.questions,[]);assert.deepEqual(r.data.content.login,{brand:'',title:'',registerTitle:''});assert.deepEqual(r.data.content.profile,{memberLabel:'',emptyTitle:'',emptyText:''});assert.deepEqual(r.data.content.sectionOrder,[]);assert.equal(r.data.defaults.footerText,'© 2026 Buy Sell This Site. All rights reserved.');
+ const content={...r.data.content,footerText:'© 2026 Wize X',noticeOn:true,noticeText:'Boost is free this week',noticeLink:'https://wizefftopup.com',templates:{...r.data.content.templates,sell:{heading:'Sell your ID',titleHint:'FF Level 80 ID',details:'Level:\nEvo guns:\nLogin:',tip:'Add clear photos'}},verification:{...r.data.content.verification,questions:[{label:'Your Facebook profile link',required:true},{label:'How long have you been selling?',required:false}]}};
+ assert.equal((await call('/api/admin/site-content','POST',content,'admin')).status,403);
+ assert.equal((await call('/api/admin/site-content','POST',{...content,noticeLink:'javascript:alert(1)'},'owner')).status,400);
+ assert.equal((await call('/api/admin/site-content','POST',{...content,verification:{...content.verification,questions:Array.from({length:7},()=>({label:'q',required:false}))}},'owner')).status,400);
+ assert.equal((await call('/api/admin/site-content','POST',{...content,footerText:'x'.repeat(201)},'owner')).status,400);
+ assert.equal((await call('/api/admin/site-content','POST',{...content,login:{brand:'x'.repeat(41)}},'owner')).status,400);
+ assert.equal((await call('/api/admin/site-content','POST',{...content,login:{brand:'WIZE X',title:'Welcome to Wize X!',registerTitle:'Join Wize X'}},'owner')).status,200);assert.deepEqual((await call('/api/site-content')).data.content.login,{brand:'WIZE X',title:'Welcome to Wize X!',registerTitle:'Join Wize X'});
+ assert.equal((await call('/api/admin/site-content','POST',{...content,sectionOrder:['footer','nope']},'owner')).status,400);assert.equal((await call('/api/admin/site-content','POST',{...content,sectionOrder:['footer','footer']},'owner')).status,400);
+ r=await call('/api/admin/site-content','POST',{...content,login:{brand:'WIZE X',title:'Welcome to Wize X!',registerTitle:'Join Wize X'},sectionOrder:['sell','login'],profile:{memberLabel:'Wize member',emptyTitle:'Nothing here',emptyText:'Posts show here'}},'owner');assert.equal(r.status,200);
+ r=await call('/api/site-content');assert.deepEqual(r.data.content.sectionOrder,['sell','login']);assert.deepEqual(r.data.content.profile,{memberLabel:'Wize member',emptyTitle:'Nothing here',emptyText:'Posts show here'});
+ // Admin Panel post search: by ID number (12 or "ID No - 12"), title or member, across both tabs.
+ const searchCode=sql.prepare('SELECT number FROM wm_listing_ids WHERE post_id=?').get(normalId).number;
+ for(const q of [String(searchCode),'ID No - '+searchCode,'id no '+searchCode])assert.ok((await call('/api/admin/posts?view=published&q='+encodeURIComponent(q),'GET',undefined,'owner')).data.posts.some(p=>p.id===normalId),q);
+ r=await call('/api/admin/posts?view=restricted&q='+encodeURIComponent('Scammer alert (updated)'),'GET',undefined,'owner');assert.ok(r.data.posts.some(p=>p.id===normalId&&p.listing_code==='ID No - '+searchCode));
+ assert.equal((await call('/api/admin/posts?q=zzzz-nothing','GET',undefined,'owner')).data.posts.length,0);assert.equal((await call('/api/admin/posts?q=1','GET',undefined,'vip')).status,403);
+ assert.equal((await call('/api/admin/site-content','POST',content,'owner')).status,200);
+ r=await call('/api/site-content');assert.equal(r.data.content.footerText,'© 2026 Wize X');assert.equal(r.data.content.noticeOn,true);assert.equal(r.data.content.templates.sell.details,'Level:\nEvo guns:\nLogin:');assert.equal(r.data.content.templates.need.heading,'What are you looking for?');assert.equal(r.data.content.verification.questions[0].required,true);
+ const nid2=await worker.fetch(new Request('https://test.local/api/private-evidence',{method:'POST',headers:{origin:'https://test.local','content-type':'image/png','x-evidence-kind':'verification',cookie:'wm_session='+tokens.pbuyer},body:png}),env);assert.equal(nid2.status,201);const nid2Id=(await nid2.json()).id;
+ const place={lat:23.7,lng:90.4,accuracy:25};
+ r=await call('/api/verification','POST',{kind:'seller',whatsapp:'01922222222',location:place,documentId:nid2Id,answers:['',' 2 years ']},'pbuyer');assert.equal(r.status,400);assert.match(r.data.error,/Please answer: Your Facebook profile link/);
+ assert.equal((await call('/api/verification','POST',{kind:'seller',whatsapp:'01922222222',location:place,documentId:nid2Id,answers:['https://facebook.com/pbuyer',' 2 years ']},'pbuyer')).status,201);
+ const answered=(await call('/api/admin/verifications','GET',undefined,'owner')).data.requests.find(v=>v.user_id==='pbuyer');assert.deepEqual(JSON.parse(answered.answers),[{q:'Your Facebook profile link',a:'https://facebook.com/pbuyer'},{q:'How long have you been selling?',a:'2 years'}]);
+ // Approving gives the blue tick (never the Admin role); a second review of the same application changes nothing; rejecting gives nothing.
+ assert.equal((await call('/api/profile/pbuyer','GET',undefined,'owner')).data.profile.verified,0);
+ assert.equal((await call('/api/admin/verification-action','POST',{id:answered.id,action:'approve'},'admin')).status,403);
+ r=await call('/api/admin/verification-action','POST',{id:answered.id,action:'approve'},'owner');assert.equal(r.status,200);assert.equal(r.data.verified,true);
+ assert.equal((await call('/api/profile/pbuyer','GET',undefined,'owner')).data.profile.verified,1);assert.equal((await call('/api/profile/pbuyer','GET',undefined,'owner')).data.profile.role,'member');
+ r=await call('/api/admin/verification-action','POST',{id:answered.id,action:'reject'},'owner');assert.equal(r.data.reviewed,0);assert.equal(sql.prepare('SELECT status FROM wm_verification_requests WHERE id=?').get(answered.id).status,'approved');
+ r=await call('/api/admin/verification-action','POST',{id:verificationRow.id,action:'reject'},'owner');assert.equal(r.data.verified,false);assert.equal(sql.prepare("SELECT count(*) n FROM wm_verifications WHERE user_id='newbie'").get().n,0);
+ // Profiles show the groups an Owner/Admin made (name, logo link, member count, joined flag); members have none.
+ const adminGroups=(await call('/api/profile/admin','GET',undefined,'newbie')).data.profile.groups;const shown=adminGroups.find(g=>g.id===group);assert.ok(shown);assert.equal(shown.name,sql.prepare('SELECT name FROM wm_groups WHERE id=?').get(group).name);assert.match(shown.logo,/^\/group-logo\//);assert.equal(shown.members,sql.prepare('SELECT count(*) n FROM wm_group_members WHERE group_id=?').get(group).n);assert.equal(shown.joined,sql.prepare('SELECT count(*) n FROM wm_group_members WHERE group_id=? AND user_id=?').get(group,'newbie').n);
+ assert.equal((await call('/api/profile/admin','GET',undefined,'admin')).data.profile.groups.find(g=>g.id===group).joined,1);assert.deepEqual((await call('/api/profile/newbie','GET',undefined,'owner')).data.profile.groups,[]);
+ // Admin picker: "Your Admins" lists the Admins this member already did (accepted) deals with; the full Admin list is always there.
+ sql.prepare("UPDATE wm_posts SET created_at=created_at-86400000-60000 WHERE user_id='vip'").run();sql.prepare("DELETE FROM wm_limits WHERE key='publish:vip'").run();r=await call('/api/posts','POST',{...listing,title:'Picker check ID',details:'For the Admin picker',price:6100,gameUid:'73737311'},'vip');assert.equal(r.status,201);const pickerPost=r.data.id;
+ // Deal box: only Admins of groups the buyer or the seller joined (seller-only groups are not named); with none, the client shows only the Owner.
+ const expectRelated=sql.prepare("SELECT DISTINCT g.owner_id id FROM wm_group_members m JOIN wm_groups g ON g.id=m.group_id JOIN wm_roles r ON r.user_id=g.owner_id AND r.role IN ('owner','trusted') WHERE m.user_id IN ('pbuyer','vip') AND g.owner_id NOT IN ('pbuyer','vip') ORDER BY 1").all().map(x=>x.id);
+ let pk=(await call('/api/deal-admins?postId='+pickerPost,'GET',undefined,'pbuyer')).data;assert.equal(pk.mode,'mediated');assert.equal(pk.iAm,'buyer');assert.equal(pk.owner.id,'owner');assert.deepEqual(pk.relatedAdmins.map(a=>a.id).sort(),expectRelated);assert.equal(pk.recommendOwner,false);assert.ok(expectRelated.includes('admin'));
+ const sellerSide=pk.relatedAdmins.find(a=>a.id==='admin');assert.equal(sellerSide.theirs,1);if(!sellerSide.mine)assert.equal(sellerSide.my_groups,null);assert.ok(Number.isInteger(sellerSide.deals_done));
+ sql.prepare("DELETE FROM wm_group_members WHERE user_id IN ('pbuyer','vip')").run();pk=(await call('/api/deal-admins?postId='+pickerPost,'GET',undefined,'pbuyer')).data;assert.deepEqual(pk.relatedAdmins,[]);assert.equal(pk.recommendOwner,true);// new members: the Owner is recommended on top
+assert.equal(pk.owner.id,'owner');
+ // Maintenance: Owner-only switch; while on, visitors get a sorry page and members get 503 from the API; the Owner and the Admin Panel keep working.
+ assert.equal((await call('/api/admin/maintenance','POST',{on:true},'admin')).status,403);assert.equal((await call('/api/admin/maintenance','POST',{on:'yes'},'owner')).status,400);
+ r=await call('/api/admin/maintenance','POST',{on:true,message:'Back at 10 PM <b>soon</b>'},'owner');assert.equal(r.status,200);assert.equal(r.data.on,true);
+ assert.deepEqual((await call('/api/maintenance')).data,{on:true,message:'Back at 10 PM <b>soon</b>'});
+ r=await call('/api/feed?limit=1','GET',undefined,'vip');assert.equal(r.status,503);assert.equal(r.data.maintenance,true);assert.equal((await call('/api/feed?limit=1')).status,503);
+ assert.equal((await call('/api/feed?limit=1','GET',undefined,'owner')).status,200);assert.equal((await panelRequest('maintenance')).status,200);
+ const closedPage=await worker.fetch(new Request('https://test.local/'),env);assert.equal(closedPage.status,503);const closedHtml=await closedPage.text();assert.match(closedHtml,/Back at 10 PM &lt;b&gt;soon&lt;\/b&gt;/);assert.ok(!closedHtml.includes('<b>soon'));
+ r=await call('/api/admin/maintenance','POST',{on:false},'owner');assert.equal(r.status,200);assert.equal((await call('/api/feed?limit=1','GET',undefined,'vip')).status,200);assert.deepEqual((await call('/api/maintenance')).data,{on:false,message:''});
+ // Chat reports: a member reports another member's message; the Owner restricts chat for a chosen time (1 hour – 30 days) and can remove the message.
+ let th=(await call('/api/threads','POST',{userId:'pbuyer'},'newbie')).data.thread;
+ if(th.status!=='accepted'){assert.equal((await call('/api/threads/'+th.id+'/messages','POST',{text:'hello'},'newbie')).status,201);assert.equal((await call('/api/threads/'+th.id+'/accept','POST',{},'pbuyer')).status,200)}
+ for(const t of ['bad word one','bad word two gali'])assert.equal((await call('/api/threads/'+th.id+'/messages','POST',{text:t},'pbuyer')).status,201);
+ let msgs=(await call('/api/threads/'+th.id+'/messages','GET',undefined,'newbie')).data.messages;const bad=msgs.find(m=>m.text==='bad word two gali'),mine=msgs.find(m=>m.user_id==='newbie');
+ assert.equal((await call('/api/message-reports','POST',{kind:'private',chatId:th.id,messageId:bad.id,reason:'abuse'},'outsider')).status,404);
+ if(mine)assert.equal((await call('/api/message-reports','POST',{kind:'private',chatId:th.id,messageId:mine.id,reason:'abuse'},'newbie')).status,400);
+ assert.equal((await call('/api/message-reports','POST',{kind:'private',chatId:th.id,messageId:bad.id,reason:'rude'},'newbie')).status,400);
+ r=await call('/api/message-reports','POST',{kind:'private',chatId:th.id,messageId:bad.id,reason:'abuse',details:'He insulted me'},'newbie');assert.equal(r.status,201);assert.equal(r.data.already,false);
+ assert.equal((await call('/api/message-reports','POST',{kind:'private',chatId:th.id,messageId:bad.id,reason:'abuse'},'newbie')).data.already,true);
+ assert.equal((await call('/api/admin/message-reports','GET',undefined,'admin')).status,403);
+ r=await call('/api/admin/message-reports','GET',undefined,'owner');const rep=r.data.reports.find(x=>x.message_id===bad.id);assert.equal(rep.target_id,'pbuyer');assert.equal(rep.reporter_id,'newbie');assert.equal(rep.message_text,'bad word two gali');assert.equal(rep.context.at(-1).text,'bad word one');assert.equal(rep.details,'He insulted me');assert.deepEqual(r.data.hours,[1,3,6,12,24,72,168,336,720]);
+ assert.equal((await call('/api/admin/message-report-action','POST',{id:rep.id,action:'restrict',hours:5},'owner')).status,400);assert.equal((await call('/api/admin/message-report-action','POST',{id:rep.id,action:'restrict',hours:24},'admin')).status,403);
+ r=await call('/api/admin/message-report-action','POST',{id:rep.id,action:'restrict',hours:24,deleteMessage:true},'owner');assert.equal(r.status,200);assert.equal(r.data.action,'Restricted 1 day · message removed');
+ assert.equal((await call('/api/admin/message-report-action','POST',{id:rep.id,action:'dismiss'},'owner')).status,404);
+ r=await call('/api/threads/'+th.id+'/messages','POST',{text:'again'},'pbuyer');assert.equal(r.status,403);assert.match(r.data.error,/cannot send messages or call until .* \(BD time\)/);
+ assert.equal((await call('/api/threads/'+th.id+'/messages','GET',undefined,'newbie')).data.messages.some(m=>m.id===bad.id),false);assert.equal((await call('/api/threads/'+th.id+'/messages/'+bad.id+'/restore','POST',{},'pbuyer')).status,404);
+ await call('/api/groups/'+group+'/join','POST',{},'pbuyer');assert.equal((await call('/api/groups/'+group+'/messages','POST',{text:'still here'},'pbuyer')).status,403);
+ assert.ok((await call('/api/admin/message-reports','GET',undefined,'owner')).data.restricted.some(x=>x.user_id==='pbuyer'&&x.until_at>Date.now()+23*3600000));
+ assert.equal((await call('/api/admin/chat-restriction','POST',{userId:'pbuyer'},'owner')).status,200);assert.equal((await call('/api/threads/'+th.id+'/messages','POST',{text:'sorry'},'pbuyer')).status,201);
+ assert.equal((await call('/api/threads/'+th.id+'/messages','POST',{text:'call:audio:120'},'pbuyer')).status,400);
+ // Calls: STUN servers, ring, busy, answer, end with a call note in the chat; decline; missed after 45 seconds; no calls in unaccepted chats or while restricted.
+ r=await call('/api/calls/ice','GET',undefined,'newbie');assert.equal(r.status,200);assert.ok(r.data.iceServers[0].urls.some(u=>u.startsWith('stun:')));assert.equal(r.data.relay,false);assert.equal((await call('/api/calls/ice')).status,401);
+ {const realFetch=globalThis.fetch,seen=[];env.TURN_KEY_ID='key1';env.TURN_KEY_API_TOKEN='token1';
+  globalThis.fetch=async(url,init)=>{seen.push({url:String(url),auth:init.headers.authorization,ttl:JSON.parse(init.body).ttl});return new Response(JSON.stringify({iceServers:[{urls:['stun:stun.cloudflare.com:3478','stun:stun.cloudflare.com:53']},{urls:['turn:turn.cloudflare.com:3478?transport=udp','turn:turn.cloudflare.com:53?transport=udp','turns:turn.cloudflare.com:443?transport=tcp'],username:'u1',credential:'c1'}]}),{status:201})};
+  try{let t=await call('/api/calls/ice','GET',undefined,'pbuyer');assert.equal(t.status,200);assert.equal(t.data.relay,true);const urls=t.data.iceServers.flatMap(x=>x.urls);assert.ok(urls.includes('turns:turn.cloudflare.com:443?transport=tcp'));assert.ok(!urls.some(v=>/:53(\?|$)/.test(v)),'port 53 is dropped');assert.match(seen[0].url,/\/keys\/key1\/credentials\/generate-ice-servers$/);assert.equal(seen[0].auth,'Bearer token1');assert.equal(seen[0].ttl,14400);
+   globalThis.fetch=async url=>String(url).endsWith('generate-ice-servers')?new Response('{}',{status:404}):new Response(JSON.stringify({iceServers:{urls:['turn:turn.cloudflare.com:3478?transport=udp'],username:'u2',credential:'c2'}}),{status:201});
+   t=await call('/api/calls/ice','GET',undefined,'pbuyer');assert.equal(t.data.relay,true,'falls back to the older TURN endpoint');
+   globalThis.fetch=async()=>new Response(JSON.stringify({iceServers:[{urls:['stun:stun.cloudflare.com:3478']}]}),{status:201});
+   t=await call('/api/calls/ice','GET',undefined,'pbuyer');assert.equal(t.data.relay,false,'no relay-only mode without a TURN login');
+   globalThis.fetch=async()=>{throw new Error('network down')};t=await call('/api/calls/ice','GET',undefined,'pbuyer');assert.equal(t.status,200);assert.equal(t.data.relay,false);
+   let limited=false;for(let i=0;i<13;i++)if((await call('/api/calls/ice','GET',undefined,'pbuyer')).status===429)limited=true;assert.ok(limited,'ICE logins are rate limited');
+  }finally{globalThis.fetch=realFetch;delete env.TURN_KEY_ID;delete env.TURN_KEY_API_TOKEN;await env.DB.prepare("DELETE FROM wm_limits WHERE key LIKE 'ice:%'").run()}}
+ const offer='v=0\r\no=- 1 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\n';
+ assert.equal((await call('/api/calls','POST',{threadId:th.id,offer:'hello'},'newbie')).status,400);
+ r=await call('/api/calls','POST',{threadId:th.id,video:false,offer},'newbie');assert.equal(r.status,201);const callId=r.data.id;
+ r=await call('/api/calls','POST',{threadId:th.id,video:false,offer},'pbuyer');assert.equal(r.status,409);assert.match(r.data.error,/Busy/);
+ assert.equal((await call('/api/chat-unread','GET',undefined,'pbuyer')).data.incoming_call.id,callId);assert.equal((await call('/api/chat-unread','GET',undefined,'newbie')).data.incoming_call,null);r=await call('/api/calls/incoming','GET',undefined,'pbuyer');assert.equal(r.data.call.id,callId);assert.equal(r.data.call.offer,offer);assert.equal(r.data.call.video,false);assert.equal(r.data.call.caller_id,'newbie');
+ assert.equal((await call('/api/calls/incoming','GET',undefined,'outsider')).data.call,null);assert.equal((await call('/api/calls/'+callId,'GET',undefined,'outsider')).status,404);
+ assert.equal((await call('/api/calls/'+callId+'/answer','POST',{answer:offer},'newbie')).status,403);assert.equal((await call('/api/calls/'+callId+'/answer','POST',{answer:offer},'pbuyer')).status,200);
+ r=await call('/api/calls/'+callId,'GET',undefined,'newbie');assert.equal(r.data.status,'active');assert.equal(r.data.answer,offer);assert.equal((await call('/api/calls/'+callId,'GET',undefined,'pbuyer')).data.answer,null);
+ sql.prepare('UPDATE wm_calls SET answered_at=answered_at-65000 WHERE id=?').run(callId);assert.equal((await call('/api/calls/'+callId+'/end','POST',{},'pbuyer')).status,200);
+ assert.equal((await call('/api/calls/'+callId,'GET',undefined,'newbie')).data.status,'ended');assert.equal(sql.prepare('SELECT offer FROM wm_calls WHERE id=?').get(callId).offer,'');
+ r=await call('/api/calls','POST',{threadId:th.id,video:true,offer},'pbuyer');assert.equal(r.status,201);assert.equal((await call('/api/calls/'+r.data.id+'/decline','POST',{},'newbie')).status,200);
+ r=await call('/api/calls','POST',{threadId:th.id,video:false,offer},'newbie');const ringing=r.data.id;sql.prepare('UPDATE wm_calls SET created_at=created_at-50000 WHERE id=?').run(ringing);assert.equal((await call('/api/calls/incoming','GET',undefined,'pbuyer')).data.call,null);assert.equal((await call('/api/calls/'+ringing,'GET',undefined,'newbie')).data.status,'missed');
+ const notes=(await call('/api/threads/'+th.id+'/messages','GET',undefined,'pbuyer')).data.messages.filter(m=>m.text.startsWith('call:')).map(m=>m.text);assert.ok(notes.some(t=>/^call:audio:6\d$/.test(t)),notes.join());assert.ok(notes.includes('call:video:declined'));assert.ok(notes.includes('call:audio:missed'));
+ assert.equal((await call('/api/message-reports','POST',{kind:'private',chatId:th.id,messageId:(await call('/api/threads/'+th.id+'/messages','GET',undefined,'newbie')).data.messages.find(m=>m.text==='call:video:declined').id,reason:'spam'},'newbie')).status,400);
+ const th2=(await call('/api/threads','POST',{userId:'vip'},'newbie')).data.thread;if(th2.status!=='accepted')assert.equal((await call('/api/calls','POST',{threadId:th2.id,offer},'newbie')).status,403);
+ sql.prepare('INSERT INTO wm_chat_restrictions(user_id,until_at,reason,created_at) VALUES(?,?,?,?)').run('newbie',Date.now()+3600000,'test',Date.now());assert.equal((await call('/api/calls','POST',{threadId:th.id,offer},'newbie')).status,403);sql.prepare("DELETE FROM wm_chat_restrictions WHERE user_id='newbie'").run();
+ delete env.WM_DATA_KEY;assert.equal((await adeal()).secure_handover,false);env.AI=previousAI;
+ console.log('PASS: protected deals (payment proof, one-time encrypted handover, delivery, checklist, safety hold, auto-confirm, Owner dispute decisions), private game UIDs with one active listing, post limits, bump/expiry/sold feed rules, safe names, trust card and share previews.');
+}
+// Migration 021 keeps every existing deal and post, and existing deals stay on their original flow.
+{
+ const current=readFileSync(new URL('./schema.sql',import.meta.url),'utf8');
+ const before=current.replace(",flow INTEGER NOT NULL DEFAULT 0,paid_at INTEGER,paid_note TEXT NOT NULL DEFAULT '',funded_at INTEGER,funded_by TEXT REFERENCES users(id),payment_trx TEXT NOT NULL DEFAULT '',payment_proof_id TEXT,delivered_at INTEGER,checklist TEXT NOT NULL DEFAULT '',checklist_proof_id TEXT,buyer_done_at INTEGER,payout_note TEXT NOT NULL DEFAULT '',dispute_reason TEXT NOT NULL DEFAULT '',disputed_by TEXT REFERENCES users(id));",");").replace(",game_uid_hash TEXT,game_uid_enc TEXT,game_uid_hint TEXT NOT NULL DEFAULT '',bumped_at INTEGER,renewed_at INTEGER,media_updated_at INTEGER,id_gender TEXT);",");").replace(",whatsapp TEXT NOT NULL DEFAULT '',location_lat REAL,location_lng REAL,location_accuracy REAL,location_at INTEGER,answers TEXT NOT NULL DEFAULT '[]',doc_type TEXT NOT NULL DEFAULT 'nid',back_document_id TEXT,review_note TEXT);",");").split('-- Protected deals, secure handover, deal proofs and listing rules (migration 021).')[0];
+ assert.notEqual(before,current);assert.equal(before.includes('game_uid_hash'),false);assert.equal(before.includes('paid_note'),false);
+ const migrated=new DatabaseSync(':memory:');migrated.exec('CREATE TABLE users(id TEXT PRIMARY KEY,name TEXT,picture TEXT,created_at INTEGER,updated_at INTEGER);'+before);
+ migrated.exec("INSERT INTO users(id,name) VALUES('b','Buyer'),('s','Seller'),('a','Admin');INSERT INTO wm_posts(id,user_id,title,details,price,kind,status,created_at) VALUES('p','s','Old ID','Old details',4000,'Game ID','approved',5);INSERT INTO wm_threads(id,buyer_id,seller_id,post_id,pair_key,created_at,is_deal) VALUES('t','b','s','p','deal:b:p',1,1);INSERT INTO wm_deals(id,thread_id,buyer_id,seller_id,admin_id,price,status,created_at,post_id,buyer_done) VALUES('d','t','b','s','a',4000,'active',2,'p',1);");
+ migrated.exec(readFileSync(new URL('./migrations/021_protected_deals_listing_rules.sql',import.meta.url),'utf8'));
+ const oldDeal=migrated.prepare('SELECT * FROM wm_deals').get();assert.equal(oldDeal.flow,0);assert.equal(oldDeal.status,'active');assert.equal(oldDeal.buyer_done,1);assert.equal(oldDeal.price,4000);
+ const oldPost=migrated.prepare('SELECT * FROM wm_posts').get();assert.equal(oldPost.title,'Old ID');assert.equal(oldPost.game_uid_hash,null);assert.equal(oldPost.game_uid_hint,'');
+ assert.equal(migrated.prepare('SELECT number FROM wm_deal_ids').get().number,1);
+ migrated.exec("UPDATE wm_posts SET game_uid_hash='h1',game_uid_enc='v1.x',game_uid_hint='789' WHERE id='p'");
+ const m022=readFileSync(new URL('./migrations/022_private_post_uids.sql',import.meta.url),'utf8');migrated.exec(m022);migrated.exec(m022);
+ assert.deepEqual({...migrated.prepare('SELECT post_id,uid_hash,uid_enc,uid_hint FROM wm_post_uids').get()},{post_id:'p',uid_hash:'h1',uid_enc:'v1.x',uid_hint:'789'});
+ assert.deepEqual({...migrated.prepare('SELECT game_uid_hash,game_uid_enc,game_uid_hint,title FROM wm_posts').get()},{game_uid_hash:null,game_uid_enc:null,game_uid_hint:'',title:'Old ID'});
+ migrated.exec("UPDATE wm_deals SET status='completed',completed_at=10 WHERE id='d'");assert.equal(migrated.prepare("SELECT uid_hash FROM wm_uid_cooldowns").get().uid_hash,'h1');
+ migrated.exec(readFileSync(new URL('./migrations/023_deal_notification_titles.sql',import.meta.url),'utf8'));migrated.exec("INSERT INTO wm_deal_events(deal_id,user_id,action,created_at) VALUES('d','b','payment_sent',11)");
+ assert.deepEqual(migrated.prepare("SELECT user_id,title FROM wm_notifications WHERE target_id='d' ORDER BY user_id").all().map(r=>r.user_id+':'+r.title),['a:Buyer sent the money','s:Buyer sent the money']);
+ migrated.exec(readFileSync(new URL('./migrations/024_password_sign_in.sql',import.meta.url),'utf8'));migrated.exec("INSERT INTO wm_credentials(user_id,login,kind,password_hash,salt,created_at,updated_at) VALUES('b','8801711111111','phone','h','s',1,1)");assert.equal(migrated.prepare('SELECT count(*) n FROM users').get().n,3);
+ migrated.exec(readFileSync(new URL('./migrations/025_password_reset_requests.sql',import.meta.url),'utf8'));migrated.exec(readFileSync(new URL('./migrations/026_verification_whatsapp_location.sql',import.meta.url),'utf8'));assert.equal(migrated.prepare("SELECT count(*) n FROM pragma_table_info('wm_verification_requests') WHERE name IN ('whatsapp','location_lat','location_lng','location_accuracy','location_at')").get().n,5);assert.equal(migrated.prepare("SELECT count(*) n FROM wm_credentials").get().n,1);
+ migrated.exec(readFileSync(new URL('./migrations/028_verification_answers.sql',import.meta.url),'utf8'));migrated.exec(readFileSync(new URL('./migrations/029_admin_agreement_alerts.sql',import.meta.url),'utf8'));assert.equal(migrated.prepare("SELECT count(*) n FROM sqlite_master WHERE type='trigger' AND name='wm_notify_deal_event'").get().n,1);assert.equal(migrated.prepare("SELECT count(*) n FROM pragma_table_info('wm_verification_requests') WHERE name='answers'").get().n,1);
+ migrated.exec(readFileSync(new URL('./migrations/030_chat_reports_calls.sql',import.meta.url),'utf8'));assert.equal(migrated.prepare("SELECT count(*) n FROM sqlite_master WHERE type='table' AND name IN ('wm_message_reports','wm_chat_restrictions','wm_calls')").get().n,3);
+ for(let i=0;i<2;i++)migrated.exec(readFileSync(new URL('./migrations/031_call_rooms_push.sql',import.meta.url),'utf8'));assert.equal(migrated.prepare("SELECT count(*) n FROM sqlite_master WHERE type='table' AND name IN ('wm_call_rooms','wm_call_room_members','wm_call_signals','wm_push_subscriptions','wm_push_events')").get().n,5);assert.equal(migrated.prepare('SELECT count(*) n FROM users').get().n,3);
+ const m027=new DatabaseSync(':memory:');m027.exec("CREATE TABLE users(id TEXT PRIMARY KEY);CREATE TABLE wm_profile_details(user_id TEXT PRIMARY KEY REFERENCES users(id),display_name TEXT,bio TEXT NOT NULL DEFAULT '',picture_id TEXT,updated_at INTEGER NOT NULL,cover_id TEXT);INSERT INTO users VALUES('a');INSERT INTO wm_profile_details(user_id,display_name,bio,updated_at) VALUES('a','A','Hi',1)");m027.exec(readFileSync(new URL('./migrations/027_profile_links.sql',import.meta.url),'utf8'));assert.deepEqual({...m027.prepare('SELECT display_name,bio,links FROM wm_profile_details').get()},{display_name:'A',bio:'Hi',links:'[]'});m027.close();
+ migrated.close();console.log('PASS: migrations 021 and 022 add protected-deal and listing-rule data without changing existing deals, posts or counters, and keep game UIDs out of wm_posts.');
+}
+// Group and deal calls (call rooms) and call alerts when Wize X is closed (Web Push).
+{
+ const mk=async id=>{sql.prepare('INSERT INTO users VALUES(?,?,?,?,?,?,?)').run(id,id,id+'@example.com',id,'',Date.now(),Date.now());const token=Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('hex');tokens[id]=token;sql.prepare('INSERT INTO sessions VALUES(?,?,?,?)').run(await hash(token),id,Date.now()+1000000,Date.now())};
+ for(const id of ['rc1','rc2','rc3','rc4','rc5','rc6','rc7','rdb','rds','rda'])await mk(id);sql.prepare("INSERT INTO wm_roles VALUES('rda','trusted')").run();
+ for(const id of ['rc1','rc2','rc3','rc4','rc5','rc6','rc7','rdb'])assert.equal((await call('/api/groups/'+group+'/join','POST',{},id)).status<300,true);
+ const sdp='v=0\r\no=- 1 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\n';
+ const realFetch=globalThis.fetch,pushes=[];let pushStatus=201;globalThis.fetch=async(url,init)=>{pushes.push({url:String(url),headers:init.headers});return new Response(null,{status:pushStatus})};
+ try{
+  // Call alerts: VAPID key, only real push services, one phone per member.
+  let r=await call('/api/push/key','GET',undefined,'rc2');assert.equal(r.status,200);const key=r.data.key;assert.equal(Buffer.from(key,'base64url').length,65);assert.equal((await call('/api/push/key','GET',undefined,'rc3')).data.key,key);assert.equal((await call('/api/push/key')).status,401);
+  assert.equal((await call('/api/push/subscribe','POST',{endpoint:'https://evil.example/push/1',keys:{p256dh:'x',auth:'y'}},'rc2')).status,400);
+  const phone='https://fcm.googleapis.com/fcm/send/rc2-phone';assert.equal((await call('/api/push/subscribe','POST',{endpoint:phone,keys:{p256dh:'p',auth:'a'}},'rc2')).status,200);
+  assert.equal(sql.prepare('SELECT user_id FROM wm_push_subscriptions WHERE endpoint=?').get(phone).user_id,'rc2');
+  // Group call: members only, invite in Wize X, alert to phones, join, offers and answers, cap of 6, busy, leave, call note.
+  assert.equal((await call('/api/rooms','POST',{kind:'group',id:group},'outsider')).status,403);
+  sql.prepare('INSERT INTO wm_member_permissions(user_id,can_post,can_message,can_start_deal,updated_by,updated_at) VALUES(?,?,?,?,?,?)').run('rc7',1,0,1,'owner',Date.now());assert.equal((await call('/api/rooms','POST',{kind:'group',id:group},'rc7')).status,403);
+  r=await call('/api/rooms','POST',{kind:'group',id:group,video:false},'rc1');assert.equal(r.status,201);const room=r.data.room.id;assert.deepEqual(r.data.members.map(m=>m.id),['rc1']);assert.equal(r.data.room.video,false);
+  const alert=pushes.find(x=>x.url===phone);assert.ok(alert,'group members get a call alert');assert.equal(alert.headers.urgency,'high');assert.equal(alert.headers.ttl,'45');
+  const [jwt,k]=alert.headers.authorization.slice('vapid t='.length).split(', k=');assert.equal(k,key);const [h,c,sg]=jwt.split('.');assert.equal(JSON.parse(Buffer.from(c,'base64url')).aud,'https://fcm.googleapis.com');
+  const pub=await crypto.subtle.importKey('raw',Buffer.from(key,'base64url'),{name:'ECDSA',namedCurve:'P-256'},false,['verify']);assert.ok(await crypto.subtle.verify({name:'ECDSA',hash:'SHA-256'},pub,Buffer.from(sg,'base64url'),new TextEncoder().encode(h+'.'+c)),'VAPID signature is valid');
+  r=await call('/api/push/pending','GET',undefined,'rc2');assert.equal(r.data.events[0].kind,'room');assert.match(r.data.events[0].url,new RegExp('room='+room));assert.equal((await call('/api/push/pending','GET',undefined,'outsider')).data.events.filter(e=>e.kind==='room').length,0);
+  assert.equal((await call('/api/chat-unread','GET',undefined,'rc2')).data.room_invite.id,room);assert.equal((await call('/api/chat-unread','GET',undefined,'rc1')).data.room_invite,null);assert.equal((await call('/api/chat-unread','GET',undefined,'outsider')).data.room_invite,null);
+  r=await call('/api/groups/'+group+'/messages','GET',undefined,'rc2');assert.equal(r.data.call.id,room);assert.equal(r.data.call.joined,false);assert.equal(r.data.call.count,1);
+  r=await call('/api/rooms','POST',{kind:'group',id:group},'rc2');assert.equal(r.status,200);assert.equal(r.data.room.id,room);assert.deepEqual(r.data.members.map(m=>m.id),['rc1','rc2']);assert.ok(r.data.room.answered_at);
+  assert.equal((await call('/api/chat-unread','GET',undefined,'rc2')).data.room_invite,null,'no ring after joining');
+  assert.equal((await call('/api/rooms/'+room+'/signal','POST',{to:'rc1',kind:'offer',sdp:'hello'},'rc2')).status,400);assert.equal((await call('/api/rooms/'+room+'/signal','POST',{to:'rc5',kind:'offer',sdp},'rc2')).status,409);
+  assert.equal((await call('/api/rooms/'+room+'/signal','POST',{to:'rc1',kind:'offer',sdp},'rc2')).status,200);assert.equal((await call('/api/rooms/'+room+'/signal','POST',{to:'rc1',kind:'offer',sdp},'outsider')).status,409);
+  r=await call('/api/rooms/'+room,'GET',undefined,'rc1');assert.equal(r.data.joined,true);assert.deepEqual(r.data.signals.map(x=>x.from_id+':'+x.kind),['rc2:offer']);assert.equal((await call('/api/rooms/'+room,'GET',undefined,'rc1')).data.signals.length,0,'signals are picked up once');
+  assert.equal((await call('/api/rooms/'+room+'/signal','POST',{to:'rc2',kind:'answer',sdp},'rc1')).status,200);assert.deepEqual((await call('/api/rooms/'+room,'GET',undefined,'rc2')).data.signals.map(x=>x.from_id+':'+x.kind),['rc1:answer']);
+  assert.equal((await call('/api/rooms/'+room,'GET',undefined,'outsider')).status,403);r=await call('/api/rooms/'+room,'GET',undefined,'rc3');assert.equal(r.data.joined,false);assert.equal(r.data.signals.length,0);
+  for(const id of ['rc3','rc4','rdb','rc5'])assert.equal((await call('/api/rooms','POST',{kind:'group',id:group},id)).status,200,id);
+  r=await call('/api/rooms','POST',{kind:'group',id:group},'rc6');assert.equal(r.status,409);assert.match(r.data.error,/full/);
+  // Deal call: only the buyer, seller and Admin of an open deal; busy while in another call; deal calls work for restricted members.
+  const dealThread=crypto.randomUUID(),deal=crypto.randomUUID();sql.prepare("INSERT INTO wm_threads(id,buyer_id,seller_id,pair_key,status,created_at,is_deal) VALUES(?,'rdb','rds',?,'accepted',?,1)").run(dealThread,'room:'+dealThread,Date.now());sql.prepare("INSERT INTO wm_deals(id,thread_id,buyer_id,seller_id,admin_id,price,status,buyer_ok,seller_ok,created_at) VALUES(?,?,'rdb','rds','rda',9000,'active',1,1,?)").run(deal,dealThread,Date.now());
+  assert.equal((await call('/api/deals/'+deal+'/messages','POST',{text:'call:video:300'},'rdb')).status,400,'no fake call notes in deal chats');
+  r=await call('/api/rooms','POST',{kind:'deal',id:deal},'rdb');assert.equal(r.status,409);assert.match(r.data.error,/another call/);
+  sql.prepare('INSERT INTO wm_chat_restrictions(user_id,until_at,reason,created_at) VALUES(?,?,?,?)').run('rds',Date.now()+3600000,'test',Date.now());
+  assert.equal((await call('/api/rooms','POST',{kind:'deal',id:deal},'outsider')).status,404);assert.equal((await call('/api/rooms','POST',{kind:'deal',id:deal},'owner')).status,404);
+  r=await call('/api/rooms','POST',{kind:'deal',id:deal,video:true},'rds');assert.equal(r.status,201);const dealRoom=r.data.room.id;assert.equal(r.data.room.video,true);assert.match(r.data.title,/^Deal - /);
+  assert.equal((await call('/api/chat-unread','GET',undefined,'rda')).data.room_invite.kind,'deal');assert.equal((await call('/api/chat-unread','GET',undefined,'rdb')).data.room_invite.id,dealRoom);
+  assert.equal((await call('/api/deals/'+deal+'/messages','GET',undefined,'rda')).data.call.id,dealRoom);
+  assert.equal((await call('/api/rooms','POST',{kind:'group',id:group},'rds')).status,403,'restricted members cannot start or join group calls');
+  assert.equal((await call('/api/rooms/'+room+'/leave','POST',{},'rdb')).status,200);assert.equal((await call('/api/rooms','POST',{kind:'deal',id:deal},'rdb')).status,200);assert.equal((await call('/api/rooms','POST',{kind:'deal',id:deal},'rda')).status,200);
+  assert.deepEqual((await call('/api/rooms/'+dealRoom,'GET',undefined,'rda')).data.members.map(m=>m.id),['rds','rdb','rda']);
+  for(const id of ['rds','rdb','rda'])assert.equal((await call('/api/rooms/'+dealRoom+'/leave','POST',{},id)).status,200);
+  assert.equal(sql.prepare('SELECT status FROM wm_call_rooms WHERE id=?').get(dealRoom).status,'ended');assert.ok((await call('/api/deals/'+deal+'/messages','GET',undefined,'rdb')).data.messages.some(m=>/^chat:call:video:\d+$/.test(m.text)),'deal call note');
+  sql.prepare("UPDATE wm_deals SET status='completed' WHERE id=?").run(deal);assert.equal((await call('/api/rooms','POST',{kind:'deal',id:deal},'rdb')).status,409);
+  // Everybody leaves the group call: it ends with a note; the ringing alert is gone.
+  for(const id of ['rc1','rc2','rc3','rc4','rc5'])assert.equal((await call('/api/rooms/'+room+'/leave','POST',{},id)).status,200);
+  assert.equal(sql.prepare('SELECT status FROM wm_call_rooms WHERE id=?').get(room).status,'ended');assert.equal((await call('/api/groups/'+group+'/messages','GET',undefined,'rc2')).data.call,null);
+  assert.ok((await call('/api/groups/'+group+'/messages','GET',undefined,'rc2')).data.messages.some(m=>m.user_id==='rc1'&&/^call:audio:\d+$/.test(m.text)),'group call note');assert.equal((await call('/api/push/pending','GET',undefined,'rc2')).data.events.filter(e=>e.kind==='room').length,0);
+  assert.equal((await call('/api/rooms/'+room+'/signal','POST',{to:'rc1',kind:'offer',sdp},'rc2')).status,409);
+  // A call nobody joins, and a phone that stopped answering for 30 s, ends as a missed call.
+  r=await call('/api/rooms','POST',{kind:'group',id:group},'rc3');const lonely=r.data.room.id;sql.prepare('UPDATE wm_call_room_members SET seen_at=seen_at-40000 WHERE room_id=?').run(lonely);
+  assert.equal((await call('/api/groups/'+group+'/messages','GET',undefined,'rc4')).data.call,null);assert.ok((await call('/api/groups/'+group+'/messages','GET',undefined,'rc4')).data.messages.some(m=>m.user_id==='rc3'&&m.text==='call:audio:missed'));
+  // At most 5 new group/deal calls per member every 10 minutes.
+  sql.prepare("UPDATE wm_call_rooms SET created_at=? WHERE started_by='rc3'").run(Date.now()-1000);for(let i=0;i<4;i++)sql.prepare("INSERT INTO wm_call_rooms(id,kind,chat_id,video,started_by,status,created_at,ended_at) VALUES(?,'group',?,0,'rc3','ended',?,?)").run(crypto.randomUUID(),group,Date.now(),Date.now());
+  r=await call('/api/rooms','POST',{kind:'group',id:group},'rc3');assert.equal(r.status,429);assert.match(r.data.error,/many calls/);
+  // Personal call alert: ringing alert, then "Missed call" when the caller gives up; a phone the push service dropped (410) is removed.
+  const pt=crypto.randomUUID();sql.prepare("INSERT INTO wm_threads(id,buyer_id,seller_id,pair_key,status,created_at) VALUES(?,'rc1','rc2',?,'accepted',?)").run(pt,'rc1:rc2',Date.now());
+  pushes.length=0;r=await call('/api/calls','POST',{threadId:pt,video:true,offer:sdp},'rc1');assert.equal(r.status,201);const pc=r.data.id;assert.equal(pushes.filter(x=>x.url===phone).length,1);
+  r=await call('/api/push/pending','GET',undefined,'rc2');assert.equal(r.data.events[0].kind,'call');assert.match(r.data.events[0].title,/rc1/);assert.match(r.data.events[0].url,new RegExp('call='+pc));
+  assert.equal((await call('/api/calls/'+pc+'/end','POST',{},'rc1')).status,200);r=await call('/api/push/pending','GET',undefined,'rc2');assert.deepEqual(r.data.events.map(e=>e.kind),['missed']);assert.match(r.data.events[0].url,new RegExp('thread='+pt));
+  pushStatus=410;r=await call('/api/calls','POST',{threadId:pt,offer:sdp},'rc1');assert.equal(r.status,201);assert.equal(sql.prepare('SELECT count(*) n FROM wm_push_subscriptions WHERE endpoint=?').get(phone).n,0,'expired phones are removed');await call('/api/calls/'+r.data.id+'/end','POST',{},'rc1');pushStatus=201;
+  assert.equal((await call('/api/push/subscribe','POST',{endpoint:phone,keys:{}},'rc2')).status,200);assert.equal((await call('/api/push/unsubscribe','POST',{endpoint:phone},'rc2')).status,200);assert.equal(sql.prepare('SELECT count(*) n FROM wm_push_subscriptions WHERE endpoint=?').get(phone).n,0);
+ }finally{globalThis.fetch=realFetch;sql.prepare("DELETE FROM wm_chat_restrictions WHERE user_id='rds'").run()}
+ console.log('PASS: group calls (members only, ring in Wize X, offers/answers picked up once, 6-person cap, busy, leave, call notes), deal calls (buyer/seller/Admin of an open deal), and call alerts (VAPID-signed Web Push, ringing and missed alerts, expired phones removed).');
+}
+// One site address: http → https and the workers.dev address → the real domain; local and test addresses stay as they are.
+{
+ const go=(u,method='GET')=>worker.fetch(new Request(u,{method}),env);
+ let r=await go('http://buysell.rahatwize.com/post/abc?x=1');assert.equal(r.status,301);assert.equal(r.headers.get('location'),'https://buysell.rahatwize.com/post/abc?x=1');
+ r=await go('https://wize-market-preview-2026.rahatwize.workers.dev/u/rahat');assert.equal(r.status,301);assert.equal(r.headers.get('location'),'https://buysell.rahatwize.com/u/rahat');
+ r=await go('http://wize-market-preview-2026.rahatwize.workers.dev/');assert.equal(r.headers.get('location'),'https://buysell.rahatwize.com/');
+ r=await go('https://wize-market-preview-2026.rahatwize.workers.dev/api/me','POST');assert.equal(r.status,308);
+ assert.notEqual((await go('https://buysell.rahatwize.com/api/market-rules')).status,301);assert.notEqual((await go('https://test.local/api/market-rules')).status,301);assert.notEqual((await go('http://127.0.0.1:8787/api/market-rules')).status,301);
+ console.log('PASS: one site address (http → https, workers.dev → buysell.rahatwize.com); local and test addresses untouched.');
+}
+{
+ // Group invite link with join approval: only the group admin changes settings and answers requests.
+ const g=(await call('/api/groups','POST',{name:'Approval group',logoId},'admin')).data.id;
+ assert.equal((await call('/api/groups/'+g+'/settings','POST',{joinApproval:true},'admin')).status,200);
+ assert.equal((await call('/api/groups/'+g+'/join','POST',{},'seller')).data.joined,undefined);
+ let pv=(await call('/api/groups/'+g+'/preview','GET',undefined,'seller')).data;assert.equal(pv.pending,true);assert.equal(pv.member,false);assert.equal(pv.group.joinApproval,true);
+ assert.equal((await call('/api/groups/'+g+'/messages','GET',undefined,'seller')).status,403);
+ const out=(await call('/api/groups/'+g+'/join','POST',{},'outsider')).data;assert.equal(out.pending,true);
+ assert.equal((await call('/api/groups/'+g+'/requests','GET',undefined,'seller')).status,403);
+ const detail=(await call('/api/groups/'+g,'GET',undefined,'admin')).data.group;assert.equal(detail.requests,2);assert.equal(detail.joinApproval,true);
+ const list=(await call('/api/groups/'+g+'/requests','GET',undefined,'admin')).data.requests;assert.deepEqual(list.map(x=>x.id).sort(),['outsider','seller']);
+ assert.equal((await call('/api/groups/'+g+'/requests/seller','POST',{approve:true},'admin')).status,200);
+ assert.equal((await call('/api/groups/'+g+'/requests/outsider','POST',{approve:false},'admin')).status,200);
+ assert.equal((await call('/api/groups/'+g+'/requests/outsider','POST',{approve:true},'admin')).status,404);
+ assert.equal((await call('/api/groups/'+g+'/messages','GET',undefined,'seller')).status,200);
+ assert.equal((await call('/api/groups/'+g+'/messages','GET',undefined,'outsider')).status,403);
+ // a member cannot change group settings, ranges or answer requests
+ assert.equal((await call('/api/groups/'+g+'/settings','POST',{joinApproval:false},'seller')).status,403);
+ assert.equal((await call('/api/groups/'+g+'/settings','POST',{name:'Taken over'},'seller')).status,403);
+ assert.equal((await call('/api/groups/'+g+'/ranges','POST',{label:'x',min:0,max:5},'seller')).status,403);
+ assert.equal((await call('/api/groups/'+g+'/requests/outsider','POST',{approve:true},'seller')).status,403);
+ // turning approval off lets the link join straight away again
+ assert.equal((await call('/api/groups/'+g+'/settings','POST',{joinApproval:false},'admin')).status,200);
+ assert.equal((await call('/api/groups/'+g+'/join','POST',{},'outsider')).data.joined,true);
+ assert.equal((await call('/api/groups/'+g+'/messages','GET',undefined,'outsider')).status,200);
+ console.log('PASS: group invite link joins directly or waits for admin approval; only the group admin changes settings and answers join requests.');
+}
+{
+ // Chat extras: nicknames, colour/emoji and pins. Group: own nickname for members; the rest is for the group admin only.
+ const g=(await call('/api/groups','POST',{name:'Extras group',logoId},'admin')).data.id;await call('/api/groups/'+g+'/join','POST',{},'buyer');
+ const base='/api/chat-extras/group/'+g;
+ assert.equal((await call(base+'/nickname','POST',{userId:'buyer',nickname:'Boss buyer'},'buyer')).status,200);
+ assert.equal((await call(base+'/nickname','POST',{userId:'admin',nickname:'Hacked'},'buyer')).status,403);
+ assert.equal((await call(base+'/nickname','POST',{userId:'buyer',nickname:'Call 01711111111'},'buyer')).status,400);
+ assert.equal((await call(base+'/nickname','POST',{userId:'admin',nickname:'Group Boss'},'admin')).status,200);
+ assert.equal((await call(base+'/nickname','POST',{userId:'outsider',nickname:'x'},'admin')).status,404);
+ assert.equal((await call(base+'/theme','POST',{color:'#a033ff',emoji:'🔥'},'buyer')).status,403);
+ assert.equal((await call(base+'/theme','POST',{color:'#123456',emoji:'🔥'},'admin')).status,400);
+ assert.equal((await call(base+'/theme','POST',{color:'#a033ff',emoji:'🔥'},'admin')).status,200);
+ await call('/api/groups/'+g+'/messages','POST',{text:'Pin me'},'buyer');const mid=(await call('/api/groups/'+g+'/messages','GET',undefined,'admin')).data.messages.find(m=>m.text==='Pin me')?.id;assert.ok(Number.isInteger(mid));
+ assert.equal((await call(base+'/pin','POST',{messageId:mid,pinned:true},'buyer')).status,403);
+ assert.equal((await call(base+'/pin','POST',{messageId:mid,pinned:true},'admin')).status,200);
+ assert.equal((await call(base+'/pin','POST',{messageId:999999,pinned:true},'admin')).status,404);
+ let x=(await call(base,'GET',undefined,'buyer')).data;assert.equal(x.nicknames.buyer,'Boss buyer');assert.equal(x.nicknames.admin,'Group Boss');assert.equal(x.theme.color,'#a033ff');assert.equal(x.theme.emoji,'🔥');assert.equal(x.theme.background,'');assert.equal(x.pins.length,1);assert.equal(x.pins[0].text,'Pin me');assert.equal(x.can.theme,false);
+ assert.equal((await call(base,'GET',undefined,'outsider')).status,403);
+ assert.equal((await call(base+'/nickname','POST',{userId:'buyer',nickname:''},'buyer')).status,200);
+ assert.equal((await call(base+'/pin','POST',{messageId:mid,pinned:false},'admin')).status,200);
+ x=(await call(base,'GET',undefined,'admin')).data;assert.equal(x.nicknames.buyer,undefined);assert.equal(x.pins.length,0);assert.equal(x.can.theme,true);
+ // personal chat: both people can change everything; others cannot see it
+ const t=(await call('/api/threads','POST',{userId:'seller'},'outsider')).data.thread.id;const pbase='/api/chat-extras/private/'+t;
+ assert.equal((await call(pbase+'/nickname','POST',{userId:'seller',nickname:'Bhai'},'outsider')).status,200);
+ assert.equal((await call(pbase+'/theme','POST',{color:'#13b06b',emoji:'❤️'},'seller')).status,200);
+ assert.equal((await call(pbase,'GET',undefined,'buyer')).status,404);
+ x=(await call(pbase,'GET',undefined,'seller')).data;assert.equal(x.nicknames.seller,'Bhai');assert.equal(x.theme.emoji,'❤️');assert.equal(x.can.pin,true);
+ console.log('PASS: chat nicknames, colour and emoji, pinned messages (personal: both people; group: own nickname, admin for the rest).');
+}
+{
+ // Reactions and "delete for me" on group and personal messages.
+ const g=(await call('/api/groups','POST',{name:'React group',logoId},'admin')).data.id;await call('/api/groups/'+g+'/join','POST',{},'buyer');
+ await call('/api/groups/'+g+'/messages','POST',{text:'React to me'},'buyer');const mid=(await call('/api/groups/'+g+'/messages','GET',undefined,'admin')).data.messages.find(m=>m.text==='React to me').id;const base='/api/chat-extras/group/'+g;
+ assert.equal((await call(base+'/react','POST',{messageId:mid,emoji:'❤️'},'admin')).status,200);assert.equal((await call(base+'/react','POST',{messageId:mid,emoji:'❤️'},'buyer')).status,200);
+ assert.equal((await call(base+'/react','POST',{messageId:mid,emoji:'<script>'},'buyer')).status,400);assert.equal((await call(base+'/react','POST',{messageId:mid,emoji:'👍'},'outsider')).status,403);
+ let x=(await call(base,'GET',undefined,'admin')).data;let r=x.reactions.find(z=>z.message_id===mid&&z.emoji==='❤️');assert.equal(r.total,2);assert.equal(r.mine,1);
+ assert.equal((await call(base+'/react','POST',{messageId:mid,emoji:'😆'},'buyer')).status,200);assert.equal((await call(base+'/react','POST',{messageId:mid,emoji:''},'admin')).status,200);
+ x=(await call(base,'GET',undefined,'admin')).data;assert.equal(x.reactions.filter(z=>z.message_id===mid).map(z=>z.emoji+z.total).join(),'😆1');
+ assert.equal((await call(base+'/hide','POST',{messageId:mid},'buyer')).status,200);assert.deepEqual((await call(base,'GET',undefined,'buyer')).data.hidden,[mid]);assert.deepEqual((await call(base,'GET',undefined,'admin')).data.hidden,[]);
+ assert.ok((await call('/api/groups/'+g+'/messages','GET',undefined,'admin')).data.messages.some(m=>m.id===mid));
+ assert.equal((await call(base+'/hide','POST',{messageId:999999},'buyer')).status,404);
+ console.log('PASS: message reactions (one per person, change or remove) and delete-for-me that leaves the message for everyone else.');
+}
+{
+ // Chat background photo: only the people in the chat can load it.
+ const t=(await call('/api/threads','POST',{userId:'buyer'},'seller')).data.thread.id,bg=crypto.randomUUID();
+ sql.prepare('INSERT INTO wm_uploads VALUES(?,?,?,?,?)').run(bg,'seller','image/png',16,Date.now());objects.set(bg,new Uint8Array([137,80,78,71,13,10,26,10,0,0,0,0,1,2,3,4]));sql.prepare('INSERT INTO wm_media_checks VALUES(?,?,?,?)').run(bg,'safe','Test scanner passed',Date.now());
+ const base='/api/chat-extras/private/'+t;assert.equal((await call(base+'/theme','POST',{color:'#0a7cff',emoji:'👍',backgroundId:bg},'seller')).status,200);
+ assert.equal((await call(base,'GET',undefined,'buyer')).data.theme.background,'/media/'+bg);
+ const media=async who=>(await worker.fetch(new Request('https://test.local/media/'+bg,{headers:who?{cookie:'wm_session='+tokens[who]}:{}}),env)).status;
+ assert.equal(await media('buyer'),200);assert.equal(await media('outsider'),404);assert.equal(await media(),404);
+ const other=crypto.randomUUID();sql.prepare('INSERT INTO wm_uploads VALUES(?,?,?,?,?)').run(other,'outsider','image/png',16,Date.now());assert.equal((await call(base+'/theme','POST',{color:'#0a7cff',emoji:'👍',backgroundId:other},'seller')).status,404);
+ assert.equal((await call(base+'/theme','POST',{color:'#0a7cff',emoji:'👍',backgroundId:null},'buyer')).status,200);assert.equal((await call(base,'GET',undefined,'seller')).data.theme.background,'');
+ console.log('PASS: chat background photo (own safe image, visible only to the people in the chat, removable).');
+}
+{
+ // Message permissions: only admins can send when the admin turns it on.
+ const g=(await call('/api/groups','POST',{name:'Admins only',logoId},'admin')).data.id;await call('/api/groups/'+g+'/join','POST',{},'buyer');
+ assert.equal((await call('/api/groups/'+g+'/settings','POST',{adminsOnly:true},'buyer')).status,403);
+ assert.equal((await call('/api/groups/'+g+'/settings','POST',{adminsOnly:true},'admin')).status,200);assert.equal((await call('/api/groups/'+g,'GET',undefined,'buyer')).data.group.adminsOnly,true);
+ assert.equal((await call('/api/groups/'+g+'/messages','POST',{text:'hello'},'buyer')).status,403);assert.equal((await call('/api/groups/'+g+'/messages','POST',{text:'Rules'},'admin')).status,201);
+ assert.equal((await call('/api/groups/'+g+'/settings','POST',{adminsOnly:false},'admin')).status,200);assert.equal((await call('/api/groups/'+g+'/messages','POST',{text:'hello'},'buyer')).status,201);
+ console.log('PASS: group message permissions (everyone or only the group admin).');
+}
+{
+ // Group co-admins and members list; pins only I can see in personal chats.
+ const g=(await call('/api/groups','POST',{name:'Co-admin group',logoId},'admin')).data.id;for(const who of ['buyer','seller'])await call('/api/groups/'+g+'/join','POST',{},who);
+ assert.equal((await call('/api/groups/'+g+'/admins','POST',{userId:'seller',admin:true},'buyer')).status,403);
+ assert.equal((await call('/api/groups/'+g+'/admins','POST',{userId:'buyer',admin:true},'admin')).status,200);
+ let list=(await call('/api/groups/'+g+'/members','GET',undefined,'seller')).data.members;assert.equal(list[0].id,'admin');assert.equal(list[0].creator,true);assert.equal(list[1].id,'buyer');assert.equal(list[1].is_admin,true);assert.equal(list[2].is_admin,false);
+ assert.equal((await call('/api/groups/'+g+'/settings','POST',{adminsOnly:true},'buyer')).status,200);assert.equal((await call('/api/groups/'+g+'/messages','POST',{text:'co-admin talks'},'buyer')).status,201);assert.equal((await call('/api/groups/'+g+'/messages','POST',{text:'member'},'seller')).status,403);
+ assert.equal((await call('/api/groups/'+g+'/admins','POST',{userId:'buyer',admin:false},'buyer')).status,403);assert.equal((await call('/api/groups/'+g+'/admins','POST',{userId:'admin',admin:false},'buyer')).status,409);
+ assert.equal((await call('/api/groups/'+g+'/admins','POST',{userId:'buyer',admin:false},'admin')).status,200);assert.equal((await call('/api/groups/'+g+'/messages','POST',{text:'not admin now'},'buyer')).status,403);
+ const gm=(await call('/api/groups/'+g+'/messages','GET',undefined,'admin')).data.messages[0].id;assert.equal((await call('/api/chat-extras/group/'+g+'/pin','POST',{messageId:gm,pinned:true,scope:'me'},'seller')).status,403);
+ const t=(await call('/api/threads','POST',{userId:'seller'},'buyer')).data.thread.id;await call('/api/threads/'+t+'/messages','POST',{text:'pin for me'},'buyer');const pm=(await call('/api/threads/'+t+'/messages','GET',undefined,'buyer')).data.messages[0].id;
+ assert.equal((await call('/api/chat-extras/private/'+t+'/pin','POST',{messageId:pm,pinned:true,scope:'me'},'buyer')).status,200);
+ const mine=(await call('/api/chat-extras/private/'+t,'GET',undefined,'buyer')).data;assert.equal(mine.pins.length,1);assert.equal(mine.pins[0].only_me,1);assert.equal(mine.can.pinForMe,true);
+ assert.equal((await call('/api/chat-extras/private/'+t,'GET',undefined,'seller')).data.pins.length,0);
+ assert.equal((await call('/api/chat-extras/private/'+t+'/pin','POST',{messageId:pm,pinned:true},'seller')).status,200);assert.equal((await call('/api/chat-extras/private/'+t,'GET',undefined,'buyer')).data.pins.length,1);assert.equal((await call('/api/chat-extras/private/'+t,'GET',undefined,'seller')).data.pins[0].only_me,0);
+ console.log('PASS: group co-admins (add/remove, admins first in members), personal-chat pins only for me or for both.');
+}
+{
+ // @mentions and @everyone: alerts even when muted; only admins mention everyone.
+ const g=(await call('/api/groups','POST',{name:'Mention group',logoId},'admin')).data.id;for(const who of ['buyer','seller'])await call('/api/groups/'+g+'/join','POST',{},who);
+ await call('/api/groups/'+g+'/preferences','POST',{muted:true},'seller');
+ let r=await call('/api/groups/'+g+'/messages','POST',{text:'@seller dekho',mentions:['seller','outsider','buyer']},'buyer');assert.equal(r.status,201);assert.equal(r.data.mentioned,1);
+ let u=(await call('/api/chat-unread','GET',undefined,'seller')).data;assert.equal(u.mentions.find(m=>m.group_id===g).total,1);assert.equal(u.mention_popup.group_id,g);assert.equal(u.mention_popup.text,'@seller dekho');
+ assert.equal((await call('/api/chat-unread','GET',undefined,'buyer')).data.mentions.filter(m=>m.group_id===g).length,0);
+ r=await call('/api/groups/'+g+'/messages','POST',{text:'@everyone meeting',everyone:true},'buyer');assert.equal(r.status,201);assert.equal(r.data.mentioned,2);
+ let x=(await call('/api/chat-extras/group/'+g,'GET',undefined,'seller')).data;assert.equal(x.mentions.length,2);
+ assert.equal((await call('/api/chat-extras/group/'+g+'/mention-seen','POST',{messageId:x.mentions[0]},'seller')).status,200);assert.equal((await call('/api/chat-extras/group/'+g,'GET',undefined,'seller')).data.mentions.length,1);
+ assert.equal((await call('/api/chat-extras/group/'+g+'/mention-seen','POST',{},'seller')).status,200);assert.equal((await call('/api/chat-unread','GET',undefined,'seller')).data.mentions.length,0);
+ assert.ok(sql.prepare("SELECT count(*) n FROM wm_notifications WHERE user_id='seller' AND kind='group_mention' AND alert_enabled=1").get().n>=2);
+ console.log('PASS: @mentions and @everyone (members only, @everyone by any member, alerts while muted, seen tracking).');
+}
+{
+ // Invite links: /j/<code>, off switch and reset.
+ const g=(await call('/api/groups','POST',{name:'Invite group',logoId},'admin')).data.id;
+ assert.equal((await call('/api/groups/'+g+'/invite','GET',undefined,'buyer')).status,403);// not a member
+ let inv=(await call('/api/groups/'+g+'/invite','GET',undefined,'admin')).data;assert.match(inv.code,/^[A-Za-z0-9]{10}$/);assert.equal(inv.url,'https://test.local/j/'+inv.code);assert.equal(inv.enabled,true);
+ assert.equal((await call('/api/invites/'+inv.code,'GET',undefined,'buyer')).data.group.id,g);
+ assert.equal((await call('/api/groups/'+g+'/join','POST',{code:'WRONGCODE1'},'buyer')).status,403);
+ const old=inv.code;inv=(await call('/api/groups/'+g+'/invite','POST',{action:'reset'},'admin')).data;assert.notEqual(inv.code,old);
+ assert.equal((await call('/api/invites/'+old,'GET',undefined,'buyer')).status,404);assert.equal((await call('/api/groups/'+g+'/join','POST',{code:old},'buyer')).status,403);
+ await call('/api/groups/'+g+'/invite','POST',{action:'off'},'admin');assert.equal((await call('/api/invites/'+inv.code,'GET',undefined,'buyer')).status,404);assert.equal((await call('/api/groups/'+g+'/join','POST',{code:inv.code},'buyer')).status,403);
+ await call('/api/groups/'+g+'/invite','POST',{action:'on'},'admin');assert.equal((await call('/api/groups/'+g+'/join','POST',{code:inv.code},'buyer')).data.joined,true);
+ assert.equal((await call('/api/groups/'+g+'/invite','GET',undefined,'buyer')).data.canManage,false);assert.equal((await call('/api/groups/'+g+'/invite','POST',{action:'reset'},'buyer')).status,403);
+ console.log('PASS: group invite links (/j/code, wrong or reset codes refused, link off and on).');
+}
+{
+ // Price ranges: change order, delete only when empty.
+ const g=(await call('/api/groups','POST',{name:'Range group',logoId},'admin')).data.id;const a=(await call('/api/groups/'+g+'/ranges','POST',{label:'A',min:0,max:5000},'admin')).data.id,b=(await call('/api/groups/'+g+'/ranges','POST',{label:'B',min:5001,max:null},'admin')).data.id;
+ let list=(await call('/api/groups/'+g,'GET',undefined,'admin')).data.ranges.map(r=>r.id);assert.ok(list.indexOf(a)<list.indexOf(b));
+ assert.equal((await call('/api/groups/'+g+'/ranges/order','POST',{ids:[b,a,...list.filter(x=>x!==a&&x!==b)]},'admin')).status,200);list=(await call('/api/groups/'+g,'GET',undefined,'admin')).data.ranges.map(r=>r.id);assert.equal(list[0],b);
+ await call('/api/groups/'+g+'/join','POST',{},'buyer');assert.equal((await call('/api/groups/'+g+'/ranges/order','POST',{ids:[a,b]},'buyer')).status,403);
+ const r=await call('/api/posts','POST',{title:'Range ID',details:'Range ID details',price:9000,kind:'Game ID',media:[],groupId:g},'admin');assert.equal(r.status,201);
+ const used=sql.prepare('SELECT range_id FROM wm_posts WHERE id=?').get(r.data.id).range_id;assert.ok(used);assert.equal((await call('/api/groups/'+g+'/ranges/'+used+'/delete','POST',{},'admin')).status,409);assert.equal((await call('/api/groups/'+g+'/ranges/'+a+'/delete','POST',{},'buyer')).status,403);
+ const empty=a===used?b:a;assert.equal((await call('/api/groups/'+g+'/ranges/'+empty+'/delete','POST',{},'admin')).status,200);assert.ok(!(await call('/api/groups/'+g,'GET',undefined,'admin')).data.ranges.some(x=>x.id===empty));
+ console.log('PASS: price ranges can be reordered and deleted when empty (group admin only).');
+}
+{
+ // Each site has its own address: WizeNex sends workers.dev to wizenex.com; "none" keeps workers.dev open.
+ const go=async site=>(await worker.fetch(new Request('https://wizenex.rahatwize.workers.dev/u/test'),{...env,SITE_HOST:site}));
+ let r=await go('wizenex.com');assert.equal(r.status,301);assert.equal(r.headers.get('location'),'https://wizenex.com/u/test');
+ r=await go('none');assert.notEqual(r.status,301);
+ console.log('PASS: per-site address (SITE_HOST) for WizeNex.');
+}
+{
+ // Admin deal limits: the Owner sets the most taka a trusted Admin can handle; the Owner is always first and has no limit.
+ assert.equal((await call('/api/admin/deal-limit','POST',{userId:'admin',maxAmount:5000},'admin')).status,403);
+ assert.equal((await call('/api/admin/deal-limit','POST',{userId:'buyer',maxAmount:5000},'owner')).status,409);
+ assert.equal((await call('/api/admin/deal-limit','POST',{userId:'admin',maxAmount:'5k'},'owner')).data.maxAmount,5000);
+ const list=(await call('/api/admin/users?q=','GET',undefined,'owner')).data.users;assert.equal(list.find(x=>x.id==='admin').deal_limit,5000);
+ sql.prepare("DELETE FROM wm_limits").run();sql.prepare("UPDATE wm_posts SET availability='sold',created_at=created_at-3*86400000 WHERE user_id='seller'").run();
+ const pr=await call('/api/posts','POST',{title:'Limit ID',details:'Limit ID details',price:9000,kind:'Game ID',media:[]},'seller');assert.equal(pr.status,201,JSON.stringify(pr.data));
+ const picks=(await call('/api/deal-admins?postId='+pr.data.id,'GET',undefined,'buyer')).data;
+ if(picks.mode==='mediated'){assert.ok(picks.allAdmins.some(a=>a.role==='owner'));assert.ok(!picks.allAdmins.some(a=>a.id==='admin'))}
+ const r=await call('/api/deals','POST',{postId:pr.data.id,adminId:'admin'},'buyer');assert.equal(r.status,409);assert.match(r.data.error,/up to ৳5,000/);
+ assert.equal((await call('/api/admin/deal-limit','POST',{userId:'admin',maxAmount:null},'owner')).data.maxAmount,null);
+ console.log('PASS: Admin deal limits (set by the Owner, enforced when choosing an Admin; the Owner is recommended on top only for new members).');
+}
+{
+ // Members create chat groups (photo optional) and add friends or people they chat with.
+ const maker='buyer',friend='seller',stranger='cg_stranger';sql.prepare('INSERT INTO users VALUES(?,?,?,?,?,?,?)').run(stranger,stranger,stranger+'@example.com',stranger,'',Date.now(),Date.now());tokens[stranger]=Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('hex');sql.prepare('INSERT INTO sessions VALUES(?,?,?,?)').run(await hash(tokens[stranger]),stranger,Date.now()+1000000,Date.now());
+ sql.prepare("DELETE FROM wm_user_blocks WHERE (user_id=? AND target_id=?) OR (user_id=? AND target_id=?)").run(maker,friend,friend,maker);sql.prepare("INSERT OR IGNORE INTO wm_threads(id,buyer_id,seller_id,post_id,pair_key,status,created_at,is_deal) VALUES(?,?,?,NULL,?,'accepted',?,0)").run(crypto.randomUUID(),maker,friend,'chat-group-test:'+maker+':'+friend,Date.now());
+ const r=await call('/api/groups','POST',{name:'Friends chat'},maker);assert.equal(r.status,201,JSON.stringify(r.data));assert.equal(r.data.chatGroup,true);const g=r.data.id;
+ let a=await call('/api/groups/'+g+'/add-members','POST',{userIds:[friend,stranger]},maker);assert.ok(a.data.added.includes(friend));assert.ok(!a.data.added.includes(stranger));
+ assert.equal((await call('/api/groups/'+g+'/add-members','POST',{userIds:[stranger]},friend)).status,403);
+ assert.equal((await call('/api/groups/'+g+'/messages','POST',{text:'hello group'},friend)).status,201);assert.equal((await call('/api/groups/'+g+'/messages','GET',undefined,friend)).status,200);
+ assert.equal((await call('/api/groups/'+g+'/join','POST',{},stranger)).status,403);
+ const inv=(await call('/api/groups/'+g+'/invite','GET',undefined,maker)).data;assert.equal((await call('/api/groups/'+g+'/join','POST',{code:inv.code},stranger)).data.joined,true);
+ // Kick: only group admins; not yourself, not the creator; messages stay.
+ assert.equal((await call('/api/groups/'+g+'/members/remove','POST',{userId:stranger},friend)).status,403);
+ assert.equal((await call('/api/groups/'+g+'/members/remove','POST',{userId:maker},maker)).status,400);
+ assert.equal((await call('/api/groups/'+g+'/members/remove','POST',{userId:stranger},maker)).status,200);
+ assert.equal(sql.prepare('SELECT count(*) n FROM wm_group_members WHERE group_id=? AND user_id=?').get(g,stranger).n,0);
+ assert.equal((await call('/api/groups/'+g+'/members/remove','POST',{userId:stranger},maker)).status,404);
+ assert.equal((await call('/api/groups/'+g+'/members/remove','POST',{userId:friend},maker)).status,200);assert.equal(sql.prepare("SELECT count(*) n FROM wm_group_messages WHERE group_id=? AND text='hello group'").get(g).n,1);
+ // Creator leaves by handing the group to one of its admins.
+ assert.equal((await call('/api/groups/'+g+'/add-members','POST',{userIds:[friend]},maker)).status,200);
+ assert.equal((await call('/api/groups/'+g+'/leave','POST',{},maker)).status,409);
+ assert.equal((await call('/api/groups/'+g+'/leave','POST',{newOwnerId:friend},maker)).status,400);
+ assert.equal((await call('/api/groups/'+g+'/admins','POST',{userId:friend,admin:true},maker)).status,200);
+ assert.equal((await call('/api/groups/'+g+'/leave','POST',{newOwnerId:friend},maker)).status,200);
+ assert.equal(sql.prepare('SELECT owner_id FROM wm_groups WHERE id=?').get(g).owner_id,friend);assert.equal(sql.prepare('SELECT count(*) n FROM wm_group_members WHERE group_id=? AND user_id=?').get(g,maker).n,0);
+ console.log('PASS: member chat groups (create, add friends or chat contacts, join only with the invite link; admins can remove members, messages stay; the creator can leave after handing over to an admin).');
+}
+{
+ // Videos longer than 2 minutes are refused.
+ const box=(type,body)=>{const b=new Uint8Array(8+body.length);new DataView(b.buffer).setUint32(0,b.length);b.set(new TextEncoder().encode(type),4);b.set(body,8);return b};
+ const mp4=secs=>{const mv=new Uint8Array(100);const dv=new DataView(mv.buffer);dv.setUint32(12,1000);dv.setUint32(16,secs*1000);const ftyp=box('ftyp',new TextEncoder().encode('isom0000isom')),moov=box('moov',box('mvhd',mv)),all=new Uint8Array(ftyp.length+moov.length+64);all.set(ftyp);all.set(moov,ftyp.length);return all};
+ const send=async bytes=>(await worker.fetch(new Request('https://test.local/api/upload',{method:'POST',headers:{origin:'https://test.local','content-type':'video/mp4',cookie:'wm_session='+tokens.buyer},body:bytes}),env)).status;
+ assert.equal(await send(mp4(150)),413);assert.equal(await send(mp4(60)),201);assert.equal(await send(mp4(120)),201);
+ console.log('PASS: videos are limited to 2 minutes (MP4 length read from the header).');
+}
+{
+ const post={title:'Ban test',details:'Details',price:5000,kind:'Game ID',media:[]};
+ assert.equal((await call('/api/admin/suspend','POST',{userId:'outsider',hours:2},'admin')).status,403);
+ assert.equal((await call('/api/admin/suspend','POST',{userId:'owner',forever:true},'owner')).status,403);
+ assert.equal((await call('/api/admin/suspend','POST',{userId:'outsider',hours:0},'owner')).status,400);
+ const timed=await call('/api/admin/suspend','POST',{userId:'outsider',hours:48,reason:'Scam report'},'owner');assert.equal(timed.status,200);assert.ok(Math.abs(timed.data.until-Date.now()-48*3600000)<60000);
+ assert.equal((await call('/api/posts','POST',post,'outsider')).status,423);
+ let list=(await call('/api/admin/users?q=outsider','GET',undefined,'owner')).data.users;assert.equal(list[0].suspension.reason,'Scam report');
+ const ban=await call('/api/admin/suspend','POST',{userId:'outsider',forever:true},'owner');assert.equal(ban.status,200);assert.ok(ban.data.until>Date.now()+1e12);
+ const blocked=await call('/api/posts','POST',post,'outsider');assert.equal(blocked.status,423);assert.match(blocked.data.error,/banned/);
+ assert.equal((await call('/api/me','GET',undefined,'outsider')).status,200);
+ // Appeals: only for a permanent ban, with a message; the Owner accepts or keeps the ban.
+ assert.equal((await call('/api/safety/appeal','POST',{message:'short'},'outsider')).status,400);
+ assert.equal((await call('/api/safety/appeal','POST',{message:'It was my brother, please check again.'},'outsider')).status,200);
+ assert.equal((await call('/api/safety/appeal','POST',{message:'Sending the same appeal twice here.'},'outsider')).status,409);
+ assert.equal((await call('/api/me','GET',undefined,'outsider')).data.user.suspension.appeal_text,'It was my brother, please check again.');
+ assert.equal((await call('/api/admin/appeal','POST',{userId:'outsider',accept:false,note:'Proof is clear'},'admin')).status,403);
+ assert.equal((await call('/api/admin/appeal','POST',{userId:'outsider',accept:false,note:'Proof is clear'},'owner')).status,200);
+ assert.equal((await call('/api/me','GET',undefined,'outsider')).data.user.suspension.appeal_note,'Proof is clear');
+ assert.equal((await call('/api/safety/appeal','POST',{message:'Please look at it once more.'},'outsider')).status,429);
+ sql.prepare("UPDATE wm_suspensions SET appeal_at=? WHERE user_id='outsider'").run(Date.now()-8*86400000);
+ assert.equal((await call('/api/safety/appeal','POST',{message:'Please look at it once more.'},'outsider')).status,200);
+ assert.equal((await call('/api/admin/appeal','POST',{userId:'outsider',accept:true},'owner')).status,200);
+ assert.equal((await call('/api/me','GET',undefined,'outsider')).data.user.suspension,null);
+ assert.equal((await call('/api/admin/suspend','POST',{userId:'outsider',hours:5},'owner')).status,200);
+ assert.equal((await call('/api/safety/appeal','POST',{message:'Timed suspension appeal attempt.'},'outsider')).status,403);
+ assert.equal((await call('/api/admin/suspend','POST',{userId:'outsider',forever:true},'owner')).status,200);
+ assert.equal((await call('/api/admin/restore','POST',{userId:'outsider'},'owner')).status,200);
+ list=(await call('/api/admin/users?q=outsider','GET',undefined,'owner')).data.users;assert.equal(list[0].suspension,null);
+ console.log('PASS: owner can suspend a member for hours/days or ban them with no end date; owner cannot be suspended; restore lifts it; only a permanent ban can be appealed, with a message, and the owner accepts or keeps it.');
+}
+{
+ // Smart feed: opened/watched posts come forward for everyone, but go lower for the person who already opened them.
+ const pool=sql.prepare("SELECT p.id,p.user_id FROM wm_posts p WHERE p.deleted_at IS NULL AND p.status='approved' AND p.group_id IS NULL AND p.availability!='sold'").all(),list=[pool[0],pool.find(x=>x.user_id!==pool[0].user_id)];assert.equal(list.length,2);
+ const [a,b]=list,t=Date.now();sql.exec('DELETE FROM wm_post_interest; DELETE FROM wm_post_signals; DELETE FROM wm_post_shares');
+ sql.prepare('UPDATE wm_posts SET created_at=?,bumped_at=NULL,renewed_at=NULL WHERE id=?').run(t+61000,a.id);sql.prepare('UPDATE wm_posts SET created_at=?,bumped_at=NULL,renewed_at=NULL WHERE id=?').run(t+60000,b.id);
+ const order=async who=>(await call('/api/feed?limit=30','GET',undefined,who)).data.posts.map(p=>p.id).filter(id=>id===a.id||id===b.id);
+ assert.deepEqual(await order(),[a.id,b.id]);
+ const viewers=['owner','admin','buyer','seller','outsider'].filter(id=>id!==b.user_id);
+ for(const who of viewers)assert.equal((await call('/api/posts/signals','POST',{items:[{id:b.id,kind:'open'},{id:b.id,kind:'open'},{id:a.id,kind:'bogus'}]},who)).status,200);
+ assert.ok(sql.prepare('SELECT score FROM wm_post_interest WHERE post_id=?').get(b.id).score>=9);assert.equal(sql.prepare('SELECT count(*) n FROM wm_post_signals WHERE post_id=?').get(b.id).n,viewers.length);
+ assert.deepEqual(await order(),[b.id,a.id]);
+ assert.deepEqual(await order(viewers[0]),[a.id,b.id]);
+ const own=(await call('/api/posts/signals','POST',{items:[{id:a.id,kind:'open'}]},a.user_id));assert.equal(own.status,200);assert.equal(sql.prepare('SELECT count(*) n FROM wm_post_signals WHERE post_id=?').get(a.id).n,0);
+ console.log('PASS: smart feed (popular posts first, already-opened posts lower for that person, no points for your own post).');
+}
+{
+ // SEO: only the main site (SEO_INDEX=on) is listed on Google; robots.txt, sitemap, canonical address, www goes to the main address.
+ const main={...env,SITE_HOST:'wizenex.com',SEO_INDEX:'on'},test={...env,SITE_HOST:'buysell.rahatwize.com'};
+ const get=async(url,e)=>worker.fetch(new Request(url),e);
+ let r=await get('https://www.wizenex.com/post/abc?x=1',main);assert.equal(r.status,301);assert.equal(r.headers.get('location'),'https://wizenex.com/post/abc?x=1');
+ let txt=await (await get('https://wizenex.com/robots.txt',main)).text();assert.match(txt,/Sitemap: https:\/\/wizenex\.com\/sitemap\.xml/);assert.match(txt,/Disallow: \/api\//);
+ txt=await (await get('https://buysell.rahatwize.com/robots.txt',test)).text();assert.match(txt,/Disallow: \/\n/);
+ assert.equal((await get('https://buysell.rahatwize.com/sitemap.xml',test)).status,404);
+ const map=await get('https://wizenex.com/sitemap.xml',main);assert.equal(map.status,200);const xml=await map.text();assert.match(xml,/<loc>https:\/\/wizenex\.com\/<\/loc>/);assert.match(xml,/<loc>https:\/\/wizenex\.com\/post\/[a-f0-9-]{36}<\/loc>/);
+ const page='<html><head><title>WizeNex</title></head><body class="x"></body></html>',cfg={name:'WizeNex',description:'Safe game ID marketplace'};
+ const home=seoPage(main,new Request('https://wizenex.com/'),'/',page,cfg);assert.match(home,/<body class="x"><noscript><h1>WizeNex<\/h1>/);assert.match(home,/"Wize Nex"/);assert.match(home,/<meta name="robots" content="index,follow/);assert.match(home,/<link rel="canonical" href="https:\/\/wizenex\.com\/">/);assert.match(home,/application\/ld\+json/);assert.match(home,/og:image/);
+ const testHome=seoPage(test,new Request('https://buysell.rahatwize.com/'),'/',page,cfg);assert.match(testHome,/noindex,nofollow/);assert.doesNotMatch(testHome,/ld\+json/);
+ console.log('PASS: SEO (robots.txt, sitemap, canonical, structured data, www to main address; test site not indexed).');
+}
+{
+ // Free Fire ID type (Male/Female): optional, only for Free Fire; the chosen type comes first in the feed.
+ env.AI={run:async()=>({response:{decision:'safe',category:'none',confidence:.99}})};sql.exec('DELETE FROM wm_limits');
+ let n=0;const make=async(extra)=>call('/api/posts','POST',{title:'FF ID '+['alpha','bravo','charlie','delta'][n++],details:'Level 70',price:5000,kind:'Game ID',media:[],gameCategory:'free-fire',...extra},'owner');
+ let r=await make({idGender:'female'});assert.equal(r.status,201,JSON.stringify(r.data));const female=r.data.id;
+ r=await make({});assert.equal(r.status,201);const plain=r.data.id;
+ r=await make({idGender:'robot'});assert.equal(r.status,201);assert.equal(sql.prepare('SELECT id_gender FROM wm_posts WHERE id=?').get(r.data.id).id_gender,null);
+ r=await make({gameCategory:'efootball',idGender:'male'});assert.equal(r.status,201);assert.equal(sql.prepare('SELECT id_gender FROM wm_posts WHERE id=?').get(r.data.id).id_gender,null);
+ assert.equal(sql.prepare('SELECT id_gender FROM wm_posts WHERE id=?').get(female).id_gender,'female');
+ sql.prepare('UPDATE wm_posts SET created_at=created_at-3600000 WHERE id=?').run(female);
+ const list=async q=>(await call('/api/feed?category=free-fire&limit=30'+q)).data.posts.map(p=>p.id);
+ let ids=await list('');assert.ok(ids.includes(female)&&ids.includes(plain));
+ ids=await list('&gender=female');assert.equal(ids[0],female);assert.ok(ids.includes(plain));
+ assert.equal((await call('/api/feed?gender=robot')).status,400);
+ console.log('PASS: Free Fire ID type (Male/Female) is optional, Free Fire only, and the chosen type shows first in the feed.');
+}
+{
+ // Owner badge: only the owner can hide or show it.
+ assert.equal((await call('/api/owner-badge','POST',{show:false},'admin')).status,403);
+ assert.equal((await call('/api/owner-badge','POST',{show:'no'},'owner')).status,400);
+ assert.equal((await call('/api/owner-badge','POST',{show:false},'owner')).status,200);assert.equal(sql.prepare("SELECT value FROM wm_settings WHERE key='owner_badge_hidden'").get().value,'1');
+ assert.equal((await call('/api/owner-badge','POST',{show:true},'owner')).status,200);assert.equal(sql.prepare("SELECT value FROM wm_settings WHERE key='owner_badge_hidden'").get().value,'0');
+ console.log('PASS: owner can hide or show the Owner badge; nobody else can.');
+}
+{
+ // My feed price buttons: default list, owner can change them, reset to default.
+ let d=(await call('/api/feed-presets')).data;assert.equal(d.presets.length,4);assert.equal(d.presets[0].max,5000);
+ assert.equal((await call('/api/admin/feed-presets','POST',{presets:[{min:1000,max:3000}]},'admin')).status,403);
+ assert.equal((await call('/api/admin/feed-presets','POST',{presets:[{min:5000,max:1000}]},'owner')).status,400);
+ assert.equal((await call('/api/admin/feed-presets','POST',{presets:[{min:null,max:null}]},'owner')).status,400);
+ assert.equal((await call('/api/admin/feed-presets','POST',{presets:[{min:null,max:2000},{min:2000,max:8000},{min:100000,max:null}]},'owner')).status,200);
+ d=(await call('/api/feed-presets')).data;assert.deepEqual(d.presets,[{min:null,max:2000},{min:2000,max:8000},{min:100000,max:null}]);
+ assert.equal((await call('/api/admin/feed-presets','POST',{reset:true},'owner')).status,200);assert.equal((await call('/api/feed-presets')).data.presets.length,4);
+ // Group Sell ID with a custom game name.
+ const g=sql.prepare('SELECT id FROM wm_groups LIMIT 1').get();assert.ok(g);
+ if(g){sql.prepare('INSERT INTO wm_group_ranges(id,group_id,label,min_price,max_price,created_at) VALUES(?,?,?,?,?,?)').run(crypto.randomUUID(),g.id,'Any',0,null,Date.now());sql.prepare('INSERT OR IGNORE INTO wm_group_members(group_id,user_id) VALUES(?,?)').run(g.id,'owner');const r=await call('/api/posts','POST',{title:'Custom game ID',details:'Lvl max',price:3000,kind:'Game ID',postIntent:'sell',gameCategory:'custom',customGameName:'Blood Strike',groupId:g.id,media:[]},'owner');assert.equal(r.status,201,JSON.stringify(r.data));assert.equal(sql.prepare('SELECT custom_game_name FROM wm_posts WHERE id=?').get(r.data.id).custom_game_name,'Blood Strike')}
+ console.log('PASS: My feed price buttons (default, owner edits, reset) and group Sell ID with a custom game name.');
+}
+{
+ // Read replicas: each request uses a D1 session and the browser keeps the latest bookmark, so it always sees its own writes.
+ let seen=null;const replicated={...env,DB:{...env.DB,withSession(mark){seen=mark;return {...env.DB,getBookmark:()=>'00000001-0000abcd'}}}};
+ let r=await worker.fetch(new Request('https://test.local/api/feed-presets'),replicated);assert.equal(r.status,200);assert.equal(seen,'first-unconstrained');assert.match(r.headers.get('set-cookie')||'',/wm_d1=00000001-0000abcd/);
+ r=await worker.fetch(new Request('https://test.local/api/feed-presets',{headers:{cookie:'wm_d1=00000001-0000abcd'}}),replicated);assert.equal(seen,'00000001-0000abcd');assert.equal(r.headers.get('set-cookie'),null);
+ console.log('PASS: D1 sessions for nearby read copies (bookmark cookie keeps your own writes visible).');
+}
+{
+ // Verification documents: choose the type; NID and driving licence need the front and the back photo.
+ const png=new Uint8Array([137,80,78,71,13,10,26,10,0,0,0,0,1,2,3,4]);
+ const shot=async who=>(await (await worker.fetch(new Request('https://test.local/api/private-evidence',{method:'POST',headers:{origin:'https://test.local','content-type':'image/png','x-evidence-kind':'verification',cookie:'wm_session='+tokens[who]},body:png}),env)).json()).id;
+ sql.exec("DELETE FROM wm_limits");const who='outsider';sql.prepare("DELETE FROM wm_verification_requests WHERE user_id=?").run(who);
+ const front=await shot(who),back=await shot(who);
+ assert.equal((await call('/api/verification','POST',{kind:'seller',whatsapp:'01811112222',answers:['https://facebook.com/test','yes','yes','yes','yes'],docType:'library-card',documentId:front},who)).status,400);
+ let r=await call('/api/verification','POST',{kind:'seller',whatsapp:'01811112222',answers:['https://facebook.com/test','yes','yes','yes','yes'],docType:'nid',documentId:front},who);assert.equal(r.status,400);assert.match(r.data.error,/back/);
+ assert.equal((await call('/api/verification','POST',{kind:'seller',whatsapp:'01811112222',answers:['https://facebook.com/test','yes','yes','yes','yes'],docType:'nid',documentId:front,backDocumentId:front},who)).status,400);
+ assert.equal((await call('/api/verification','POST',{kind:'seller',whatsapp:'01811112222',answers:['https://facebook.com/test','yes','yes','yes','yes'],docType:'nid',documentId:front,backDocumentId:back},who)).status,201);
+ const row=sql.prepare("SELECT doc_type,back_document_id FROM wm_verification_requests WHERE user_id=? AND status='pending'").get(who);assert.equal(row.doc_type,'nid');assert.equal(row.back_document_id,back);
+ sql.exec('DELETE FROM wm_limits');const p2=await shot(who);assert.equal((await call('/api/verification','POST',{kind:'trusted',whatsapp:'01811112222',answers:['https://facebook.com/test','yes','yes','yes','yes'],docType:'passport',documentId:p2},who)).status,201);
+ console.log('PASS: verification document types with live front/back photos (back needed for NID and driving licence).');
+}
+{
+ // Short account IDs: /id/<first 8> opens the profile; the owner can search members by it.
+ const id=sql.prepare("SELECT id FROM users WHERE id='buyer'").get().id;sql.prepare("INSERT OR IGNORE INTO users VALUES(?,?,?,?,?,?,?)").run('5126fe11-c297-4633-9416-e59b0b068e24',null,'joy@example.com','Joy','',Date.now(),Date.now());
+ let r=await call('/api/people/id/5126FE11','GET',undefined,'owner');assert.equal(r.status,200);assert.equal(r.data.userId,'5126fe11-c297-4633-9416-e59b0b068e24');
+ assert.equal((await call('/api/people/id/zzzzzzzz','GET',undefined,'owner')).status,404);
+ r=await call('/api/admin/users?q=%235126fe11','GET',undefined,'owner');assert.equal(r.status,200);assert.ok(r.data.users.some(x=>x.id==='5126fe11-c297-4633-9416-e59b0b068e24'));
+ r=await call('/api/admin/users?q=buyer','GET',undefined,'owner');assert.ok(r.data.users.some(x=>x.id===id));
+ console.log('PASS: short account IDs open profiles (/id/XXXXXXXX) and work in the owner member search.');
+}
+{
+ // Notices: the reporter hears the owner's answer; verification results and appeal answers arrive under the bell.
+ sql.exec('DELETE FROM wm_limits');const post=sql.prepare("SELECT id,title FROM wm_posts WHERE status='approved' AND deleted_at IS NULL AND group_id IS NULL LIMIT 1").get();
+ let r=await call('/api/reports','POST',{reason:'scam',details:'Fake ID, seller asked money outside',postId:post.id},'seller');assert.equal(r.status,201,JSON.stringify(r.data));
+ const rep=sql.prepare("SELECT id FROM wm_reports WHERE user_id='seller' AND status='open' ORDER BY created_at DESC").get();
+ assert.equal((await call('/api/admin/report-action','POST',{reportId:rep.id,action:'dismiss',note:'The seller showed proof of ownership.'},'owner')).status,200);
+ assert.equal(sql.prepare('SELECT resolution_note FROM wm_reports WHERE id=?').get(rep.id).resolution_note,'The seller showed proof of ownership.');
+ let n=(await call('/api/notices','GET',undefined,'seller')).data;assert.equal(n.unread,1);assert.equal(n.notices[0].status,'rejected');assert.match(n.notices[0].body,/proof of ownership/);assert.equal(n.notices[0].link,'/post/'+post.id);
+ assert.equal((await call('/api/notices/read','POST',{},'seller')).status,200);assert.equal((await call('/api/notices','GET',undefined,'seller')).data.unread,0);
+ const vr=sql.prepare("SELECT id,user_id FROM wm_verification_requests WHERE status='pending' LIMIT 1").get();
+ if(vr){assert.equal((await call('/api/admin/verification-action','POST',{id:vr.id,action:'reject',note:'The photo is blurry.'},'owner')).status,200);const vn=(await call('/api/notices','GET',undefined,vr.user_id)).data.notices[0];assert.equal(vn.kind,'verification');assert.equal(vn.status,'rejected');assert.match(vn.body,/blurry/)}
+ assert.equal((await call('/api/notices','GET',undefined,'outsider')).status,200);
+ console.log('PASS: notices (report answers with the owner note and post link, verification results, read state).');
+}
+{
+ // Owner gives or removes the blue tick by hand (no application); the member gets a notice.
+ sql.prepare("DELETE FROM wm_verifications WHERE user_id='outsider'").run();
+ assert.equal((await call('/api/admin/verify','POST',{userId:'outsider',verified:true},'admin')).status,403);
+ assert.equal((await call('/api/admin/verify','POST',{userId:'owner',verified:false},'owner')).status,403);
+ assert.equal((await call('/api/admin/verify','POST',{userId:'outsider',verified:true},'owner')).status,200);
+ assert.ok((await call('/api/me','GET',undefined,'outsider')).data.user.verified);
+ assert.equal((await call('/api/notices','GET',undefined,'outsider')).data.notices[0].title,'✅ You are now a Verified member');
+ assert.equal((await call('/api/admin/verify','POST',{userId:'outsider',verified:false},'owner')).status,200);
+ assert.ok(!(await call('/api/me','GET',undefined,'outsider')).data.user.verified);
+ console.log('PASS: owner gives or removes the blue tick by hand, with a notice to the member.');
+}
+{
+ // An Admin who starts a deal looks after it: no Admin picker; the deal starts as soon as the seller agrees.
+ sql.exec('DELETE FROM wm_limits');const sellerId='selfsell';sql.prepare('INSERT OR IGNORE INTO users VALUES(?,?,?,?,?,?,?)').run(sellerId,sellerId,sellerId+'@example.com',sellerId,'',Date.now(),Date.now());tokens[sellerId]=Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('hex');sql.prepare('INSERT INTO sessions VALUES(?,?,?,?)').run(await hash(tokens[sellerId]),sellerId,Date.now()+1000000,Date.now());env.AI={run:async()=>({response:{decision:'safe',category:'none',confidence:.99}})};
+ const made=await call('/api/posts','POST',{title:'Self admin test ID',details:'Level 50',price:2500,kind:'Game ID',media:[],gameCategory:'efootball'},sellerId);assert.equal(made.status,201,JSON.stringify(made.data));
+ sql.prepare("DELETE FROM wm_user_blocks WHERE user_id IN ('owner','selfsell') AND target_id IN ('owner','selfsell')").run();
+ const picks=(await call('/api/deal-admins?postId='+made.data.id,'GET',undefined,'owner')).data;assert.equal(picks.mode,'self');
+ const r=await call('/api/deals','POST',{postId:made.data.id},'owner');assert.equal(r.status,201,JSON.stringify(r.data));const deal=sql.prepare('SELECT * FROM wm_deals WHERE id=?').get(r.data.id);assert.equal(deal.admin_id,'owner');assert.equal(deal.status,'awaiting_seller');
+ const ok=await call('/api/deals/'+deal.id+'/action','POST',{action:'confirm',version:deal.version},sellerId);assert.equal(ok.status,200,JSON.stringify(ok.data));
+ assert.equal(sql.prepare('SELECT status FROM wm_deals WHERE id=?').get(deal.id).status,'active');
+ console.log('PASS: an Admin who starts a deal looks after it; it starts as soon as the seller agrees.');
+}
+{
+ // New deal steps: buyer → seller accepts → deal box opens for both → they choose an Admin → the Admin accepts and joins.
+ sql.exec('DELETE FROM wm_limits');env.AI={run:async()=>({response:{decision:'safe',category:'none',confidence:.99}})};
+ const mk=async id=>{sql.prepare('INSERT OR IGNORE INTO users VALUES(?,?,?,?,?,?,?)').run(id,id,id+'@example.com',id,'',Date.now(),Date.now());tokens[id]=Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('hex');sql.prepare('INSERT INTO sessions VALUES(?,?,?,?)').run(await hash(tokens[id]),id,Date.now()+1000000,Date.now())};
+ await mk('boxbuyer');await mk('boxseller');
+ const made=await call('/api/posts','POST',{title:'Box flow ID',details:'Level 40',price:3000,kind:'Game ID',media:[],gameCategory:'efootball'},'boxseller');assert.equal(made.status,201,JSON.stringify(made.data));
+ const r=await call('/api/deals','POST',{postId:made.data.id},'boxbuyer');assert.equal(r.status,201,JSON.stringify(r.data));
+ const get=()=>sql.prepare('SELECT * FROM wm_deals WHERE id=?').get(r.data.id);let d=get();assert.equal(d.admin_id,null);assert.equal(d.status,'awaiting_seller');
+ assert.equal((await call('/api/deals/'+d.id+'/messages','GET',undefined,'boxbuyer')).status,409);
+ assert.equal((await call('/api/deals/'+d.id+'/action','POST',{action:'confirm',version:d.version},'boxseller')).status,200);d=get();assert.equal(d.status,'open');
+ assert.equal((await call('/api/deals/'+d.id+'/messages','POST',{text:'Hi, which Admin?'},'boxbuyer')).status,201);
+ assert.equal((await call('/api/deals/'+d.id+'/messages','GET',undefined,'boxseller')).status,200);
+ sql.prepare("UPDATE wm_notifications SET read_at=1 WHERE user_id='admin'").run();
+ assert.equal((await call('/api/deals/'+d.id+'/action','POST',{action:'choose_admin',adminId:'admin',version:d.version},'boxbuyer')).status,200);d=get();assert.equal(d.status,'admin_proposed');assert.equal(d.admin_id,'admin');
+ assert.equal((await call('/api/deals/'+d.id,'GET',undefined,'admin')).status,404);// a suggested Admin is not in the deal yet
+ assert.ok(!(await call('/api/deals','GET',undefined,'admin')).data.deals.some(x=>x.id===d.id));
+ assert.equal(sql.prepare("SELECT count(*) n FROM wm_notifications WHERE user_id='admin' AND target_id=? AND read_at IS NULL").get(d.id).n,0);
+ assert.equal((await call('/api/deals/'+d.id+'/action','POST',{action:'agree_admin',version:d.version},'boxbuyer')).status,409);// the one who suggested waits
+ assert.ok((await call('/api/deals/'+d.id+'/messages','GET',undefined,'boxseller')).data.messages.some(m=>m.text==='admin_proposed'));
+ assert.equal((await call('/api/deals/'+d.id+'/action','POST',{action:'agree_admin',version:d.version},'boxseller')).status,200);d=get();assert.equal(d.status,'awaiting_admin');
+ assert.equal(sql.prepare("SELECT count(*) n FROM wm_notifications WHERE user_id='admin' AND target_id=? AND read_at IS NULL AND title='New deal request — accept to join'").get(d.id).n,1);
+ assert.equal((await call('/api/deals/'+d.id+'/messages','GET',undefined,'admin')).status,409);
+ sql.prepare("UPDATE wm_notifications SET read_at=1 WHERE user_id='admin'").run();
+ assert.equal((await call('/api/deals/'+d.id+'/messages','POST',{text:'Waiting for the Admin'},'boxseller')).status,201);
+ assert.equal(sql.prepare("SELECT count(*) n FROM wm_notifications WHERE user_id='admin' AND target_id=? AND read_at IS NULL AND title='New deal message'").get(d.id).n,0);
+ assert.equal((await call('/api/deals/'+d.id+'/action','POST',{action:'reject',version:d.version},'admin')).status,200);d=get();assert.equal(d.status,'open');assert.equal(d.admin_id,null);
+ assert.equal((await call('/api/deals/'+d.id+'/action','POST',{action:'choose_admin',adminId:'admin',version:d.version},'boxseller')).status,200);d=get();
+ assert.equal((await call('/api/deals/'+d.id+'/action','POST',{action:'agree_admin',version:d.version},'boxbuyer')).status,200);d=get();
+ assert.equal((await call('/api/deals/'+d.id+'/action','POST',{action:'accept',version:d.version},'admin')).status,200);d=get();assert.equal(d.status,'active');
+ assert.equal((await call('/api/deals/'+d.id+'/messages','GET',undefined,'admin')).status,200);
+ // withdraw before the Admin joins
+ await mk('boxbuyer2');await mk('boxseller2');const made2=await call('/api/posts','POST',{title:'Box flow ID two',details:'Level 41',price:3100,kind:'Game ID',media:[],gameCategory:'efootball'},'boxseller2');assert.equal(made2.status,201,JSON.stringify(made2.data));const r2=await call('/api/deals','POST',{postId:made2.data.id},'boxbuyer2');assert.equal(r2.status,201,JSON.stringify(r2.data));
+ {const d2=sql.prepare('SELECT * FROM wm_deals WHERE id=?').get(r2.data.id);assert.equal(d2.status,'awaiting_seller');assert.equal((await call('/api/deals/'+d2.id+'/action','POST',{action:'withdraw',version:d2.version},'boxbuyer2')).status,200);assert.equal(sql.prepare('SELECT status FROM wm_deals WHERE id=?').get(d2.id).status,'cancelled')}
+ console.log('PASS: deal box first: seller accepts → box opens → one side suggests an Admin → the other agrees → the Admin accepts and joins (saying no reopens the choice).');
+}
+{
+ // Owner-only website: the Owner is the Admin of every deal; nobody else becomes an Admin.
+ sql.exec('DELETE FROM wm_limits');const rules=(await call('/api/market-rules')).data.rules;
+ assert.equal((await call('/api/admin/market-rules','POST',{...rules,ownerOnly:true},'owner')).status,200);
+ const card=(await call('/api/owner-card')).data;assert.equal(card.ownerOnly,true);assert.equal(card.owner.id,'owner');
+ const mk=async id=>{sql.prepare('INSERT OR IGNORE INTO users VALUES(?,?,?,?,?,?,?)').run(id,id,id+'@example.com',id,'',Date.now(),Date.now());tokens[id]=Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('hex');sql.prepare('INSERT INTO sessions VALUES(?,?,?,?)').run(await hash(tokens[id]),id,Date.now()+1000000,Date.now())};
+ await mk('oobuyer');await mk('ooseller');env.AI={run:async()=>({response:{decision:'safe',category:'none',confidence:.99}})};
+ const made=await call('/api/posts','POST',{title:'Owner only ID',details:'Level 30',price:2000,kind:'Game ID',media:[],gameCategory:'efootball'},'ooseller');assert.equal(made.status,201,JSON.stringify(made.data));
+ const r=await call('/api/deals','POST',{postId:made.data.id,adminId:'owner'},'oobuyer');assert.equal(r.status,201);let d=sql.prepare('SELECT * FROM wm_deals WHERE id=?').get(r.data.id);assert.equal(d.admin_id,null);// an older app naming the Admin up front is ignored
+ assert.ok(!(await call('/api/deals?status=current','GET',undefined,'owner')).data.deals.some(x=>x.id===d.id));// the Owner sees nothing before the seller accepts
+ assert.equal((await call('/api/deals/'+d.id,'GET',undefined,'owner')).status,404);
+ assert.equal((await call('/api/deals/'+d.id+'/action','POST',{action:'confirm',version:d.version},'ooseller')).status,200);d=sql.prepare('SELECT * FROM wm_deals WHERE id=?').get(d.id);
+ assert.equal(d.status,'active');assert.equal(d.admin_id,'owner');
+ assert.ok((await call('/api/deals?status=current','GET',undefined,'owner')).data.deals.some(x=>x.id===d.id));
+ // an older deal that already named the Owner also starts at once when the seller accepts
+ await mk('oobuyer2');await mk('ooseller2');const madeOld=await call('/api/posts','POST',{title:'Owner only ID two',details:'Level 31',price:2100,kind:'Game ID',media:[],gameCategory:'efootball'},'ooseller2');assert.equal(madeOld.status,201,JSON.stringify(madeOld.data));sql.prepare("UPDATE wm_settings SET value=json_set(value,'$.ownerOnly',json('false')) WHERE key='market_rules'").run();const old=await call('/api/deals','POST',{postId:madeOld.data.id,adminId:'owner'},'oobuyer2');sql.prepare("UPDATE wm_settings SET value=json_set(value,'$.ownerOnly',json('true')) WHERE key='market_rules'").run();let od=sql.prepare('SELECT * FROM wm_deals WHERE id=?').get(old.data.id);assert.equal(od.admin_id,'owner');assert.equal(od.status,'awaiting_seller');
+ assert.equal((await call('/api/deals/'+od.id+'/action','POST',{action:'confirm',version:od.version},'ooseller2')).status,200);od=sql.prepare('SELECT * FROM wm_deals WHERE id=?').get(od.id);assert.equal(od.status,'active');
+ assert.equal((await call('/api/verification','POST',{kind:'trusted',whatsapp:'01811113333',documentId:'x'},'oobuyer')).status,403);
+ assert.equal((await call('/api/admin/member-access','POST',{userId:'oobuyer',verified:false,trustedSeller:false,role:'trusted'},'owner')).status,403);
+ assert.equal((await call('/api/admin/market-rules','POST',{...rules,ownerOnly:false},'owner')).status,200);
+ console.log('PASS: owner-only website (the Owner joins every deal as the Admin when the seller accepts; no new Admins).');
+}
+{
+ // Phone notifications: deal steps, @mentions in a deal room, private messages and friend requests create push alerts.
+ const wait=()=>new Promise(r=>setTimeout(r,80));sql.exec('DELETE FROM wm_limits');
+ const mk=async id=>{sql.prepare('INSERT OR IGNORE INTO users VALUES(?,?,?,?,?,?,?)').run(id,id,id+'@example.com',id,'',Date.now(),Date.now());tokens[id]=Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('hex');sql.prepare('INSERT INTO sessions VALUES(?,?,?,?)').run(await hash(tokens[id]),id,Date.now()+1000000,Date.now())};
+ await mk('pnbuyer');await mk('pnseller');env.AI={run:async()=>({response:{decision:'safe',category:'none',confidence:.99}})};
+ const pushes=who=>sql.prepare('SELECT ref_id,title,url FROM wm_push_events WHERE user_id=? ORDER BY id').all(who);
+ const made=await call('/api/posts','POST',{title:'Push test ID',details:'Level 20',price:1500,kind:'Game ID',media:[],gameCategory:'efootball'},'pnseller');assert.equal(made.status,201);
+ const r=await call('/api/deals','POST',{postId:made.data.id},'pnbuyer');assert.equal(r.status,201);await wait();
+ assert.ok(pushes('pnseller').some(p=>p.ref_id.startsWith('dn-')&&p.url.includes(r.data.id)),'seller gets the deal request on the phone');
+ let d=sql.prepare('SELECT * FROM wm_deals WHERE id=?').get(r.data.id);assert.equal((await call('/api/deals/'+d.id+'/action','POST',{action:'confirm',version:d.version},'pnseller')).status,200);await wait();
+ d=sql.prepare('SELECT * FROM wm_deals WHERE id=?').get(d.id);
+ assert.equal((await call('/api/deals/'+d.id+'/messages','POST',{text:'@pnbuyer please send the money'},'pnseller')).status,201);await wait();
+ assert.ok(pushes('pnbuyer').some(p=>p.ref_id.startsWith('dm-')&&/mentioned you/.test(p.title)));
+ assert.equal((await call('/api/deals/'+d.id+'/messages','POST',{text:'no mention here'},'pnseller')).status,201);await wait();
+ assert.equal(pushes('pnbuyer').filter(p=>p.ref_id.startsWith('dm-')).length,1);
+ assert.equal((await call('/api/friends/request','POST',{userId:'pnbuyer'},'pnseller')).status,200);await wait();
+ assert.ok(pushes('pnbuyer').some(p=>p.ref_id.startsWith('fr-')));
+ console.log('PASS: phone notifications for deal steps, deal @mentions and friend requests (chat without a mention stays quiet).');
+}
+{// Website switches: close groups (nothing deleted) and Follow only (no friend requests)
+ const rules=(await call('/api/market-rules')).data.rules,before=sql.prepare('SELECT count(*) n FROM wm_groups').get().n;
+ assert.equal((await call('/api/admin/market-rules','POST',{...rules,groupsOff:true,followOnly:true},'owner')).status,200);
+ assert.deepEqual((await call('/api/groups','GET',undefined,'owner')).data.groups,[]);
+ assert.equal((await call('/api/groups','POST',{name:'Closed group'},'owner')).status,403);
+ assert.equal(sql.prepare('SELECT count(*) n FROM wm_groups').get().n,before);
+ assert.equal((await call('/api/friends/request','POST',{userId:'vip'},'admin')).status,403);
+ sql.exec("DELETE FROM wm_follows WHERE user_id='admin' AND target_id='vip'");
+ assert.equal((await call('/api/follow','POST',{userId:'vip',follow:true},'admin')).status,200);
+ assert.equal((await call('/api/profile/admin/connections?kind=following','GET',undefined,'admin')).data.people.find(p=>p.id==='vip')?.followed,true);
+ assert.equal((await call('/api/admin/market-rules','POST',{...rules,groupsOff:false,followOnly:false},'owner')).status,200);
+ assert.ok((await call('/api/groups','GET',undefined,'owner')).data.groups.length>0);
+ console.log('PASS: website switches (groups closed without deleting data, Follow only).');
 }

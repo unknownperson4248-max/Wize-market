@@ -2,6 +2,8 @@
   "name": "wize-market-preview-2026",
   "main": "dist/worker.mjs",
   "compatibility_date": "2026-10-29",
+  // Keep variables added in the Cloudflare dashboard (for example TURN_KEY_ID) when deploying with Wrangler.
+  "keep_vars": true,
   "build": {
     "command": "node build.mjs"
   },
@@ -24,5 +26,40 @@
   },
   "ai": {
     "binding": "AI"
+  },
+  // WizeNex (wizenex.com): a separate site with its own worker, database and media. The settings above stay Wize Market's.
+  // Deploy with: npx wrangler deploy --env wizenex
+  // SITE_HOST: wizenex.com is the one address; workers.dev sends visitors there. The routes serve wizenex.com and www
+  // through the existing proxied DNS records (custom domains need those records removed first).
+  "env": {
+    "wizenex": {
+      "name": "wizenex",
+      "workers_dev": true,
+      "vars": {
+        "SITE_HOST": "wizenex.com",
+        // Only WizeNex is listed on Google; the test site says noindex.
+        "SEO_INDEX": "on"
+      },
+      "routes": [
+        { "pattern": "wizenex.com/*", "zone_name": "wizenex.com" },
+        { "pattern": "www.wizenex.com", "custom_domain": true }
+      ],
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "wize-market-demo",
+          "database_id": "b3d80ef7-d9cd-4ea4-9b12-f939f8adce35"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "MEDIA",
+          "bucket_name": "wize-market-demo-media"
+        }
+      ],
+      "ai": {
+        "binding": "AI"
+      }
+    }
   }
 }
